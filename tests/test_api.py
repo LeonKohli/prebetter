@@ -165,3 +165,54 @@ def test_payload_truncation(client):
             full_len = len(full_data["additional_data"]["payload"])
             if truncated_len < full_len:
                 assert truncated_data["additional_data"]["payload"].endswith("...")
+
+
+def test_alert_timeline(client):
+    """Test the alert timeline endpoint"""
+    # Test with default parameters
+    response = client.get("/api/v1/timeline")
+    if response.status_code != 200:
+        print(f"Error response: {response.json()}")
+    assert response.status_code == 200
+    data = response.json()
+    assert "time_frame" in data
+    assert "start_date" in data
+    assert "end_date" in data
+    assert "data" in data
+    assert isinstance(data["data"], list)
+
+    # Test with specific time frame
+    response = client.get("/api/v1/timeline?time_frame=hour")
+    if response.status_code != 200:
+        print(f"Error response: {response.json()}")
+    assert response.status_code == 200
+    hourly_data = response.json()
+    assert hourly_data["time_frame"] == "hour"
+
+    # Test with date range
+    start_date = "2024-01-01T00:00:00Z"
+    end_date = "2024-01-02T00:00:00Z"
+    response = client.get(
+        f"/api/v1/timeline?start_date={start_date}&end_date={end_date}"
+    )
+    if response.status_code != 200:
+        print(f"Error response: {response.json()}")
+    assert response.status_code == 200
+
+    # Test with filters
+    response = client.get("/api/v1/timeline?severity=high&time_frame=day")
+    if response.status_code != 200:
+        print(f"Error response: {response.json()}")
+    assert response.status_code == 200
+    filtered_data = response.json()
+    assert filtered_data["time_frame"] == "day"
+
+    # Test all time frames
+    time_frames = ["hour", "day", "week", "month"]
+    for frame in time_frames:
+        response = client.get(f"/api/v1/timeline?time_frame={frame}")
+        if response.status_code != 200:
+            print(f"Error response for {frame}: {response.json()}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["time_frame"] == frame
