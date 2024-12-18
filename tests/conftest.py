@@ -1,11 +1,13 @@
+import os
+
 import pytest
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.main import app
+
 from app.database.config import get_db
-from dotenv import load_dotenv
-import os
+from app.main import app
 
 load_dotenv()
 
@@ -18,6 +20,7 @@ MYSQL_DB = os.getenv("MYSQL_DB", "prelude")
 # Create MySQL database URL
 SQLALCHEMY_DATABASE_URL = f"mysql+mysqlconnector://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
 
+
 def get_test_db():
     """Get test database session"""
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
@@ -27,6 +30,7 @@ def get_test_db():
         yield db
     finally:
         db.close()
+
 
 @pytest.fixture
 def client():

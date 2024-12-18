@@ -16,7 +16,7 @@ app = FastAPI(
     """,
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # Configure CORS
@@ -29,11 +29,8 @@ app.add_middleware(
 )
 
 # Include the API router
-app.include_router(
-    api_router,
-    prefix="/api/v1",
-    tags=["alerts"]
-)
+app.include_router(api_router, prefix="/api/v1", tags=["alerts"])
+
 
 @app.get("/", tags=["status"])
 async def root():
@@ -41,5 +38,5 @@ async def root():
         "status": "online",
         "message": "Welcome to Prelude SIEM API",
         "docs_url": "/docs",
-        "redoc_url": "/redoc"
-    } 
+        "redoc_url": "/redoc",
+    }
