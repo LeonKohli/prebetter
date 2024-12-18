@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Literal
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 
 class AddressCategory(str, Enum):
@@ -31,17 +31,14 @@ class NetworkInfo(BaseModel):
     vlan_num: Optional[int] = Field(None, description="VLAN number if applicable")
     ident: Optional[str] = Field(None, description="Address identifier")
     
-    class Config:
-        from_attributes = True
-        use_enum_values = True
+    model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
 class TimeInfo(BaseModel):
     time: datetime = Field(..., description="Timestamp of the event")
     usec: int = Field(..., description="Microseconds part of the timestamp")
     gmtoff: int = Field(..., description="GMT offset in seconds")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReferenceInfo(BaseModel):
     origin: str = Field(..., description="Origin of the reference (e.g., 'vendor-specific', 'cve')")
@@ -49,16 +46,14 @@ class ReferenceInfo(BaseModel):
     url: Optional[str] = Field(None, description="URL for more information")
     meaning: Optional[str] = Field(None, description="Additional context about the reference")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ServiceInfo(BaseModel):
     port: Optional[int] = Field(None, description="Port number")
     protocol: str = Field(..., description="Protocol name (e.g., 'tcp', 'udp')")
     direction: str = Field(..., description="Traffic direction ('source' or 'target')")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class NodeInfo(BaseModel):
     ident: Optional[str] = Field(None, description="Node identifier")
@@ -66,16 +61,14 @@ class NodeInfo(BaseModel):
     location: Optional[str] = Field(None, description="Physical or logical location")
     name: Optional[str] = Field(None, description="Node hostname or name")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProcessInfo(BaseModel):
     name: Optional[str] = Field(None, description="Process name")
     pid: Optional[int] = Field(None, description="Process ID")
     path: Optional[str] = Field(None, description="Process executable path")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AnalyzerInfo(BaseModel):
     name: str = Field(..., description="Analyzer name (e.g., 'snort-eno5')")
@@ -88,8 +81,7 @@ class AnalyzerInfo(BaseModel):
     osversion: Optional[str] = Field(None, description="Operating system version")
     process: Optional[ProcessInfo] = Field(None, description="Process information")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TCPInfo(BaseModel):
     seq: Optional[str] = Field(None, alias="tcp_seq")
@@ -127,8 +119,7 @@ class AlertListItem(BaseModel):
     target_ipv4: Optional[str] = Field(None, description="Target IPv4 address")
     analyzer: Optional[AnalyzerInfo] = Field(None, description="Analyzer information")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AlertListResponse(BaseModel):
     total: int = Field(..., description="Total number of alerts")
@@ -160,6 +151,8 @@ class AlertDetail(BaseModel):
         description="Additional alert data including payload and protocol details"
     )
     
+    model_config = ConfigDict(from_attributes=True)
+    
     @property
     def tcp_info(self) -> Optional[TCPInfo]:
         """Extract TCP-related information from additional_data"""
@@ -180,6 +173,3 @@ class AlertDetail(BaseModel):
         if not any(k.startswith('snort_') for k in self.additional_data.keys()):
             return None
         return SnortInfo(**{k: v for k, v in self.additional_data.items() if k.startswith('snort_')})
-    
-    class Config:
-        from_attributes = True 
