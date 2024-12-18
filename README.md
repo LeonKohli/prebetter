@@ -50,3 +50,9 @@ uvicorn app.main:app --reload
 - `MYSQL_HOST`: MySQL host (default: localhost)
 - `MYSQL_PORT`: MySQL port (default: 3306)
 - `MYSQL_DB`: MySQL database name (default: prelude) 
+
+
+# Commands
+
+gunzip < prelude.sql.gz | mysql -u root -p prelude
+
