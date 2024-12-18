@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Literal
 from datetime import datetime, UTC
 from enum import Enum
 
+
 class AddressCategory(str, Enum):
     UNKNOWN = "unknown"
     ATM = "atm"
@@ -20,6 +21,7 @@ class AddressCategory(str, Enum):
     IPV6_NET = "ipv6-net"
     IPV6_NET_MASK = "ipv6-net-mask"
 
+
 class NetworkInfo(BaseModel):
     interface: Optional[str]
     ip_version: Optional[int]
@@ -30,45 +32,55 @@ class NetworkInfo(BaseModel):
     vlan_name: Optional[str] = Field(None, description="VLAN name if applicable")
     vlan_num: Optional[int] = Field(None, description="VLAN number if applicable")
     ident: Optional[str] = Field(None, description="Address identifier")
-    
+
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
+
 
 class TimeInfo(BaseModel):
     time: datetime = Field(..., description="Timestamp of the event")
     usec: int = Field(..., description="Microseconds part of the timestamp")
     gmtoff: int = Field(..., description="GMT offset in seconds")
-    
+
     model_config = ConfigDict(from_attributes=True)
 
+
 class ReferenceInfo(BaseModel):
-    origin: str = Field(..., description="Origin of the reference (e.g., 'vendor-specific', 'cve')")
+    origin: str = Field(
+        ..., description="Origin of the reference (e.g., 'vendor-specific', 'cve')"
+    )
     name: str = Field(..., description="Reference identifier or name")
     url: Optional[str] = Field(None, description="URL for more information")
-    meaning: Optional[str] = Field(None, description="Additional context about the reference")
-    
+    meaning: Optional[str] = Field(
+        None, description="Additional context about the reference"
+    )
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class ServiceInfo(BaseModel):
     port: Optional[int] = Field(None, description="Port number")
     protocol: str = Field(..., description="Protocol name (e.g., 'tcp', 'udp')")
     direction: str = Field(..., description="Traffic direction ('source' or 'target')")
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class NodeInfo(BaseModel):
     ident: Optional[str] = Field(None, description="Node identifier")
     category: Optional[str] = Field(None, description="Node category (e.g., 'unknown')")
     location: Optional[str] = Field(None, description="Physical or logical location")
     name: Optional[str] = Field(None, description="Node hostname or name")
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class ProcessInfo(BaseModel):
     name: Optional[str] = Field(None, description="Process name")
     pid: Optional[int] = Field(None, description="Process ID")
     path: Optional[str] = Field(None, description="Process executable path")
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class AnalyzerInfo(BaseModel):
     name: str = Field(..., description="Analyzer name (e.g., 'snort-eno5')")
@@ -80,8 +92,9 @@ class AnalyzerInfo(BaseModel):
     ostype: Optional[str] = Field(None, description="Operating system type")
     osversion: Optional[str] = Field(None, description="Operating system version")
     process: Optional[ProcessInfo] = Field(None, description="Process information")
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class TCPInfo(BaseModel):
     seq: Optional[str] = Field(None, alias="tcp_seq")
@@ -92,6 +105,7 @@ class TCPInfo(BaseModel):
     win: Optional[str] = Field(None, alias="tcp_win")
     sum: Optional[str] = Field(None, alias="tcp_sum")
     urp: Optional[str] = Field(None, alias="tcp_urp")
+
 
 class IPInfo(BaseModel):
     ver: Optional[str] = Field(None, alias="ip_ver")
@@ -104,22 +118,27 @@ class IPInfo(BaseModel):
     proto: Optional[str] = Field(None, alias="ip_proto")
     sum: Optional[str] = Field(None, alias="ip_sum")
 
+
 class SnortInfo(BaseModel):
     rule_sid: Optional[str] = Field(None, alias="snort_rule_sid")
     rule_rev: Optional[str] = Field(None, alias="snort_rule_rev")
+
 
 class AlertListItem(BaseModel):
     alert_id: int = Field(..., description="Unique alert identifier")
     message_id: Optional[str] = Field(None, description="Message identifier")
     create_time: Optional[TimeInfo] = Field(None, description="Alert creation time")
     detect_time: TimeInfo = Field(..., description="Alert detection time")
-    classification_text: str = Field(..., description="Alert classification description")
+    classification_text: str = Field(
+        ..., description="Alert classification description"
+    )
     severity: Optional[str] = Field(None, description="Alert severity level")
     source_ipv4: Optional[str] = Field(None, description="Source IPv4 address")
     target_ipv4: Optional[str] = Field(None, description="Target IPv4 address")
     analyzer: Optional[AnalyzerInfo] = Field(None, description="Analyzer information")
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class AlertListResponse(BaseModel):
     total: int = Field(..., description="Total number of alerts")
@@ -127,49 +146,68 @@ class AlertListResponse(BaseModel):
     page: int = Field(..., description="Current page number")
     size: int = Field(..., description="Number of items per page")
 
+
 class AlertDetail(BaseModel):
     alert_id: int = Field(..., description="Unique alert identifier")
     message_id: Optional[str] = Field(None, description="Message identifier")
     create_time: Optional[TimeInfo] = Field(None, description="Alert creation time")
     detect_time: TimeInfo = Field(..., description="Alert detection time")
-    classification_text: str = Field(..., description="Alert classification description")
-    classification_ident: Optional[str] = Field(None, description="Classification identifier")
+    classification_text: str = Field(
+        ..., description="Alert classification description"
+    )
+    classification_ident: Optional[str] = Field(
+        None, description="Classification identifier"
+    )
     severity: Optional[str] = Field(None, description="Alert severity level")
     description: Optional[str] = Field(None, description="Detailed alert description")
     completion: Optional[str] = Field(None, description="Alert completion status")
     impact_type: Optional[str] = Field(None, description="Type of impact")
-    
-    source: Optional[NetworkInfo] = Field(None, description="Source network information")
-    target: Optional[NetworkInfo] = Field(None, description="Target network information")
-    
+
+    source: Optional[NetworkInfo] = Field(
+        None, description="Source network information"
+    )
+    target: Optional[NetworkInfo] = Field(
+        None, description="Target network information"
+    )
+
     analyzer: Optional[AnalyzerInfo] = Field(None, description="Analyzer information")
-    references: List[ReferenceInfo] = Field(default_factory=list, description="Related references")
-    services: List[ServiceInfo] = Field(default_factory=list, description="Network services involved")
-    
+    references: List[ReferenceInfo] = Field(
+        default_factory=list, description="Related references"
+    )
+    services: List[ServiceInfo] = Field(
+        default_factory=list, description="Network services involved"
+    )
+
     additional_data: Dict[str, Optional[str]] = Field(
         default_factory=dict,
-        description="Additional alert data including payload and protocol details"
+        description="Additional alert data including payload and protocol details",
     )
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     @property
     def tcp_info(self) -> Optional[TCPInfo]:
         """Extract TCP-related information from additional_data"""
-        if not any(k.startswith('tcp_') for k in self.additional_data.keys()):
+        if not any(k.startswith("tcp_") for k in self.additional_data.keys()):
             return None
-        return TCPInfo(**{k: v for k, v in self.additional_data.items() if k.startswith('tcp_')})
-    
+        return TCPInfo(
+            **{k: v for k, v in self.additional_data.items() if k.startswith("tcp_")}
+        )
+
     @property
     def ip_info(self) -> Optional[IPInfo]:
         """Extract IP-related information from additional_data"""
-        if not any(k.startswith('ip_') for k in self.additional_data.keys()):
+        if not any(k.startswith("ip_") for k in self.additional_data.keys()):
             return None
-        return IPInfo(**{k: v for k, v in self.additional_data.items() if k.startswith('ip_')})
-    
+        return IPInfo(
+            **{k: v for k, v in self.additional_data.items() if k.startswith("ip_")}
+        )
+
     @property
     def snort_info(self) -> Optional[SnortInfo]:
         """Extract Snort-related information from additional_data"""
-        if not any(k.startswith('snort_') for k in self.additional_data.keys()):
+        if not any(k.startswith("snort_") for k in self.additional_data.keys()):
             return None
-        return SnortInfo(**{k: v for k, v in self.additional_data.items() if k.startswith('snort_')})
+        return SnortInfo(
+            **{k: v for k, v in self.additional_data.items() if k.startswith("snort_")}
+        )
