@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, select, text, literal_column, desc, asc
 from typing import List, Optional, Dict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from enum import Enum
 from ...database.config import get_db
 from ...models.prelude import (
@@ -33,8 +33,8 @@ async def list_alerts(
     db: Session = Depends(get_db),
     page: int = Query(1, gt=0),
     size: int = Query(20, gt=0, le=100),
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[datetime] = Query(None, description="Start date in ISO format with timezone"),
+    end_date: Optional[datetime] = Query(None, description="End date in ISO format with timezone"),
     severity: Optional[str] = None,
     classification: Optional[str] = None,
     source_ip: Optional[str] = None,
@@ -54,7 +54,7 @@ async def list_alerts(
     
     Supports:
     - Pagination
-    - Date range filtering
+    - Date range filtering (expects ISO format with timezone)
     - Multiple filter criteria
     - Sorting options
     """
@@ -123,8 +123,14 @@ async def list_alerts(
 
     # Apply filters
     if start_date:
+        # Convert to UTC if timezone is provided
+        if start_date.tzinfo:
+            start_date = start_date.astimezone(UTC)
         query = query.filter(DetectTime.time >= start_date)
     if end_date:
+        # Convert to UTC if timezone is provided
+        if end_date.tzinfo:
+            end_date = end_date.astimezone(UTC)
         query = query.filter(DetectTime.time <= end_date)
     if severity:
         query = query.filter(Impact.severity == severity)
@@ -254,7 +260,12 @@ async def get_alert_detail(
     Options:
     - truncate_payload: Truncate long payload data
     """
+    # First check if the alert exists
     try:
+        alert_exists = db.query(Alert._ident).filter(Alert._ident == alert_id).first()
+        if not alert_exists:
+            raise HTTPException(status_code=404, detail="Alert not found")
+
         # Get base alert information
         alert = (
             db.query(
@@ -271,9 +282,6 @@ async def get_alert_detail(
             .filter(Alert._ident == alert_id)
             .first()
         )
-
-        if not alert:
-            raise HTTPException(status_code=404, detail="Alert not found")
 
         # Get source information with complete address details
         source_info = (
@@ -517,6 +525,8 @@ async def get_alert_detail(
             additional_data=additional_data
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}")
 
@@ -527,7 +537,7 @@ async def get_statistics_summary(
 ):
     """Get summary statistics of alerts"""
     try:
-        start_time = datetime.utcnow() - timedelta(hours=time_range)
+        start_time = datetime.now(UTC) - timedelta(hours=time_range)
         
         # Get severity distribution
         severity_stats = (
