@@ -211,3 +211,17 @@ class AlertDetail(BaseModel):
         return SnortInfo(
             **{k: v for k, v in self.additional_data.items() if k.startswith("snort_")}
         )
+
+
+class TimelineDataPoint(BaseModel):
+    timestamp: str = Field(..., description="ISO formatted timestamp")
+    count: int = Field(..., description="Number of alerts in this time interval")
+
+
+class TimelineResponse(BaseModel):
+    time_frame: str = Field(
+        ..., description="Time frame used for grouping (hour, day, week, month)"
+    )
+    start_date: str = Field(..., description="ISO formatted start date")
+    end_date: str = Field(..., description="ISO formatted end date")
+    data: List[TimelineDataPoint] = Field(..., description="Time series data points")
