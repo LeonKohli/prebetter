@@ -10,6 +10,7 @@ import {
   useVueTable,
 } from '@tanstack/vue-table'
 import type { Alert } from '~/composables/useAlerts'
+import AlertStatisticsChart from './AlertStatisticsChart.vue'
 
 interface Props {
   columns: ColumnDef<Alert, any>[]
@@ -137,6 +138,9 @@ watch(() => props.data, () => {
 
 <template>
   <div class="w-full space-y-4 overflow-x-auto">
+    <!-- Add Statistics Chart -->
+    <AlertStatisticsChart :time-range="24" />
+    
     <DataTableToolbar :table="table" />
     <div class="relative min-w-full border rounded-md">
       <!-- Loading Overlay -->
