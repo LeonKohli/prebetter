@@ -9,17 +9,14 @@ export const severityOptions = [
   {
     value: 'high',
     label: 'High',
-    icon: 'lucide:alert-triangle',
   },
   {
     value: 'medium',
     label: 'Medium',
-    icon: 'lucide:alert-circle',
   },
   {
     value: 'low',
     label: 'Low',
-    icon: 'lucide:info',
   },
 ]
 
@@ -64,10 +61,7 @@ export const columns: ColumnDef<Alert>[] = [
           h(Badge, {
             variant: severity.value === 'high' ? 'destructive' : 'default',
             class: 'capitalize',
-          }, () => [
-            h('Icon', { name: severity.icon, class: 'w-3 h-3 mr-1' }),
-            severity.label,
-          ]),
+          }, () => severity.label),
         ]),
       ])
     },
@@ -78,7 +72,37 @@ export const columns: ColumnDef<Alert>[] = [
   {
     accessorKey: 'detect_time',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Time' }),
-    cell: ({ row }) => h('div', { class: 'w-[150px]' }, new Date(row.getValue('detect_time')).toLocaleString()),
+    cell: ({ row }) => {
+      const timeObj = row.getValue('detect_time') as { time: string; usec: number; gmtoff: number }
+      
+      try {
+        // Parse the base time
+        const baseDate = new Date(timeObj.time)
+        
+        // Add microseconds (convert to milliseconds by dividing by 1000)
+        baseDate.setMilliseconds(timeObj.usec / 1000)
+        
+        // Adjust for GMT offset (gmtoff is in seconds)
+        const userTimezoneOffset = baseDate.getTimezoneOffset() * 60 // Convert minutes to seconds
+        const targetOffset = timeObj.gmtoff
+        const offsetDiff = targetOffset + userTimezoneOffset
+        baseDate.setSeconds(baseDate.getSeconds() + offsetDiff)
+        
+        // Format the date in a readable way
+        const dateFormatter = new Intl.DateTimeFormat('de', {
+          day: '2-digit',
+          month: 'short',
+          year: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        
+        return h('div', { class: 'w-[150px]' }, dateFormatter.format(baseDate))
+      } catch (error) {
+        console.error('Error parsing date:', error, timeObj)
+        return h('div', { class: 'w-[150px] text-destructive' }, 'Invalid Date Format')
+      }
+    },
   },
   {
     accessorKey: 'classification_text',
@@ -102,4 +126,4 @@ export const columns: ColumnDef<Alert>[] = [
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Analyzer' }),
     cell: ({ row }) => h('div', { class: 'w-[150px]' }, row.original.analyzer.name),
   },
-] 
+]
