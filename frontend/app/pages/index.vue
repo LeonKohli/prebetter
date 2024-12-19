@@ -18,9 +18,10 @@ const handleSortingChange = (newSorting: SortingState) => {
     if (id === 'classification_text') sortField = 'classification'
     else if (id === 'source_ipv4') sortField = 'source_ip'
     else if (id === 'target_ipv4') sortField = 'target_ip'
+    else if (id === 'alert_id') sortField = 'alert_id'
     // analyzer.name is now handled by the explicit column id
     
-    setSorting(sortField as 'detect_time' | 'create_time' | 'severity' | 'classification' | 'source_ip' | 'target_ip' | 'analyzer', desc ? 'desc' : 'asc')
+    setSorting(sortField as 'detect_time' | 'create_time' | 'severity' | 'classification' | 'source_ip' | 'target_ip' | 'analyzer' | 'alert_id', desc ? 'desc' : 'asc')
   } else {
     setSorting(undefined, undefined)
   }

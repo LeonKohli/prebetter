@@ -26,7 +26,7 @@ interface AlertsFilter {
   timeRange: string
   page: number
   size: number
-  sort_by?: 'detect_time' | 'create_time' | 'severity' | 'classification' | 'source_ip' | 'target_ip' | 'analyzer'
+  sort_by?: 'detect_time' | 'create_time' | 'severity' | 'classification' | 'source_ip' | 'target_ip' | 'analyzer' | 'alert_id'
   sort_order?: 'asc' | 'desc'
 }
 
@@ -79,7 +79,7 @@ export function useAlerts() {
   }
 
   const setSorting = (
-    field?: 'detect_time' | 'create_time' | 'severity' | 'classification' | 'source_ip' | 'target_ip' | 'analyzer',
+    field?: 'detect_time' | 'create_time' | 'severity' | 'classification' | 'source_ip' | 'target_ip' | 'analyzer' | 'alert_id',
     order?: 'asc' | 'desc'
   ) => {
     filters.sort_by = field
