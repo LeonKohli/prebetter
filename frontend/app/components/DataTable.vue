@@ -19,6 +19,7 @@ interface Props {
   totalItems?: number
   totalPages?: number
   sorting?: SortingState
+  loading?: boolean
   onPageChange?: (page: number) => void
   onPageSizeChange?: (size: number) => void
 }
@@ -29,6 +30,7 @@ const props = withDefaults(defineProps<Props>(), {
   totalItems: 0,
   totalPages: 1,
   sorting: () => [],
+  loading: false,
   onPageChange: undefined,
   onPageSizeChange: undefined,
 })
@@ -36,14 +38,17 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'update:page': [page: number]
   'update:pageSize': [size: number]
-  'update:rowSelection': [selection: Record<string, boolean>]
   'update:sorting': [sorting: SortingState]
+  'update:rowSelection': [selection: Record<string, boolean>]
 }>()
 
 const sorting = ref<SortingState>(props.sorting)
 const columnFilters = ref<ColumnFiltersState>([])
 const columnVisibility = ref<VisibilityState>({})
 const rowSelection = ref<Record<string, boolean>>({})
+
+// Generate a unique key for each row using page number, row index, and alert_id
+const rowKey = (row: any, index: number) => `${props.page}-${index}-${row.original.alert_id}`
 
 const table = useVueTable({
   get data() {
@@ -89,7 +94,7 @@ const table = useVueTable({
   pageCount: props.totalPages,
   enableRowSelection: true,
   enableMultiRowSelection: true,
-  getRowId: (row: Alert) => row.alert_id.toString(),
+  getRowId: (row: Alert, index: number) => `${props.page}-${index}-${row.alert_id}`,
 })
 
 const handlePageChange = (page: number) => {
@@ -106,6 +111,13 @@ const handlePageSizeChange = (size: number) => {
   }
 }
 
+// Watch for external sorting changes
+watch(() => props.sorting, (newSorting) => {
+  if (JSON.stringify(newSorting) !== JSON.stringify(sorting.value)) {
+    sorting.value = newSorting
+  }
+}, { deep: true })
+
 // Clear row selection when page changes
 watch(() => props.page, () => {
   rowSelection.value = {}
@@ -114,26 +126,30 @@ watch(() => props.page, () => {
 // Watch for data changes to update row selection
 watch(() => props.data, () => {
   // Remove selection for rows that no longer exist
-  const validIds = new Set(props.data.map(row => row.alert_id.toString()))
+  const validIds = new Set(props.data.map((row, index) => `${props.page}-${index}-${row.alert_id}`))
   for (const id of Object.keys(rowSelection.value)) {
     if (!validIds.has(id)) {
       delete rowSelection.value[id]
     }
   }
 }, { deep: true })
-
-// Watch for external sorting changes
-watch(() => props.sorting, (newSorting) => {
-  if (JSON.stringify(newSorting) !== JSON.stringify(sorting.value)) {
-    sorting.value = newSorting
-  }
-}, { deep: true })
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="w-full space-y-4 overflow-x-auto">
     <DataTableToolbar :table="table" />
-    <div class="border rounded-md">
+    <div class="relative min-w-full border rounded-md">
+      <!-- Loading Overlay -->
+      <div
+        v-if="loading"
+        class="absolute inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm"
+      >
+        <div class="flex items-center space-x-4">
+          <Spinner class="w-6 h-6" />
+          <p class="text-sm text-muted-foreground">Loading data...</p>
+        </div>
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
@@ -141,7 +157,7 @@ watch(() => props.sorting, (newSorting) => {
               v-for="header in headerGroup.headers" 
               :key="header.id"
               :class="[
-                header.column.columnDef.id === 'select' ? 'w-[48px] pr-0' : '',
+                header.column.columnDef.id === 'select' ? 'w-[48px] p-0' : '',
               ]"
             >
               <template v-if="!header.isPlaceholder">
@@ -157,16 +173,16 @@ watch(() => props.sorting, (newSorting) => {
         </TableHeader>
         <TableBody>
           <TableRow
-            v-for="row in table.getRowModel().rows"
-            :key="row.id"
+            v-for="(row, index) in table.getRowModel().rows"
+            :key="rowKey(row, index)"
             :data-state="row.getIsSelected() && 'selected'"
-            class="[&>td]:py-3"
+            class="[&>td]:py-3 data-[state=selected]:bg-muted/50"
           >
             <TableCell 
               v-for="cell in row.getVisibleCells()" 
               :key="cell.id"
               :class="[
-                cell.column.columnDef.id === 'select' ? 'w-[48px] pr-0' : '',
+                cell.column.columnDef.id === 'select' ? 'w-[48px] p-0' : '',
               ]"
             >
               <component
@@ -188,6 +204,7 @@ watch(() => props.sorting, (newSorting) => {
       :page-size="pageSize"
       :total-items="totalItems"
       :total-pages="totalPages"
+      :selected-rows="Object.keys(rowSelection).length"
       @update:page="handlePageChange"
       @update:page-size="handlePageSizeChange"
     />
