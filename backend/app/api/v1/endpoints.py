@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, select, text, literal_column, desc, asc, extract
+from sqlalchemy import func, and_, select, text, literal_column, desc, asc, extract, or_
 from typing import List, Optional, Dict, Literal
 from datetime import datetime, timedelta, UTC
 from enum import Enum
@@ -47,6 +47,7 @@ class SortField(str, Enum):
     SOURCE_IP = "source_ip"
     TARGET_IP = "target_ip"
     ANALYZER = "analyzer"
+    ALERT_ID = "alert_id"
 
 
 class SortOrder(str, Enum):
@@ -63,85 +64,69 @@ class TimeFrame(str, Enum):
 
 @router.get("/alerts", response_model=AlertListResponse)
 async def list_alerts(
-    db: Session = Depends(get_db),
-    page: int = Query(1, gt=0),
-    size: int = Query(20, gt=0, le=100),
-    start_date: Optional[datetime] = Query(
-        None, description="Start date in ISO format with timezone"
-    ),
-    end_date: Optional[datetime] = Query(
-        None, description="End date in ISO format with timezone"
-    ),
+    page: int = 1,
+    size: int = 10,
+    sort_by: str = "detect_time",
+    sort_order: str = "desc",
     severity: Optional[str] = None,
     classification: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     source_ip: Optional[str] = None,
     target_ip: Optional[str] = None,
-    analyzer_name: Optional[str] = None,
-    impact_type: Optional[str] = None,
-    sort_by: SortField = Query(SortField.DETECT_TIME, description="Field to sort by"),
-    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order"),
-):
-    """
-    Get a list of alerts with essential information:
-    - Alert ID and timing
-    - Classification
-    - Severity
-    - Source and target IPv4
-    - Basic analyzer info
+    analyzer_model: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> AlertListResponse:
+    # Create aliases for source and target addresses
+    source_addr = aliased(Address)
+    target_addr = aliased(Address)
 
-    Supports:
-    - Pagination
-    - Date range filtering (expects ISO format with timezone)
-    - Multiple filter criteria
-    - Sorting options
-    """
-    offset = (page - 1) * size
-
-    # Base query for alerts
+    # Base query for alerts with essential joins
     query = (
         db.query(
             Alert._ident,
             Alert.messageid,
-            # Create Time
-            CreateTime.time.label("create_time"),
-            CreateTime.usec.label("create_time_usec"),
-            CreateTime.gmtoff.label("create_time_gmtoff"),
-            # Detect Time
             DetectTime.time.label("detect_time"),
             DetectTime.usec.label("detect_time_usec"),
             DetectTime.gmtoff.label("detect_time_gmtoff"),
-            # Classification and Impact
-            Classification.text.label("classification"),
+            CreateTime.time.label("create_time"),
+            CreateTime.usec.label("create_time_usec"),
+            CreateTime.gmtoff.label("create_time_gmtoff"),
+            Classification.text.label("classification_text"),
             Impact.severity,
-            # Source and Target IPs will be added through joins
-            # Analyzer info
+            source_addr.address.label("source_ipv4"),
+            target_addr.address.label("target_ipv4"),
             Analyzer.name.label("analyzer_name"),
+            Node.name.label("analyzer_host"),
             Analyzer.model.label("analyzer_model"),
             Analyzer.manufacturer.label("analyzer_manufacturer"),
             Analyzer.version.label("analyzer_version"),
             literal_column("Prelude_Analyzer.class").label("analyzer_class"),
             Analyzer.ostype.label("analyzer_ostype"),
             Analyzer.osversion.label("analyzer_osversion"),
-            # Node info
-            Node.name.label("node_name"),
             Node.location.label("node_location"),
             Node.category.label("node_category"),
-            # Process info
-            Process.name.label("process_name"),
-            Process.pid.label("process_pid"),
-            Process.path.label("process_path"),
         )
-        .select_from(Alert)
-        .outerjoin(
-            CreateTime,
-            and_(
-                CreateTime._message_ident == Alert._ident,
-                CreateTime._parent_type == "A",
-            ),
-        )
-        .outerjoin(DetectTime, DetectTime._message_ident == Alert._ident)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .outerjoin(CreateTime, and_(CreateTime._message_ident == Alert._ident, CreateTime._parent_type == "A"))
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
+        .outerjoin(
+            source_addr,
+            and_(
+                source_addr._message_ident == Alert._ident,
+                source_addr._parent_type == "S",
+                source_addr.category == "ipv4-addr",
+            ),
+        )
+        .outerjoin(
+            target_addr,
+            and_(
+                target_addr._message_ident == Alert._ident,
+                target_addr._parent_type == "T",
+                target_addr.category == "ipv4-addr",
+            ),
+        )
         .outerjoin(
             Analyzer,
             and_(
@@ -158,113 +143,75 @@ async def list_alerts(
                 Node._parent0_index == -1,
             ),
         )
-        .outerjoin(
-            Process,
-            and_(
-                Process._message_ident == Alert._ident,
-                Process._parent_type == "A",
-                Process._parent0_index == -1,
-            ),
-        )
-    )
-
-    # Add source IP join
-    source_addr = aliased(Address)
-    query = query.outerjoin(
-        source_addr,
-        and_(
-            source_addr._message_ident == Alert._ident,
-            source_addr._parent_type == "S",
-            source_addr.category == "ipv4-addr",
-        ),
-    )
-
-    # Add target IP join
-    target_addr = aliased(Address)
-    query = query.outerjoin(
-        target_addr,
-        and_(
-            target_addr._message_ident == Alert._ident,
-            target_addr._parent_type == "T",
-            target_addr.category == "ipv4-addr",
-        ),
-    )
-
-    # Add source and target IPs to select
-    query = query.add_columns(
-        source_addr.address.label("source_ipv4"),
-        target_addr.address.label("target_ipv4"),
     )
 
     # Apply filters
-    if start_date:
-        # Convert to UTC if timezone is provided
-        if start_date.tzinfo:
-            start_date = start_date.astimezone(UTC)
-        query = query.filter(DetectTime.time >= start_date)
-    if end_date:
-        # Convert to UTC if timezone is provided
-        if end_date.tzinfo:
-            end_date = end_date.astimezone(UTC)
-        query = query.filter(DetectTime.time <= end_date)
     if severity:
         query = query.filter(Impact.severity == severity)
     if classification:
-        query = query.filter(Classification.text.contains(classification))
+        query = query.filter(Classification.text == classification)
+    if start_date:
+        query = query.filter(DetectTime.time >= start_date)
+    if end_date:
+        query = query.filter(DetectTime.time <= end_date)
     if source_ip:
         query = query.filter(source_addr.address == source_ip)
     if target_ip:
         query = query.filter(target_addr.address == target_ip)
-    if analyzer_name:
-        query = query.filter(Analyzer.name == analyzer_name)
-    if impact_type:
-        query = query.filter(Impact.type == impact_type)
+    if analyzer_model:
+        query = query.filter(Analyzer.model == analyzer_model)
 
-    # Apply sorting
-    if sort_by == SortField.DETECT_TIME:
-        query = query.order_by(desc(DetectTime.time) if sort_order == SortOrder.DESC else asc(DetectTime.time))
-    elif sort_by == SortField.CREATE_TIME:
-        query = query.order_by(desc(CreateTime.time) if sort_order == SortOrder.DESC else asc(CreateTime.time))
-    elif sort_by == SortField.SEVERITY:
-        query = query.order_by(desc(Impact.severity) if sort_order == SortOrder.DESC else asc(Impact.severity))
-    elif sort_by == SortField.CLASSIFICATION:
-        query = query.order_by(desc(Classification.text) if sort_order == SortOrder.DESC else asc(Classification.text))
-    elif sort_by == SortField.SOURCE_IP:
-        query = query.order_by(desc(source_addr.address) if sort_order == SortOrder.DESC else asc(source_addr.address))
-    elif sort_by == SortField.TARGET_IP:
-        query = query.order_by(desc(target_addr.address) if sort_order == SortOrder.DESC else asc(target_addr.address))
-    elif sort_by == SortField.ANALYZER:
-        query = query.order_by(desc(Analyzer.name) if sort_order == SortOrder.DESC else asc(Analyzer.name))
+    # Optimize count query by removing unnecessary joins and ORDER BY
+    count_query = (
+        db.query(Alert._ident)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .filter(*query.whereclause.clauses if query.whereclause else [])
+        .distinct()
+    )
+    
+    # Remove ORDER BY from count query
+    count_query = count_query.order_by(None)
+    total = count_query.count()
 
-    # Get total count
-    total = query.count()
+    # Apply sorting to main query
+    if sort_by == "detect_time":
+        sort_column = DetectTime.time
+    elif sort_by == "create_time":
+        sort_column = CreateTime.time
+    elif sort_by == "severity":
+        sort_column = Impact.severity
+    else:
+        sort_column = DetectTime.time
 
-    # Get paginated results
-    results = query.offset(offset).limit(size).all()
+    if sort_order.lower() == "asc":
+        query = query.order_by(sort_column.asc())
+    else:
+        query = query.order_by(sort_column.desc())
 
-    # Process results
-    alerts = []
+    # Paginate results
+    offset = (page - 1) * size
+    results = (
+        query.distinct()
+        .offset(offset)
+        .limit(size)
+        .all()
+    )
+
+    # Convert the results to AlertListItem objects
+    items = []
     for result in results:
         node_info = None
-        if result.node_name or result.node_location or result.node_category:
+        if result.analyzer_host or result.node_location or result.node_category:
             node_info = NodeInfo(
-                name=result.node_name,
+                name=result.analyzer_host,
                 location=result.node_location,
                 category=result.node_category,
-            )
-
-        process_info = None
-        if result.process_name or result.process_pid or result.process_path:
-            process_info = ProcessInfo(
-                name=result.process_name,
-                pid=result.process_pid,
-                path=result.process_path,
             )
 
         analyzer_info = None
         if result.analyzer_name:
             analyzer_info = AnalyzerInfo(
-                name=result.analyzer_name,
+                name=f"{result.analyzer_name} ({result.analyzer_host.split('.')[0]})" if result.analyzer_host else result.analyzer_name,
                 node=node_info,
                 model=result.analyzer_model,
                 manufacturer=result.analyzer_manufacturer,
@@ -272,12 +219,11 @@ async def list_alerts(
                 class_type=result.analyzer_class,
                 ostype=result.analyzer_ostype,
                 osversion=result.analyzer_osversion,
-                process=process_info,
             )
 
-        alert_info = AlertListItem(
-            alert_id=result[0],
-            message_id=result[1],
+        alert_item = AlertListItem(
+            alert_id=result._ident,
+            message_id=result.messageid,
             create_time=TimeInfo(
                 time=result.create_time,
                 usec=result.create_time_usec,
@@ -290,15 +236,20 @@ async def list_alerts(
                 usec=result.detect_time_usec,
                 gmtoff=result.detect_time_gmtoff,
             ),
-            classification_text=result.classification,
+            classification_text=result.classification_text,
             severity=result.severity,
             source_ipv4=result.source_ipv4,
             target_ipv4=result.target_ipv4,
             analyzer=analyzer_info,
         )
-        alerts.append(alert_info)
+        items.append(alert_item)
 
-    return AlertListResponse(total=total, items=alerts, page=page, size=size)
+    return AlertListResponse(
+        total=total,
+        items=items,
+        page=page,
+        size=size,
+    )
 
 
 @router.get("/alerts/{alert_id}", response_model=AlertDetail)
