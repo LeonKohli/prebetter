@@ -685,7 +685,10 @@ async def get_alert_timeline(
             end_date = end_date.astimezone(UTC)
 
         # Base query
-        query = db.query(DetectTime.time, func.count(Alert._ident).label("count")).join(
+        query = db.query(
+            func.min(DetectTime.time).label("group_time"),
+            func.count(Alert._ident).label("count")
+        ).join(
             Alert, Alert._ident == DetectTime._message_ident
         )
 
@@ -720,29 +723,46 @@ async def get_alert_timeline(
                 extract("month", DetectTime.time),
                 extract("day", DetectTime.time),
                 extract("hour", DetectTime.time),
-            ).order_by(DetectTime.time)
+            ).order_by(
+                extract("year", DetectTime.time),
+                extract("month", DetectTime.time),
+                extract("day", DetectTime.time),
+                extract("hour", DetectTime.time)
+            )
         elif time_frame == TimeFrame.DAY:
             query = query.group_by(
                 extract("year", DetectTime.time),
                 extract("month", DetectTime.time),
                 extract("day", DetectTime.time),
-            ).order_by(DetectTime.time)
+            ).order_by(
+                extract("year", DetectTime.time),
+                extract("month", DetectTime.time),
+                extract("day", DetectTime.time)
+            )
         elif time_frame == TimeFrame.WEEK:
             query = query.group_by(
-                extract("year", DetectTime.time), extract("week", DetectTime.time)
-            ).order_by(DetectTime.time)
+                extract("year", DetectTime.time),
+                extract("week", DetectTime.time)
+            ).order_by(
+                extract("year", DetectTime.time),
+                extract("week", DetectTime.time)
+            )
         else:  # MONTH
             query = query.group_by(
-                extract("year", DetectTime.time), extract("month", DetectTime.time)
-            ).order_by(DetectTime.time)
+                extract("year", DetectTime.time),
+                extract("month", DetectTime.time)
+            ).order_by(
+                extract("year", DetectTime.time),
+                extract("month", DetectTime.time)
+            )
 
         results = query.all()
 
         # Format results
         timeline_data = []
         for result in results:
-            timestamp = result[0]
-            count = result[1]
+            timestamp = result.group_time
+            count = result.count
 
             if time_frame == TimeFrame.HOUR:
                 # Round to hour
