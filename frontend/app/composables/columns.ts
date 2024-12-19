@@ -26,18 +26,22 @@ export const severityOptions = [
 export const columns: ColumnDef<Alert>[] = [
   {
     id: 'select',
-    header: ({ table }) => h(Checkbox, {
-      'checked': table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() ? 'indeterminate' : false),
-      'onUpdate:checked': value => table.toggleAllPageRowsSelected(!!value),
-      'ariaLabel': 'Select all',
-      'class': 'translate-y-0.5',
-    }),
-    cell: ({ row }) => h(Checkbox, {
-      'checked': row.getIsSelected(),
-      'onUpdate:checked': value => row.toggleSelected(!!value),
-      'ariaLabel': 'Select row',
-      'class': 'translate-y-0.5',
-    }),
+    header: ({ table }) => h('div', { class: 'w-[48px] flex items-center justify-center' }, [
+      h(Checkbox, {
+        'checked': table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() ? 'indeterminate' : false),
+        'onUpdate:checked': value => table.toggleAllPageRowsSelected(!!value),
+        'aria-label': 'Select all',
+        'class': 'translate-y-[2px]',
+      }),
+    ]),
+    cell: ({ row }) => h('div', { class: 'w-[48px] flex items-center justify-center' }, [
+      h(Checkbox, {
+        'checked': row.getIsSelected(),
+        'onUpdate:checked': value => row.toggleSelected(!!value),
+        'aria-label': 'Select row',
+        'class': 'translate-y-[2px]',
+      }),
+    ]),
     enableSorting: false,
     enableHiding: false,
   },
@@ -78,21 +82,23 @@ export const columns: ColumnDef<Alert>[] = [
   },
   {
     accessorKey: 'classification_text',
+    id: 'classification_text',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Classification' }),
     cell: ({ row }) => h('div', { class: 'max-w-[500px] truncate' }, row.getValue('classification_text')),
   },
   {
     accessorKey: 'source_ipv4',
-    header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Source' }),
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Source IP' }),
     cell: ({ row }) => h('div', { class: 'w-[120px]' }, row.getValue('source_ipv4')),
   },
   {
     accessorKey: 'target_ipv4',
-    header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Target' }),
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Target IP' }),
     cell: ({ row }) => h('div', { class: 'w-[120px]' }, row.getValue('target_ipv4')),
   },
   {
     accessorKey: 'analyzer.name',
+    id: 'analyzer',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Analyzer' }),
     cell: ({ row }) => h('div', { class: 'w-[150px]' }, row.original.analyzer.name),
   },

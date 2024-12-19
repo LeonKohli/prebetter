@@ -22,8 +22,8 @@ const forwardedProps = useForwardProps(delegatedProps)
 </script>
 
 <template>
-  <div class="flex items-center border-b px-3" cmdk-input-wrapper>
-    <Search class="mr-2 h-4 w-4 shrink-0 opacity-50" />
+  <div class="flex items-center px-3 border-b" cmdk-input-wrapper>
+    <Search class="w-4 h-4 mr-2 opacity-50 shrink-0" />
     <ComboboxInput
       v-bind="{ ...forwardedProps, ...$attrs }"
       auto-focus
