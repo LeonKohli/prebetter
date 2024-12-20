@@ -214,17 +214,12 @@ class AlertDetail(BaseModel):
 
 
 class TimelineDataPoint(BaseModel):
-    timestamp: str = Field(..., description="ISO formatted timestamp")
-    count: int = Field(..., description="Number of alerts in this time interval")
+    time: datetime = Field(..., description="Time bucket for the data point")
+    count: int = Field(..., description="Number of alerts in this time bucket")
 
 
 class TimelineResponse(BaseModel):
-    time_frame: str = Field(
-        ..., description="Time frame used for grouping (hour, day, week, month)"
-    )
-    start_date: str = Field(..., description="ISO formatted start date")
-    end_date: str = Field(..., description="ISO formatted end date")
-    data: List[TimelineDataPoint] = Field(..., description="Time series data points")
+    data: List[TimelineDataPoint] = Field(..., description="List of data points for the timeline")
 
 
 class GroupedAlertDetail(BaseModel):

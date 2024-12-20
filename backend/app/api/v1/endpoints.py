@@ -550,8 +550,109 @@ async def get_grouped_alerts(
         )
 
 
+@router.get("/alerts/timeline", response_model=TimelineResponse)
+async def get_timeline(
+    timeframe: TimeFrame = Query(TimeFrame.HOUR, description="Timeframe for aggregation"),
+    severity: Optional[str] = None,
+    classification: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    target_ip: Optional[str] = None,
+    analyzer_model: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> TimelineResponse:
+    try:
+        # Create aliases for source and target addresses
+        source_addr = aliased(Address)
+        target_addr = aliased(Address)
+
+        # Create time bucket based on timeframe
+        if timeframe == TimeFrame.HOUR:
+            time_bucket = func.date_format(DetectTime.time, '%Y-%m-%d %H:00:00')
+        elif timeframe == TimeFrame.DAY:
+            time_bucket = func.date_format(DetectTime.time, '%Y-%m-%d 00:00:00')
+        elif timeframe == TimeFrame.WEEK:
+            # MySQL doesn't have a direct week truncation, so we'll use date_sub to get to Monday
+            time_bucket = func.date_format(
+                func.date_sub(
+                    DetectTime.time,
+                    text(f"INTERVAL (DAYOFWEEK(time) - 2) DAY")
+                ),
+                '%Y-%m-%d 00:00:00'
+            )
+        else:  # MONTH
+            time_bucket = func.date_format(DetectTime.time, '%Y-%m-01 00:00:00')
+
+        # Base query for alerts with essential joins
+        query = (
+            db.query(
+                time_bucket.label("time_bucket"),
+                func.count(Alert._ident).label("count"),
+            )
+            .join(DetectTime, Alert._ident == DetectTime._message_ident)
+            .outerjoin(Impact, Impact._message_ident == Alert._ident)
+            .outerjoin(Classification, Classification._message_ident == Alert._ident)
+            .outerjoin(
+                source_addr,
+                and_(
+                    source_addr._message_ident == Alert._ident,
+                    source_addr._parent_type == "S",
+                    source_addr.category == "ipv4-addr",
+                ),
+            )
+            .outerjoin(
+                target_addr,
+                and_(
+                    target_addr._message_ident == Alert._ident,
+                    target_addr._parent_type == "T",
+                    target_addr.category == "ipv4-addr",
+                ),
+            )
+            .outerjoin(
+                Analyzer,
+                and_(
+                    Analyzer._message_ident == Alert._ident,
+                    Analyzer._parent_type == "A",
+                    Analyzer._index == -1,
+                ),
+            )
+        )
+
+        # Apply filters
+        if severity:
+            query = query.filter(Impact.severity == severity)
+        if classification:
+            query = query.filter(Classification.text.like(f"%{classification}%"))
+        if source_ip:
+            query = query.filter(func.binary(source_addr.address) == source_ip)
+        if target_ip:
+            query = query.filter(func.binary(target_addr.address) == target_ip)
+        if analyzer_model:
+            query = query.filter(Analyzer.model == analyzer_model)
+
+        # Group by time bucket and order by time
+        query = query.group_by("time_bucket").order_by("time_bucket")
+
+        # Execute query and format results
+        results = query.all()
+        data_points = [
+            TimelineDataPoint(
+                time=datetime.strptime(result.time_bucket, "%Y-%m-%d %H:%M:%S"),
+                count=result.count,
+            )
+            for result in results
+        ]
+
+        return TimelineResponse(data=data_points)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching timeline data: {str(e)}",
+        )
+
+
 @router.get("/alerts/{alert_id}", response_model=AlertDetail)
-async def get_alert_detail(
+async def get_alert(
     alert_id: int,
     db: Session = Depends(get_db),
     truncate_payload: bool = Query(
@@ -935,161 +1036,4 @@ def read_unique_analyzers(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error fetching analyzers: {str(e)}"
-        )
-
-
-@router.get("/timeline", response_model=TimelineResponse)
-async def get_alert_timeline(
-    db: Session = Depends(get_db),
-    time_frame: TimeFrame = Query(
-        TimeFrame.DAY, description="Time frame for grouping alerts"
-    ),
-    start_date: Optional[datetime] = Query(
-        None, description="Start date in ISO format with timezone"
-    ),
-    end_date: Optional[datetime] = Query(
-        None, description="End date in ISO format with timezone"
-    ),
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    analyzer_name: Optional[str] = None,
-):
-    """
-    Get alert counts grouped by time intervals for visualization.
-
-    Returns data suitable for time-series visualization with:
-    - Alert counts per time interval
-    - Optional filtering by severity, classification, and analyzer
-    - Configurable time frame (hour, day, week, month)
-    """
-    try:
-        # Set default time range if not provided
-        if not end_date:
-            end_date = datetime.now(UTC)
-        if not start_date:
-            if time_frame == TimeFrame.HOUR:
-                start_date = end_date - timedelta(hours=24)
-            elif time_frame == TimeFrame.DAY:
-                start_date = end_date - timedelta(days=30)
-            elif time_frame == TimeFrame.WEEK:
-                start_date = end_date - timedelta(weeks=12)
-            else:  # MONTH
-                start_date = end_date - timedelta(days=365)
-
-        # Convert to UTC if timezone is provided
-        if start_date.tzinfo:
-            start_date = start_date.astimezone(UTC)
-        if end_date.tzinfo:
-            end_date = end_date.astimezone(UTC)
-
-        # Base query
-        query = db.query(
-            func.min(DetectTime.time).label("group_time"),
-            func.count(Alert._ident).label("count")
-        ).join(
-            Alert, Alert._ident == DetectTime._message_ident
-        )
-
-        # Apply filters
-        if severity:
-            query = query.join(Impact, Impact._message_ident == Alert._ident).filter(
-                Impact.severity == severity
-            )
-
-        if classification:
-            query = query.join(
-                Classification, Classification._message_ident == Alert._ident
-            ).filter(Classification.text.contains(classification))
-
-        if analyzer_name:
-            query = query.join(
-                Analyzer,
-                and_(
-                    Analyzer._message_ident == Alert._ident,
-                    Analyzer._parent_type == "A",
-                    Analyzer._index == -1,
-                ),
-            ).filter(Analyzer.name == analyzer_name)
-
-        # Apply time range filter
-        query = query.filter(DetectTime.time >= start_date, DetectTime.time <= end_date)
-
-        # Group by time interval
-        if time_frame == TimeFrame.HOUR:
-            query = query.group_by(
-                extract("year", DetectTime.time),
-                extract("month", DetectTime.time),
-                extract("day", DetectTime.time),
-                extract("hour", DetectTime.time),
-            ).order_by(
-                extract("year", DetectTime.time),
-                extract("month", DetectTime.time),
-                extract("day", DetectTime.time),
-                extract("hour", DetectTime.time)
-            )
-        elif time_frame == TimeFrame.DAY:
-            query = query.group_by(
-                extract("year", DetectTime.time),
-                extract("month", DetectTime.time),
-                extract("day", DetectTime.time),
-            ).order_by(
-                extract("year", DetectTime.time),
-                extract("month", DetectTime.time),
-                extract("day", DetectTime.time)
-            )
-        elif time_frame == TimeFrame.WEEK:
-            query = query.group_by(
-                extract("year", DetectTime.time),
-                extract("week", DetectTime.time)
-            ).order_by(
-                extract("year", DetectTime.time),
-                extract("week", DetectTime.time)
-            )
-        else:  # MONTH
-            query = query.group_by(
-                extract("year", DetectTime.time),
-                extract("month", DetectTime.time)
-            ).order_by(
-                extract("year", DetectTime.time),
-                extract("month", DetectTime.time)
-            )
-
-        results = query.all()
-
-        # Format results
-        timeline_data = []
-        for result in results:
-            timestamp = result.group_time
-            count = result.count
-
-            if time_frame == TimeFrame.HOUR:
-                # Round to hour
-                timestamp = timestamp.replace(minute=0, second=0, microsecond=0)
-            elif time_frame == TimeFrame.DAY:
-                # Round to day
-                timestamp = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
-            elif time_frame == TimeFrame.WEEK:
-                # Round to start of week (Monday)
-                timestamp = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
-                timestamp = timestamp - timedelta(days=timestamp.weekday())
-            else:  # MONTH
-                # Round to start of month
-                timestamp = timestamp.replace(
-                    day=1, hour=0, minute=0, second=0, microsecond=0
-                )
-
-            timeline_data.append(
-                TimelineDataPoint(timestamp=timestamp.isoformat(), count=count)
-            )
-
-        return TimelineResponse(
-            time_frame=time_frame.value,
-            start_date=start_date.isoformat(),
-            end_date=end_date.isoformat(),
-            data=timeline_data,
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error generating timeline data: {str(e)}"
         )
