@@ -2,14 +2,11 @@
 import { LineChart } from '@/components/ui/chart-line'
 
 interface TimelineDataPoint {
-  timestamp: string
+  time: string
   count: number
 }
 
 interface TimelineResponse {
-  time_frame: string
-  start_date: string
-  end_date: string
   data: TimelineDataPoint[]
 }
 
@@ -21,6 +18,9 @@ const props = defineProps<{
   analyzerName?: string
 }>()
 
+// Default to 24 hours
+const defaultTimeRange = 24
+
 const loading = ref(true)
 const error = ref<string | null>(null)
 const timelineData = ref<TimelineResponse | null>(null)
@@ -30,7 +30,13 @@ const chartData = computed(() => {
   if (!timelineData.value) return []
   
   return timelineData.value.data.map(point => ({
-    label: new Date(point.timestamp).toLocaleString(),
+    label: new Date(point.time).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
     value: point.count
   }))
 })
@@ -40,11 +46,12 @@ const fetchTimeline = async () => {
     loading.value = true
     error.value = null
     
-    // Calculate start and end dates based on timeRange
+    // Calculate start and end dates based on timeRange, defaulting to 24 hours
     const end = new Date()
-    const start = new Date(end.getTime() - (props.timeRange || 24) * 60 * 60 * 1000)
+    const start = new Date(end.getTime() - (props.timeRange || defaultTimeRange) * 60 * 60 * 1000)
     
-    const response = await $fetch<TimelineResponse>('/api/timeline', {
+    // Ensure dates are in ISO format with timezone
+    const response = await $fetch<TimelineResponse>('/api/alerts/timeline', {
       params: {
         time_frame: props.timeFrame || 'hour',
         start_date: start.toISOString(),
@@ -96,7 +103,7 @@ onUnmounted(() => {
 <template>
   <div class="w-full space-y-4">
     <div class="flex items-center justify-between">
-      <h3 class="text-lg font-medium">Alert Timeline (Last {{ props.timeRange || 24 }} hours)</h3>
+      <h3 class="text-lg font-medium">Alert Timeline (Last {{ props.timeRange || defaultTimeRange }} hours)</h3>
       <Button
         v-if="error"
         variant="ghost"
