@@ -225,3 +225,27 @@ class TimelineResponse(BaseModel):
     start_date: str = Field(..., description="ISO formatted start date")
     end_date: str = Field(..., description="ISO formatted end date")
     data: List[TimelineDataPoint] = Field(..., description="Time series data points")
+
+
+class GroupedAlertDetail(BaseModel):
+    classification: str = Field(..., description="Classification text")
+    count: int = Field(..., description="Number of alerts for this classification")
+    analyzer: List[str] = Field(..., description="List of analyzer names")
+    analyzer_host: List[str] = Field(..., description="List of analyzer host names")
+    time: datetime = Field(..., description="Time of the most recent alert")
+
+
+class GroupedAlert(BaseModel):
+    source_ipv4: str = Field(..., description="Source IPv4 address")
+    target_ipv4: str = Field(..., description="Target IPv4 address")
+    total_count: int = Field(..., description="Total number of alerts in this group")
+    alerts: List[GroupedAlertDetail] = Field(..., description="Detailed alert information for this group")
+
+
+class GroupedAlertResponse(BaseModel):
+    total: int = Field(..., description="Total number of groups")
+    groups: List[GroupedAlert] = Field(..., description="List of grouped alerts")
+    page: int = Field(..., description="Current page number")
+    size: int = Field(..., description="Number of groups per page")
+
+    model_config = ConfigDict(from_attributes=True)
