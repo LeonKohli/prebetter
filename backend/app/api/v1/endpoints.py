@@ -553,6 +553,8 @@ async def get_grouped_alerts(
 @router.get("/alerts/timeline", response_model=TimelineResponse)
 async def get_timeline(
     timeframe: TimeFrame = Query(TimeFrame.HOUR, description="Timeframe for aggregation"),
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     severity: Optional[str] = None,
     classification: Optional[str] = None,
     source_ip: Optional[str] = None,
@@ -568,8 +570,10 @@ async def get_timeline(
         # Create time bucket based on timeframe
         if timeframe == TimeFrame.HOUR:
             time_bucket = func.date_format(DetectTime.time, '%Y-%m-%d %H:00:00')
+            interval = timedelta(hours=1)
         elif timeframe == TimeFrame.DAY:
             time_bucket = func.date_format(DetectTime.time, '%Y-%m-%d 00:00:00')
+            interval = timedelta(days=1)
         elif timeframe == TimeFrame.WEEK:
             # MySQL doesn't have a direct week truncation, so we'll use date_sub to get to Monday
             time_bucket = func.date_format(
@@ -579,8 +583,10 @@ async def get_timeline(
                 ),
                 '%Y-%m-%d 00:00:00'
             )
+            interval = timedelta(weeks=1)
         else:  # MONTH
             time_bucket = func.date_format(DetectTime.time, '%Y-%m-01 00:00:00')
+            interval = timedelta(days=30)  # Approximate for months
 
         # Base query for alerts with essential joins
         query = (
@@ -628,21 +634,62 @@ async def get_timeline(
             query = query.filter(func.binary(target_addr.address) == target_ip)
         if analyzer_model:
             query = query.filter(Analyzer.model == analyzer_model)
+        if start_date:
+            query = query.filter(DetectTime.time >= start_date)
+        if end_date:
+            query = query.filter(DetectTime.time <= end_date)
 
         # Group by time bucket and order by time
         query = query.group_by("time_bucket").order_by("time_bucket")
 
         # Execute query and format results
         results = query.all()
-        data_points = [
-            TimelineDataPoint(
-                time=datetime.strptime(result.time_bucket, "%Y-%m-%d %H:%M:%S"),
-                count=result.count,
-            )
+        
+        # Create a dictionary of existing data points
+        data_dict = {
+            datetime.strptime(result.time_bucket, "%Y-%m-%d %H:%M:%S"): result.count
             for result in results
-        ]
+        }
 
-        return TimelineResponse(data=data_points)
+        # Generate all time slots between start and end date
+        if start_date and end_date:
+            current_time = start_date
+            data_points = []
+            
+            while current_time <= end_date:
+                # Round current time based on timeframe
+                if timeframe == TimeFrame.HOUR:
+                    rounded_time = current_time.replace(minute=0, second=0, microsecond=0)
+                elif timeframe == TimeFrame.DAY:
+                    rounded_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+                elif timeframe == TimeFrame.WEEK:
+                    # Round to Monday
+                    rounded_time = current_time - timedelta(days=current_time.weekday())
+                    rounded_time = rounded_time.replace(hour=0, minute=0, second=0, microsecond=0)
+                else:  # MONTH
+                    rounded_time = current_time.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+                # Add data point with count or 0
+                data_points.append(
+                    TimelineDataPoint(
+                        time=rounded_time,
+                        count=data_dict.get(rounded_time, 0)
+                    )
+                )
+                
+                current_time += interval
+
+            return TimelineResponse(data=data_points)
+        else:
+            # If no date range specified, just return the actual data points
+            data_points = [
+                TimelineDataPoint(
+                    time=datetime.strptime(result.time_bucket, "%Y-%m-%d %H:%M:%S"),
+                    count=result.count,
+                )
+                for result in results
+            ]
+            return TimelineResponse(data=data_points)
 
     except Exception as e:
         raise HTTPException(
