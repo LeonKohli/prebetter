@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, select, text, literal_column, desc, asc, extract, or_
+from sqlalchemy import func, and_, select, text, literal_column, desc, asc, extract, or_, Index
 from typing import List, Optional, Dict, Literal
 from datetime import datetime, timedelta, UTC
 from enum import Enum
@@ -145,7 +145,7 @@ async def list_alerts(
         )
     )
 
-    # Apply filters
+    # Apply filters with binary comparison for IP addresses
     if severity:
         query = query.filter(Impact.severity == severity)
     if classification:
@@ -155,9 +155,9 @@ async def list_alerts(
     if end_date:
         query = query.filter(DetectTime.time <= end_date)
     if source_ip:
-        query = query.filter(source_addr.address == source_ip)
+        query = query.filter(func.binary(source_addr.address) == source_ip)
     if target_ip:
-        query = query.filter(target_addr.address == target_ip)
+        query = query.filter(func.binary(target_addr.address) == target_ip)
     if analyzer_model:
         query = query.filter(Analyzer.model == analyzer_model)
 
