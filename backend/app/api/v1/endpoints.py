@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, select, text, literal_column, desc, asc, extract, or_, Index
+from sqlalchemy import func, and_, select, text, literal_column, desc, asc, extract, or_, Index, tuple_, distinct
 from typing import List, Optional, Dict, Literal
 from datetime import datetime, timedelta, UTC
 from enum import Enum
@@ -34,6 +34,9 @@ from ...schemas.prelude import (
     ServiceInfo,
     TimelineResponse,
     TimelineDataPoint,
+    GroupedAlertResponse,
+    GroupedAlert,
+    GroupedAlertDetail,
 )
 
 router = APIRouter()
@@ -48,6 +51,7 @@ class SortField(str, Enum):
     TARGET_IP = "target_ip"
     ANALYZER = "analyzer"
     ALERT_ID = "alert_id"
+    TOTAL_COUNT = "total_count"
 
 
 class SortOrder(str, Enum):
@@ -64,10 +68,10 @@ class TimeFrame(str, Enum):
 
 @router.get("/alerts", response_model=AlertListResponse)
 async def list_alerts(
-    page: int = 1,
-    size: int = 10,
-    sort_by: str = "detect_time",
-    sort_order: str = "desc",
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    sort_by: SortField = Query(SortField.DETECT_TIME, description="Field to sort by"),
+    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
     severity: Optional[str] = None,
     classification: Optional[str] = None,
     start_date: Optional[datetime] = None,
@@ -145,11 +149,11 @@ async def list_alerts(
         )
     )
 
-    # Apply filters with binary comparison for IP addresses
+    # Apply filters
     if severity:
         query = query.filter(Impact.severity == severity)
     if classification:
-        query = query.filter(Classification.text == classification)
+        query = query.filter(Classification.text.like(f"%{classification}%"))
     if start_date:
         query = query.filter(DetectTime.time >= start_date)
     if end_date:
@@ -165,25 +169,74 @@ async def list_alerts(
     count_query = (
         db.query(Alert._ident)
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .filter(*query.whereclause.clauses if query.whereclause else [])
-        .distinct()
+        .outerjoin(CreateTime, and_(CreateTime._message_ident == Alert._ident, CreateTime._parent_type == "A"))
+        .outerjoin(Classification, Classification._message_ident == Alert._ident)
+        .outerjoin(Impact, Impact._message_ident == Alert._ident)
+        .outerjoin(
+            source_addr,
+            and_(
+                source_addr._message_ident == Alert._ident,
+                source_addr._parent_type == "S",
+                source_addr.category == "ipv4-addr",
+            ),
+        )
+        .outerjoin(
+            target_addr,
+            and_(
+                target_addr._message_ident == Alert._ident,
+                target_addr._parent_type == "T",
+                target_addr.category == "ipv4-addr",
+            ),
+        )
+        .outerjoin(
+            Analyzer,
+            and_(
+                Analyzer._message_ident == Alert._ident,
+                Analyzer._parent_type == "A",
+                Analyzer._index == -1,
+            ),
+        )
     )
+
+    # Apply filters to count query
+    if severity:
+        count_query = count_query.filter(Impact.severity == severity)
+    if classification:
+        count_query = count_query.filter(Classification.text.like(f"%{classification}%"))
+    if start_date:
+        count_query = count_query.filter(DetectTime.time >= start_date)
+    if end_date:
+        count_query = count_query.filter(DetectTime.time <= end_date)
+    if source_ip:
+        count_query = count_query.filter(func.binary(source_addr.address) == source_ip)
+    if target_ip:
+        count_query = count_query.filter(func.binary(target_addr.address) == target_ip)
+    if analyzer_model:
+        count_query = count_query.filter(Analyzer.model == analyzer_model)
     
-    # Remove ORDER BY from count query
+    # Remove ORDER BY from count query and get total
     count_query = count_query.order_by(None)
-    total = count_query.count()
+    total = count_query.distinct().count()
 
     # Apply sorting to main query
-    if sort_by == "detect_time":
+    if sort_by == SortField.DETECT_TIME:
         sort_column = DetectTime.time
-    elif sort_by == "create_time":
+    elif sort_by == SortField.CREATE_TIME:
         sort_column = CreateTime.time
-    elif sort_by == "severity":
+    elif sort_by == SortField.SEVERITY:
         sort_column = Impact.severity
+    elif sort_by == SortField.CLASSIFICATION:
+        sort_column = Classification.text
+    elif sort_by == SortField.SOURCE_IP:
+        sort_column = source_addr.address
+    elif sort_by == SortField.TARGET_IP:
+        sort_column = target_addr.address
+    elif sort_by == SortField.ANALYZER:
+        sort_column = Analyzer.name
     else:
-        sort_column = DetectTime.time
+        sort_column = Alert._ident
 
-    if sort_order.lower() == "asc":
+    if sort_order == SortOrder.ASC:
         query = query.order_by(sort_column.asc())
     else:
         query = query.order_by(sort_column.desc())
@@ -250,6 +303,251 @@ async def list_alerts(
         page=page,
         size=size,
     )
+
+
+@router.get("/alerts/groups", response_model=GroupedAlertResponse)
+async def get_grouped_alerts(
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(10, ge=1, le=100, description="Number of groups per page"),
+    sort_by: SortField = Query(SortField.DETECT_TIME, description="Field to sort by"),
+    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
+    severity: Optional[str] = None,
+    classification: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    source_ip: Optional[str] = None,
+    target_ip: Optional[str] = None,
+    analyzer_model: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> GroupedAlertResponse:
+    """
+    Retrieve alerts grouped by source and target IP addresses.
+    Each group includes detailed alert information with analyzers and times per classification.
+    Supports pagination and filtering.
+    """
+    try:
+        # Create aliases for source and target addresses
+        source_addr = aliased(Address, name="source_addr")
+        target_addr = aliased(Address, name="target_addr")
+
+        # Base query for getting unique source-target pairs with total counts
+        pairs_query = (
+            db.query(
+                source_addr.address.label("source_ipv4"),
+                target_addr.address.label("target_ipv4"),
+                func.count(Alert._ident).label("total_count"),
+                func.max(DetectTime.time).label("latest_time"),
+                func.max(Impact.severity).label("max_severity"),
+                func.max(Classification.text).label("latest_classification"),
+                func.max(Analyzer.name).label("analyzer_name"),
+            )
+            .select_from(Alert)
+            .join(DetectTime, Alert._ident == DetectTime._message_ident)
+            .outerjoin(Impact, Impact._message_ident == Alert._ident)
+            .outerjoin(Classification, Classification._message_ident == Alert._ident)
+            .outerjoin(
+                source_addr,
+                and_(
+                    source_addr._message_ident == Alert._ident,
+                    source_addr._parent_type == "S",
+                    source_addr.category == "ipv4-addr",
+                ),
+            )
+            .outerjoin(
+                target_addr,
+                and_(
+                    target_addr._message_ident == Alert._ident,
+                    target_addr._parent_type == "T",
+                    target_addr.category == "ipv4-addr",
+                ),
+            )
+            .outerjoin(
+                Analyzer,
+                and_(
+                    Analyzer._message_ident == Alert._ident,
+                    Analyzer._parent_type == "A",
+                    Analyzer._index == -1,
+                ),
+            )
+            .group_by(
+                source_addr.address,
+                target_addr.address,
+            )
+        )
+
+        # Apply filters
+        if severity:
+            pairs_query = pairs_query.filter(Impact.severity == severity)
+        if classification:
+            pairs_query = pairs_query.filter(Classification.text.like(f"%{classification}%"))
+        if start_date:
+            pairs_query = pairs_query.filter(DetectTime.time >= start_date)
+        if end_date:
+            pairs_query = pairs_query.filter(DetectTime.time <= end_date)
+        if source_ip:
+            pairs_query = pairs_query.filter(func.binary(source_addr.address) == source_ip)
+        if target_ip:
+            pairs_query = pairs_query.filter(func.binary(target_addr.address) == target_ip)
+        if analyzer_model:
+            pairs_query = pairs_query.filter(Analyzer.model == analyzer_model)
+
+        # Apply sorting based on parameters
+        if sort_by == SortField.DETECT_TIME:
+            sort_column = func.max(DetectTime.time)
+        elif sort_by == SortField.SEVERITY:
+            sort_column = func.max(Impact.severity)
+        elif sort_by == SortField.CLASSIFICATION:
+            sort_column = func.max(Classification.text)
+        elif sort_by == SortField.SOURCE_IP:
+            sort_column = source_addr.address
+        elif sort_by == SortField.TARGET_IP:
+            sort_column = target_addr.address
+        elif sort_by == SortField.ANALYZER:
+            sort_column = func.max(Analyzer.name)
+        elif sort_by == SortField.TOTAL_COUNT:
+            sort_column = func.count(Alert._ident)
+        else:
+            sort_column = func.count(Alert._ident)  # Default sort by count
+
+        if sort_order == SortOrder.ASC:
+            pairs_query = pairs_query.order_by(sort_column.asc())
+        else:
+            pairs_query = pairs_query.order_by(sort_column.desc())
+
+        # Get total count before pagination
+        total_pairs = pairs_query.count()
+
+        # Apply pagination to pairs query
+        pairs_query = pairs_query.offset((page - 1) * size).limit(size)
+        pairs = pairs_query.all()
+
+        # Get detailed alert information for the paginated pairs
+        alerts_query = (
+            db.query(
+                source_addr.address.label("source_ipv4"),
+                target_addr.address.label("target_ipv4"),
+                Classification.text.label("classification"),
+                func.count(Alert._ident).label("count"),
+                func.group_concat(distinct(Analyzer.name)).label("analyzers"),
+                func.group_concat(distinct(Node.name)).label("analyzer_hosts"),
+                func.max(DetectTime.time).label("latest_time"),
+            )
+            .select_from(Alert)
+            .join(DetectTime, Alert._ident == DetectTime._message_ident)
+            .outerjoin(Classification, Classification._message_ident == Alert._ident)
+            .outerjoin(
+                source_addr,
+                and_(
+                    source_addr._message_ident == Alert._ident,
+                    source_addr._parent_type == "S",
+                    source_addr.category == "ipv4-addr",
+                ),
+            )
+            .outerjoin(
+                target_addr,
+                and_(
+                    target_addr._message_ident == Alert._ident,
+                    target_addr._parent_type == "T",
+                    target_addr.category == "ipv4-addr",
+                ),
+            )
+            .outerjoin(
+                Analyzer,
+                and_(
+                    Analyzer._message_ident == Alert._ident,
+                    Analyzer._parent_type == "A",
+                    Analyzer._index == -1,
+                ),
+            )
+            .outerjoin(
+                Node,
+                and_(
+                    Node._message_ident == Alert._ident,
+                    Node._parent_type == "A",
+                    Node._parent0_index == -1,
+                ),
+            )
+            .filter(
+                tuple_(source_addr.address, target_addr.address).in_(
+                    [(p.source_ipv4, p.target_ipv4) for p in pairs]
+                )
+            )
+        )
+
+        # Apply the same filters
+        if severity:
+            alerts_query = alerts_query.outerjoin(
+                Impact, Impact._message_ident == Alert._ident
+            ).filter(Impact.severity == severity)
+        if classification:
+            alerts_query = alerts_query.filter(Classification.text.like(f"%{classification}%"))
+        if start_date:
+            alerts_query = alerts_query.filter(DetectTime.time >= start_date)
+        if end_date:
+            alerts_query = alerts_query.filter(DetectTime.time <= end_date)
+        if analyzer_model:
+            alerts_query = alerts_query.filter(Analyzer.model == analyzer_model)
+
+        # Group by source, target, and classification
+        alerts_query = alerts_query.group_by(
+            source_addr.address,
+            target_addr.address,
+            Classification.text,
+        )
+
+        alerts = alerts_query.all()
+
+        # Build the response
+        groups = []
+        alerts_map = {}
+        
+        # Create a map of alerts for each source-target pair
+        for a in alerts:
+            key = (a.source_ipv4, a.target_ipv4)
+            if key not in alerts_map:
+                alerts_map[key] = []
+            if a.classification:  # Only add if classification is not None
+                # Process analyzer hosts to remove domain names
+                analyzer_hosts = [
+                    host.split('.')[0] if host else None 
+                    for host in (a.analyzer_hosts.split(',') if a.analyzer_hosts else [])
+                    if host
+                ]
+                analyzers = a.analyzers.split(',') if a.analyzers else []
+                alerts_map[key].append(
+                    GroupedAlertDetail(
+                        classification=a.classification,
+                        count=a.count,
+                        analyzer=list(filter(None, analyzers)),
+                        analyzer_host=analyzer_hosts,
+                        time=a.latest_time,
+                    )
+                )
+
+        # Build the final groups list
+        for pair in pairs:
+            key = (pair.source_ipv4, pair.target_ipv4)
+            groups.append(
+                GroupedAlert(
+                    source_ipv4=pair.source_ipv4,
+                    target_ipv4=pair.target_ipv4,
+                    total_count=pair.total_count,
+                    alerts=alerts_map.get(key, []),
+                )
+            )
+
+        return GroupedAlertResponse(
+            total=total_pairs,
+            groups=groups,
+            page=page,
+            size=size,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching grouped alerts: {str(e)}",
+        )
 
 
 @router.get("/alerts/{alert_id}", response_model=AlertDetail)
