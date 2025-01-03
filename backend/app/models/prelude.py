@@ -1,6 +1,5 @@
 from sqlalchemy.ext.automap import automap_base
-from sqlalchemy.orm import relationship
-from ..database.config import engine, metadata
+from ..database.config import metadata
 
 Base = automap_base(metadata=metadata)
 
