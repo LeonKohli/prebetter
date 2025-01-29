@@ -1,9 +1,8 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import get_settings
-from .core.logging import setup_logging, log_request
+from .core.logging import setup_logging
 from .api.base import api_router
-import time
 
 # Set up logging
 setup_logging()
@@ -26,15 +25,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Middleware to log all requests with timing information"""
-    start_time = time.time()
-    response = await call_next(request)
-    duration = time.time() - start_time
-    log_request(request, response.status_code, duration)
-    return response
 
 # Include API router with v1 prefix
 app.include_router(api_router, prefix="/api/v1")
