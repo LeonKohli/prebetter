@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, text, literal_column, tuple_, distinct
 from typing import List, Optional
-from datetime import datetime, timedelta, UTC
+from datetime import datetime
 from enum import Enum
-from ...database.config import get_db
-from ...models.prelude import (
+from ....database.config import get_db
+from ....models.prelude import (
     Alert,
     Impact,
     Classification,
@@ -21,7 +21,7 @@ from ...models.prelude import (
     Source,
     Target,
 )
-from ...schemas.prelude import (
+from ....schemas.prelude import (
     AlertListResponse,
     AlertListItem,
     AlertDetail,
@@ -32,15 +32,12 @@ from ...schemas.prelude import (
     ProcessInfo,
     ReferenceInfo,
     ServiceInfo,
-    TimelineResponse,
-    TimelineDataPoint,
     GroupedAlertResponse,
     GroupedAlert,
     GroupedAlertDetail,
 )
 
 router = APIRouter()
-
 
 class SortField(str, Enum):
     DETECT_TIME = "detect_time"
@@ -51,22 +48,12 @@ class SortField(str, Enum):
     TARGET_IP = "target_ip"
     ANALYZER = "analyzer"
     ALERT_ID = "alert_id"
-    TOTAL_COUNT = "total_count"
-
 
 class SortOrder(str, Enum):
     ASC = "asc"
     DESC = "desc"
 
-
-class TimeFrame(str, Enum):
-    HOUR = "hour"
-    DAY = "day"
-    WEEK = "week"
-    MONTH = "month"
-
-
-@router.get("/alerts", response_model=AlertListResponse)
+@router.get("/", response_model=AlertListResponse)
 async def list_alerts(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=100, description="Number of items per page"),
@@ -241,16 +228,11 @@ async def list_alerts(
     else:
         query = query.order_by(sort_column.desc())
 
-    # Paginate results
+    # Apply pagination
     offset = (page - 1) * size
-    results = (
-        query.distinct()
-        .offset(offset)
-        .limit(size)
-        .all()
-    )
+    results = query.distinct().offset(offset).limit(size).all()
 
-    # Convert the results to AlertListItem objects
+    # Convert results to response items
     items = []
     for result in results:
         node_info = None
@@ -275,7 +257,7 @@ async def list_alerts(
             )
 
         alert_item = AlertListItem(
-            alert_id=result._ident,
+            alert_id=str(result._ident),
             message_id=result.messageid,
             create_time=TimeInfo(
                 time=result.create_time,
@@ -305,7 +287,7 @@ async def list_alerts(
     )
 
 
-@router.get("/alerts/groups", response_model=GroupedAlertResponse)
+@router.get("/groups", response_model=GroupedAlertResponse)
 async def get_grouped_alerts(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=100, description="Number of groups per page"),
@@ -404,8 +386,6 @@ async def get_grouped_alerts(
             sort_column = target_addr.address
         elif sort_by == SortField.ANALYZER:
             sort_column = func.max(Analyzer.name)
-        elif sort_by == SortField.TOTAL_COUNT:
-            sort_column = func.count(Alert._ident)
         else:
             sort_column = func.count(Alert._ident)  # Default sort by count
 
@@ -547,181 +527,17 @@ async def get_grouped_alerts(
         raise HTTPException(
             status_code=500,
             detail=f"Error fetching grouped alerts: {str(e)}",
-        )
+        ) 
 
 
-@router.get("/alerts/timeline", response_model=TimelineResponse)
-async def get_timeline(
-    timeframe: TimeFrame = Query(TimeFrame.HOUR, description="Timeframe for aggregation"),
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    source_ip: Optional[str] = None,
-    target_ip: Optional[str] = None,
-    analyzer_model: Optional[str] = None,
-    db: Session = Depends(get_db),
-) -> TimelineResponse:
-    try:
-        # Create aliases for source and target addresses
-        source_addr = aliased(Address)
-        target_addr = aliased(Address)
-
-        # Create time bucket based on timeframe
-        if timeframe == TimeFrame.HOUR:
-            time_bucket = func.date_format(DetectTime.time, '%Y-%m-%d %H:00:00')
-            interval = timedelta(hours=1)
-        elif timeframe == TimeFrame.DAY:
-            time_bucket = func.date_format(DetectTime.time, '%Y-%m-%d 00:00:00')
-            interval = timedelta(days=1)
-        elif timeframe == TimeFrame.WEEK:
-            # MySQL doesn't have a direct week truncation, so we'll use date_sub to get to Monday
-            time_bucket = func.date_format(
-                func.date_sub(
-                    DetectTime.time,
-                    text(f"INTERVAL (DAYOFWEEK(time) - 2) DAY")
-                ),
-                '%Y-%m-%d 00:00:00'
-            )
-            interval = timedelta(weeks=1)
-        else:  # MONTH
-            time_bucket = func.date_format(DetectTime.time, '%Y-%m-01 00:00:00')
-            interval = timedelta(days=30)  # Approximate for months
-
-        # Base query for alerts with essential joins
-        query = (
-            db.query(
-                time_bucket.label("time_bucket"),
-                func.count(Alert._ident).label("count"),
-            )
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .outerjoin(Impact, Impact._message_ident == Alert._ident)
-            .outerjoin(Classification, Classification._message_ident == Alert._ident)
-            .outerjoin(
-                source_addr,
-                and_(
-                    source_addr._message_ident == Alert._ident,
-                    source_addr._parent_type == "S",
-                    source_addr.category == "ipv4-addr",
-                ),
-            )
-            .outerjoin(
-                target_addr,
-                and_(
-                    target_addr._message_ident == Alert._ident,
-                    target_addr._parent_type == "T",
-                    target_addr.category == "ipv4-addr",
-                ),
-            )
-            .outerjoin(
-                Analyzer,
-                and_(
-                    Analyzer._message_ident == Alert._ident,
-                    Analyzer._parent_type == "A",
-                    Analyzer._index == -1,
-                ),
-            )
-        )
-
-        # Apply filters
-        if severity:
-            query = query.filter(Impact.severity == severity)
-        if classification:
-            query = query.filter(Classification.text.like(f"%{classification}%"))
-        if source_ip:
-            query = query.filter(func.binary(source_addr.address) == source_ip)
-        if target_ip:
-            query = query.filter(func.binary(target_addr.address) == target_ip)
-        if analyzer_model:
-            query = query.filter(Analyzer.model == analyzer_model)
-        if start_date:
-            query = query.filter(DetectTime.time >= start_date)
-        if end_date:
-            query = query.filter(DetectTime.time <= end_date)
-
-        # Group by time bucket and order by time
-        query = query.group_by("time_bucket").order_by("time_bucket")
-
-        # Execute query and format results
-        results = query.all()
-        
-        # Create a dictionary of existing data points
-        data_dict = {
-            datetime.strptime(result.time_bucket, "%Y-%m-%d %H:%M:%S"): result.count
-            for result in results
-        }
-
-        # Generate all time slots between start and end date
-        if start_date and end_date:
-            current_time = start_date
-            data_points = []
-            
-            while current_time <= end_date:
-                # Round current time based on timeframe
-                if timeframe == TimeFrame.HOUR:
-                    rounded_time = current_time.replace(minute=0, second=0, microsecond=0)
-                elif timeframe == TimeFrame.DAY:
-                    rounded_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-                elif timeframe == TimeFrame.WEEK:
-                    # Round to Monday
-                    rounded_time = current_time - timedelta(days=current_time.weekday())
-                    rounded_time = rounded_time.replace(hour=0, minute=0, second=0, microsecond=0)
-                else:  # MONTH
-                    rounded_time = current_time.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-                # Add data point with count or 0
-                data_points.append(
-                    TimelineDataPoint(
-                        time=rounded_time,
-                        count=data_dict.get(rounded_time, 0)
-                    )
-                )
-                
-                current_time += interval
-
-            return TimelineResponse(data=data_points)
-        else:
-            # If no date range specified, just return the actual data points
-            data_points = [
-                TimelineDataPoint(
-                    time=datetime.strptime(result.time_bucket, "%Y-%m-%d %H:%M:%S"),
-                    count=result.count,
-                )
-                for result in results
-            ]
-            return TimelineResponse(data=data_points)
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching timeline data: {str(e)}",
-        )
-
-
-@router.get("/alerts/{alert_id}", response_model=AlertDetail)
-async def get_alert(
+@router.get("/{alert_id}", response_model=AlertDetail)
+async def get_alert_detail(
     alert_id: int,
+    truncate_payload: bool = Query(False, description="Whether to truncate the payload data"),
     db: Session = Depends(get_db),
-    truncate_payload: bool = Query(
-        False, description="Whether to truncate the payload data"
-    ),
-):
-    """
-    Get detailed information about a specific alert including:
-    - Full timing information
-    - Classification details
-    - Impact details
-    - Source and target information with complete network details
-    - Detailed analyzer information
-    - References
-    - Services
-    - Additional data
-
-    Options:
-    - truncate_payload: Truncate long payload data
-    """
-    # First check if the alert exists
+) -> AlertDetail:
     try:
+        # Check if alert exists
         alert_exists = db.query(Alert._ident).filter(Alert._ident == alert_id).first()
         if not alert_exists:
             raise HTTPException(status_code=404, detail="Alert not found")
@@ -948,7 +764,7 @@ async def get_alert(
                 unique_refs.append(ref)
 
         return AlertDetail(
-            alert_id=alert[0]._ident,
+            alert_id=str(alert[0]._ident),
             message_id=alert[0].messageid,
             create_time=TimeInfo(
                 time=alert[1].time, usec=alert[1].usec, gmtoff=alert[1].gmtoff
@@ -958,8 +774,8 @@ async def get_alert(
             detect_time=TimeInfo(
                 time=alert[2].time, usec=alert[2].usec, gmtoff=alert[2].gmtoff
             ),
-            classification_text=alert[3].text,
-            classification_ident=alert[3].ident,
+            classification_text=alert[3].text if alert[3] else None,
+            classification_ident=alert[3].ident if alert[3] else None,
             severity=alert[4].severity if alert[4] else None,
             description=alert[4].description if alert[4] else None,
             completion=alert[4].completion if alert[4] else None,
@@ -983,104 +799,7 @@ async def get_alert(
             ],
             additional_data=additional_data,
         )
-
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}")
-
-
-@router.get("/statistics/summary")
-async def get_statistics_summary(
-    db: Session = Depends(get_db),
-    time_range: int = Query(24, description="Time range in hours to analyze"),
-):
-    """Get summary statistics of alerts"""
-    try:
-        start_time = datetime.now(UTC) - timedelta(hours=time_range)
-
-        # Get severity distribution
-        severity_stats = (
-            db.query(Impact.severity, func.count(Alert._ident).label("count"))
-            .join(Alert, Alert._ident == Impact._message_ident)
-            .join(DetectTime, DetectTime._message_ident == Alert._ident)
-            .filter(DetectTime.time >= start_time)
-            .group_by(Impact.severity)
-            .all()
-        )
-
-        # Get top classifications
-        top_classifications = (
-            db.query(Classification.text, func.count(Alert._ident).label("count"))
-            .join(Alert, Alert._ident == Classification._message_ident)
-            .join(DetectTime, DetectTime._message_ident == Alert._ident)
-            .filter(DetectTime.time >= start_time)
-            .group_by(Classification.text)
-            .order_by(func.count(Alert._ident).desc())
-            .limit(10)
-            .all()
-        )
-
-        # Get top source IPs
-        top_sources = (
-            db.query(Address.address, func.count(Alert._ident).label("count"))
-            .join(Alert, Alert._ident == Address._message_ident)
-            .join(DetectTime, DetectTime._message_ident == Alert._ident)
-            .filter(
-                DetectTime.time >= start_time,
-                Address._parent_type == "S",
-                Address.category == "ipv4-addr",
-            )
-            .group_by(Address.address)
-            .order_by(func.count(Alert._ident).desc())
-            .limit(10)
-            .all()
-        )
-
-        return {
-            "time_range_hours": time_range,
-            "severity_distribution": {
-                severity: count for severity, count in severity_stats if severity
-            },
-            "top_classifications": {text: count for text, count in top_classifications},
-            "top_source_ips": {ip: count for ip, count in top_sources},
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error generating statistics: {str(e)}"
-        )
-
-
-@router.get("/classifications/", response_model=List[str])
-def read_unique_classifications(db: Session = Depends(get_db)):
-    try:
-        classifications = db.query(Classification.text).distinct().all()
-        return [c[0] for c in classifications]
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching classifications: {str(e)}"
-        )
-
-
-@router.get("/impacts/severities/", response_model=List[str])
-def read_unique_severities(db: Session = Depends(get_db)):
-    try:
-        severities = db.query(Impact.severity).distinct().all()
-        return [s[0] for s in severities if s[0]]
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching severities: {str(e)}"
-        )
-
-
-@router.get("/analyzers/", response_model=List[str])
-def read_unique_analyzers(db: Session = Depends(get_db)):
-    """Get list of unique analyzer names"""
-    try:
-        analyzers = db.query(Analyzer.name).distinct().all()
-        return [a[0] for a in analyzers if a[0]]
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching analyzers: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}") 
