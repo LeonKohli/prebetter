@@ -22,13 +22,6 @@ A FastAPI-based REST API for accessing Prelude IDS/SIEM data in read-only mode. 
   - Top classifications and source IPs
   - Timeline visualization with customizable time frames
 
-- **Logging & Monitoring**
-  - Structured request logging with timing information
-  - Separate access and error logs
-  - Log rotation with size limits
-  - Request tracing with file and line numbers
-  - Performance metrics tracking
-
 ## Project Structure
 
 ```
@@ -143,30 +136,6 @@ uvicorn app.main:app --reload
 - `MYSQL_HOST`: MySQL host (default: localhost)
 - `MYSQL_PORT`: MySQL port (default: 3306)
 - `MYSQL_DB`: MySQL database name (default: prelude)
-- `LOG_LEVEL`: Logging level (default: INFO)
-
-## Logging
-
-The API uses a comprehensive logging system with the following features:
-
-### Log Files
-- `logs/app.log`: Main application logs (rotated, max 10MB)
-- `logs/error.log`: Error-level logs only (rotated, max 10MB)
-- `logs/access.log`: API request logs with timing (rotated, max 10MB)
-
-### Log Format
-- Console: `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
-- File: `%(asctime)s - %(name)s - %(levelname)s - %(message)s - [%(pathname)s:%(lineno)d]`
-
-### Request Logging
-Each API request is logged with:
-- Timestamp
-- HTTP method
-- URL
-- Status code
-- Response time
-- Client IP
-- User agent
 
 ## Testing
 
@@ -194,7 +163,6 @@ The test suite includes:
 - Pagination to handle large datasets
 - Optional payload truncation
 - Proper database connection pooling
-- Request timing metrics
 
 ## Security Notes
 
