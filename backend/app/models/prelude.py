@@ -1,17 +1,18 @@
 from sqlalchemy.ext.automap import automap_base
-from ..database.config import metadata
+from ..database.config import metadata, engine
 
-Base = automap_base(metadata=metadata)
+# Create the base class
+Base = automap_base()
 
-# Reflect the tables
-Base.prepare()
+# Reflect the database
+metadata.reflect(bind=engine)
+Base.prepare(autoload_with=engine)
 
 # Map the tables to classes
 Alert = Base.classes.Prelude_Alert
 AdditionalData = Base.classes.Prelude_AdditionalData
 Address = Base.classes.Prelude_Address
 Analyzer = Base.classes.Prelude_Analyzer
-Assessment = Base.classes.Prelude_Assessment
 Classification = Base.classes.Prelude_Classification
 CreateTime = Base.classes.Prelude_CreateTime
 DetectTime = Base.classes.Prelude_DetectTime

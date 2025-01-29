@@ -1,28 +1,32 @@
-import os
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.ext.declarative import declarative_base
+from ..core.config import get_settings
 
-from dotenv import load_dotenv
-from sqlalchemy import MetaData, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+settings = get_settings()
 
-load_dotenv()
+# Create SQLAlchemy engine
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+)
 
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
-MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
-MYSQL_DB = os.getenv("MYSQL_DB", "prelude")
-
-SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
-
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# Create metadata object
 metadata = MetaData()
-metadata.reflect(bind=engine)
+metadata.bind = engine
 
+# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+
+# Create base class for declarative models
+Base = declarative_base(metadata=metadata)
 
 
-def get_db():
+def get_db() -> Session:
+    """Dependency for getting database session"""
     db = SessionLocal()
     try:
         yield db
