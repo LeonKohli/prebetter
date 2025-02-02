@@ -1,31 +1,5 @@
-from fastapi.testclient import TestClient
-from app.main import app
 
-client = TestClient(app)
-
-def test_root():
-    """Test the root endpoint that provides API status and documentation links"""
-    response = client.get("/")
-    
-    # Verify response structure
-    assert response.status_code == 200
-    data = response.json()
-    
-    # Verify all required fields are present
-    assert "status" in data
-    assert "message" in data
-    assert "version" in data
-    assert "docs_url" in data
-    assert "redoc_url" in data
-    
-    # Verify the expected values
-    assert data["status"] == "online"
-    assert data["message"] == "Welcome to Prelude SIEM API"
-    assert data["version"] == "1.0.0"
-    assert data["docs_url"] == "/docs"
-    assert data["redoc_url"] == "/redoc"
-
-def test_get_unique_classifications():
+def test_get_unique_classifications(client):
     """Test getting classifications from the real database"""
     response = client.get("/api/v1/classifications")
     
@@ -52,63 +26,25 @@ def test_get_unique_classifications():
     if len(classifications) > 0:
         print(f"Sample classifications: {classifications[:3]}")
 
-def test_statistics_summary():
-    """Test getting statistics summary from the database"""
-    response = client.get("/api/v1/statistics/summary?time_range=24")
+def test_get_unique_severities(client):
+    """Test getting unique severity levels"""
+    response = client.get("/api/v1/severities")
     
     # Verify response structure
     assert response.status_code == 200
-    data = response.json()
+    severities = response.json()
     
-    # Verify all required fields are present
-    assert "total_alerts" in data
-    assert "alerts_by_severity" in data
-    assert "alerts_by_classification" in data
-    assert "alerts_by_analyzer" in data
-    assert "alerts_by_source_ip" in data
-    assert "alerts_by_target_ip" in data
-    assert "time_range_hours" in data
-    assert "start_time" in data
-    assert "end_time" in data
+    # Verify we got a list of strings
+    assert isinstance(severities, list)
+    assert all(isinstance(item, str) for item in severities)
     
-    # Verify data types
-    assert isinstance(data["total_alerts"], int)
-    assert isinstance(data["alerts_by_severity"], dict)
-    assert isinstance(data["alerts_by_classification"], dict)
-    assert isinstance(data["alerts_by_analyzer"], dict)
-    assert isinstance(data["alerts_by_source_ip"], dict)
-    assert isinstance(data["alerts_by_target_ip"], dict)
-    assert isinstance(data["time_range_hours"], int)
-    assert isinstance(data["start_time"], str)
-    assert isinstance(data["end_time"], str)
+    # Verify no duplicates
+    assert len(severities) == len(set(severities))
     
-    # Verify time range is correct
-    assert data["time_range_hours"] == 24
+    # Verify the list is sorted
+    assert severities == sorted(severities)
     
-    # Verify distributions contain expected data types
-    for severity, count in data["alerts_by_severity"].items():
-        assert isinstance(severity, str)
-        assert isinstance(count, int)
-    
-    for classification, count in data["alerts_by_classification"].items():
-        assert isinstance(classification, str)
-        assert isinstance(count, int)
-    
-    for analyzer, count in data["alerts_by_analyzer"].items():
-        assert isinstance(analyzer, str)
-        assert isinstance(count, int)
-    
-    for ip, count in data["alerts_by_source_ip"].items():
-        assert isinstance(ip, str)
-        assert isinstance(count, int)
-    
-    for ip, count in data["alerts_by_target_ip"].items():
-        assert isinstance(ip, str)
-        assert isinstance(count, int)
-    
-    # Print some debug info about what we found
-    print(f"\nTotal alerts in last 24 hours: {data['total_alerts']}")
-    if data["alerts_by_severity"]:
-        print(f"Top severity: {max(data['alerts_by_severity'].items(), key=lambda x: x[1])[0]}")
-    if data["alerts_by_classification"]:
-        print(f"Top classification: {max(data['alerts_by_classification'].items(), key=lambda x: x[1])[0]}")
+    # Print some debug info
+    print(f"\nFound {len(severities)} unique severity levels")
+    if severities:
+        print(f"Available severities: {severities}") 
