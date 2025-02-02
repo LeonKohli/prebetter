@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 
 class Settings(BaseSettings):
@@ -25,10 +26,11 @@ class Settings(BaseSettings):
     # CORS settings
     BACKEND_CORS_ORIGINS: list[str] = ["*"]
     
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = ConfigDict(
+        case_sensitive=True,
+        env_file=".env",
+        env_file_encoding="utf-8"
+    )
 
 
 #@lru_cache()
