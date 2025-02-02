@@ -1,0 +1,25 @@
+meta {
+  name: Get Grouped Alerts
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/alerts/groups
+  body: none
+  auth: none
+}
+
+params:query {
+  ~page: 
+  ~size: 
+  ~sort_by: 
+  ~sort_order: 
+  ~severity: 
+  ~classification: 
+  ~start_date: 
+  ~end_date: 
+  ~source_ip: 
+  ~target_ip: 
+  ~analyzer_model: 
+}
