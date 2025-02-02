@@ -655,7 +655,7 @@ async def get_alert_detail(
                 if value.isdigit():
                     return str(int(value))
                 return value
-            except:
+            except Exception:  # Fixed bare except
                 return value
 
         for row in add_data_rows:
