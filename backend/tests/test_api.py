@@ -1,5 +1,3 @@
-import pytest
-from datetime import datetime, timedelta, UTC
 
 
 def test_list_alerts(client):

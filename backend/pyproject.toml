@@ -50,4 +50,5 @@ dependencies = [
     "uvloop==0.21.0",
     "watchfiles==1.0.3",
     "websockets==14.1",
+    "ruff>=0.9.4",
 ]
