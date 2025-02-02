@@ -139,4 +139,124 @@ def test_alert_detail(client):
     if "classification_text" in data:
         print(f"Classification: {data['classification_text']}")
     if "severity" in data:
-        print(f"Severity: {data['severity']}") 
+        print(f"Severity: {data['severity']}")
+
+def test_grouped_alerts(client):
+    """Test getting grouped alerts with various filters and sorting options"""
+    # Test basic pagination
+    response = client.get("/api/v1/alerts/groups?page=1&size=10")
+    
+    # Verify response structure
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify all required fields are present
+    assert "total" in data
+    assert "groups" in data
+    assert "page" in data
+    assert "size" in data
+    
+    # Verify data types and pagination
+    assert isinstance(data["total"], int)
+    assert isinstance(data["groups"], list)
+    assert data["page"] == 1
+    assert data["size"] == 10
+    assert len(data["groups"]) <= 10  # Should not exceed page size
+    
+    # Verify group structure
+    if data["groups"]:
+        group = data["groups"][0]
+        assert "source_ipv4" in group
+        assert "target_ipv4" in group
+        assert "total_count" in group
+        assert "alerts" in group
+        assert isinstance(group["alerts"], list)
+        
+        # Verify alert details in group
+        if group["alerts"]:
+            alert = group["alerts"][0]
+            assert "classification" in alert
+            assert "count" in alert
+            assert "analyzer" in alert
+            assert "analyzer_host" in alert
+            assert "time" in alert
+    
+    # Test sorting
+    sort_response = client.get("/api/v1/alerts/groups?sort_by=severity&sort_order=desc")
+    assert sort_response.status_code == 200
+    
+    # Test filtering
+    filter_params = {
+        "severity": "high",
+        "classification": "scan",
+        "start_date": "2024-01-01T00:00:00",
+        "end_date": "2024-12-31T23:59:59"
+    }
+    filter_response = client.get("/api/v1/alerts/groups", params=filter_params)
+    assert filter_response.status_code == 200
+    
+    # Test invalid parameters
+    invalid_response = client.get("/api/v1/alerts/groups?page=0&size=1000")
+    assert invalid_response.status_code in [400, 422]  # FastAPI validation error
+
+def test_list_alerts_edge_cases(client):
+    """Test edge cases for the list alerts endpoint"""
+    # Test empty filters
+    response = client.get("/api/v1/alerts/?severity=&classification=")
+    assert response.status_code == 200
+    
+    # Test invalid date format
+    response = client.get("/api/v1/alerts/?start_date=invalid-date")
+    assert response.status_code in [400, 422]
+    
+    # Test invalid sort field
+    response = client.get("/api/v1/alerts/?sort_by=invalid_field")
+    assert response.status_code in [400, 422]
+    
+    # Test invalid sort order
+    response = client.get("/api/v1/alerts/?sort_order=invalid")
+    assert response.status_code in [400, 422]
+    
+    # Test future date range
+    future_params = {
+        "start_date": "2025-01-01T00:00:00",
+        "end_date": "2025-12-31T23:59:59"
+    }
+    response = client.get("/api/v1/alerts/", params=future_params)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0  # Should return empty result for future dates
+
+def test_alert_detail_edge_cases(client):
+    """Test edge cases for the alert detail endpoint"""
+    # Test non-numeric alert ID
+    response = client.get("/api/v1/alerts/abc")
+    assert response.status_code in [400, 422]
+    
+    # Test zero alert ID
+    response = client.get("/api/v1/alerts/0")
+    assert response.status_code == 404
+    
+    # Test negative alert ID - should return 404 as negative IDs can't exist
+    response = client.get("/api/v1/alerts/-1")
+    assert response.status_code == 404
+    
+    # Test very large alert ID
+    response = client.get("/api/v1/alerts/999999999999999")
+    assert response.status_code == 404
+    
+    # Test truncate_payload parameter variations
+    list_response = client.get("/api/v1/alerts/?page=1&size=1")
+    if list_response.json()["items"]:
+        alert_id = list_response.json()["items"][0]["alert_id"]
+        
+        # Test explicit true/false values
+        response = client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=true")
+        assert response.status_code == 200
+        
+        response = client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=false")
+        assert response.status_code == 200
+        
+        # Test invalid truncate_payload value
+        response = client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=invalid")
+        assert response.status_code in [400, 422] 
