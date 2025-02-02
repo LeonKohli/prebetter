@@ -53,22 +53,18 @@ async def get_timeline(
                 start_date = end_date - timedelta(days=365)
 
         # Create aliases for tables
-        source_addr = aliased(Address)
-        target_addr = aliased(Address)
+        aliased(Address)
+        aliased(Address)
 
         # Determine the date format based on time frame
         if time_frame == TimeFrame.HOUR:
             date_format = "%Y-%m-%d %H:00:00"
-            interval = "HOUR"
         elif time_frame == TimeFrame.DAY:
             date_format = "%Y-%m-%d 00:00:00"
-            interval = "DAY"
         elif time_frame == TimeFrame.WEEK:
             date_format = "%Y-%m-%d 00:00:00"  # We'll handle week grouping in Python
-            interval = "DAY"
         else:  # month
             date_format = "%Y-%m-01 00:00:00"
-            interval = "MONTH"
 
         # Base query for alerts
         base_query = (
