@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, text, literal_column, tuple_, distinct
-from typing import List, Optional
+from sqlalchemy import func, and_, literal_column, tuple_, distinct
+from typing import Optional
 from datetime import datetime
 from enum import Enum
 from ....database.config import get_db

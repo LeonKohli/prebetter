@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, desc, text
+from sqlalchemy import func, and_, text
 from ....database.config import get_db
 from ....models.prelude import Alert, DetectTime, Impact, Classification, Analyzer, Node, Address
 from ....schemas.prelude import TimelineResponse, TimelineDataPoint, GroupedAlertResponse, GroupedAlert, GroupedAlertDetail, StatisticsSummary
