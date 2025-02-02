@@ -211,4 +211,4 @@ def test_statistics_summary_edge_cases(client):
     long_range = client.get("/api/v1/statistics/summary?time_range=24").json()
     
     # The longer time range should include at least as many alerts as the shorter one
-    assert long_range["total_alerts"] >= short_range["total_alerts"] 
+    assert long_range["total_alerts"] >= short_range["total_alerts"]
