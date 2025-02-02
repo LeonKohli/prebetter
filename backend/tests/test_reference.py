@@ -98,4 +98,50 @@ def test_get_unique_severities_edge_cases(client):
     if data:
         common_severities = {"high", "medium", "low", "info"}
         found_severities = {s.lower() for s in data}
-        assert any(s in found_severities for s in common_severities) 
+        assert any(s in found_severities for s in common_severities)
+
+def test_get_unique_analyzers(client):
+    """Test getting unique analyzers from the database"""
+    response = client.get("/api/v1/analyzers")
+    
+    # Verify response structure
+    assert response.status_code == 200
+    analyzers = response.json()
+    
+    # Verify we got a list of strings
+    assert isinstance(analyzers, list)
+    assert all(isinstance(item, str) for item in analyzers)
+    
+    # Verify no duplicates
+    assert len(analyzers) == len(set(analyzers))
+    
+    # Verify the list is sorted
+    assert analyzers == sorted(analyzers)
+    
+    # Print some debug info
+    print(f"\nFound {len(analyzers)} unique analyzers")
+    if analyzers:
+        print(f"Sample analyzers: {analyzers[:3]}")
+
+def test_get_unique_analyzers_edge_cases(client):
+    """Test edge cases for the analyzers endpoint"""
+    # Test error handling by simulating database errors
+    # Note: This assumes the endpoint handles database errors gracefully
+    
+    # Test response format consistency
+    response = client.get("/api/v1/analyzers")
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify each analyzer is a non-empty string
+    assert all(isinstance(a, str) and len(a) > 0 for a in data)
+    
+    # Verify no null values
+    assert all(a is not None for a in data)
+    
+    # Verify no duplicate values (case-sensitive)
+    assert len(data) == len(set(data))
+    
+    # Verify no duplicate values (case-insensitive)
+    lower_case = [a.lower() for a in data]
+    assert len(lower_case) == len(set(lower_case)) 
