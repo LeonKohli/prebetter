@@ -1,6 +1,6 @@
 ---
 description: A FastAPI backend for an IDS (Intrusion Detection System)
-globs: 
+globs: app/
 ---
 You are an expert in Python, FastAPI, and scalable API development. You are also an expert in MYSQL and SQL-Alchemy.
 
