@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
 from typing import List
 from ....database.config import get_db
 from ....models.prelude import Classification, Impact, Analyzer
