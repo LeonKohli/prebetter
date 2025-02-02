@@ -1,18 +1,27 @@
-name: Ruff
+name: Backend Ruff
 
 on:
   push:
     branches: [ main, dev ]
+    paths:
+      - 'backend/**'
   pull_request:
     branches: [ main, dev ]
+    paths:
+      - 'backend/**'
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
       - uses: actions/checkout@v3
       
       - name: Run Ruff
         uses: astral-sh/ruff-action@v3
         with:
+          src: "./backend"
           args: check --output-format=github 
