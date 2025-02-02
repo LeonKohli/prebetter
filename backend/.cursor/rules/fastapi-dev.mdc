@@ -62,4 +62,8 @@ This is the API backend for an upcoming new frontend for an IDS (Intrusion Detec
  - Use dedicated async functions for database and external API operations.
  - Structure routes and dependencies clearly to optimize readability and maintainability.
 
+### Composer Specific Guidelines
+- When implementing new endpoints, immediately validate/test them using curl and jq.
+
+
 Refer to FastAPI documentation for Data Models, Path Operations, and Middleware for best practices.
