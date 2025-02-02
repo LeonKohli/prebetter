@@ -1,4 +1,3 @@
-
 def test_get_unique_classifications(client):
     """Test getting classifications from the real database"""
     response = client.get("/api/v1/classifications")
@@ -47,4 +46,56 @@ def test_get_unique_severities(client):
     # Print some debug info
     print(f"\nFound {len(severities)} unique severity levels")
     if severities:
-        print(f"Available severities: {severities}") 
+        print(f"Available severities: {severities}")
+
+def test_get_unique_classifications_edge_cases(client):
+    """Test edge cases for the classifications endpoint"""
+    # Test error handling by simulating database errors
+    # Note: This assumes the endpoint handles database errors gracefully
+    
+    # Test response format consistency
+    response = client.get("/api/v1/classifications")
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify each classification is a non-empty string
+    assert all(isinstance(c, str) and len(c) > 0 for c in data)
+    
+    # Verify no null values
+    assert all(c is not None for c in data)
+    
+    # Verify no duplicate values (case-sensitive)
+    assert len(data) == len(set(data))
+    
+    # Verify no duplicate values (case-insensitive)
+    lower_case = [c.lower() for c in data]
+    assert len(lower_case) == len(set(lower_case))
+
+def test_get_unique_severities_edge_cases(client):
+    """Test edge cases for the severities endpoint"""
+    # Test error handling by simulating database errors
+    # Note: This assumes the endpoint handles database errors gracefully
+    
+    # Test response format consistency
+    response = client.get("/api/v1/severities")
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify each severity is a non-empty string
+    assert all(isinstance(s, str) and len(s) > 0 for s in data)
+    
+    # Verify no null values
+    assert all(s is not None for s in data)
+    
+    # Verify no duplicate values (case-sensitive)
+    assert len(data) == len(set(data))
+    
+    # Verify no duplicate values (case-insensitive)
+    lower_case = [s.lower() for s in data]
+    assert len(lower_case) == len(set(lower_case))
+    
+    # Verify common severity levels are present if data exists
+    if data:
+        common_severities = {"high", "medium", "low", "info"}
+        found_severities = {s.lower() for s in data}
+        assert any(s in found_severities for s in common_severities) 

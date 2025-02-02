@@ -1,4 +1,3 @@
-
 def test_statistics_summary(client):
     """Test getting statistics summary from the database"""
     response = client.get("/api/v1/statistics/summary?time_range=24")
@@ -110,4 +109,106 @@ def test_timeline(client):
     if data["data"]:
         total_alerts = sum(point["count"] for point in data["data"])
         print(f"Total alerts in timeline: {total_alerts}")
-        print(f"Time range: {data['start_date']} to {data['end_date']}") 
+        print(f"Time range: {data['start_date']} to {data['end_date']}")
+
+def test_timeline_time_frames(client):
+    """Test timeline endpoint with different time frames"""
+    time_frames = ["hour", "day", "week", "month"]
+    
+    for time_frame in time_frames:
+        response = client.get(f"/api/v1/statistics/timeline?time_frame={time_frame}")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Verify time frame is correct
+        assert data["time_frame"] == time_frame
+        
+        # Verify data points are properly spaced
+        if len(data["data"]) > 1:
+            from datetime import datetime
+            timestamps = [datetime.fromisoformat(point["timestamp"]) for point in data["data"]]
+            time_diff = timestamps[1] - timestamps[0]
+            
+            # Verify time difference based on time frame
+            if time_frame == "hour":
+                assert time_diff.seconds == 3600  # 1 hour
+            elif time_frame == "day":
+                assert time_diff.days == 1
+            elif time_frame == "week":
+                assert time_diff.days == 7
+            elif time_frame == "month":
+                assert 28 <= time_diff.days <= 31
+    
+    # Test invalid time frame
+    response = client.get("/api/v1/statistics/timeline?time_frame=invalid")
+    assert response.status_code in [400, 422]
+
+def test_timeline_group_by(client):
+    """Test timeline endpoint with different group by options"""
+    group_by_options = ["severity", "classification", "analyzer", "source", "target"]
+    
+    for group_by in group_by_options:
+        response = client.get(f"/api/v1/statistics/timeline?time_frame=hour&group_by={group_by}")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Verify data structure includes grouping
+        if data["data"]:
+            point = data["data"][0]
+            if group_by == "severity":
+                assert isinstance(point.get("severity"), str)
+            elif group_by == "classification":
+                assert isinstance(point.get("classification"), str)
+            elif group_by == "analyzer":
+                assert isinstance(point.get("analyzer"), str)
+            elif group_by == "source":
+                assert isinstance(point.get("source_ipv4"), str)
+            elif group_by == "target":
+                assert isinstance(point.get("target_ipv4"), str)
+    
+    # Test invalid group by - should return 200 but without grouped data
+    response = client.get("/api/v1/statistics/timeline?time_frame=hour&group_by=invalid")
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Verify no grouping fields are present in the response
+    if data["data"]:
+        point = data["data"][0]
+        for field in ["severity", "classification", "analyzer", "source_ipv4", "target_ipv4"]:
+            assert field not in point, f"Found unexpected grouping field {field} with invalid group_by parameter"
+        
+        # Should only contain timestamp and count
+        assert "timestamp" in point
+        assert "count" in point
+        assert len(point.keys()) == 2
+
+def test_statistics_summary_edge_cases(client):
+    """Test edge cases for statistics summary endpoint"""
+    # Test minimum time range
+    response = client.get("/api/v1/statistics/summary?time_range=1")
+    assert response.status_code == 200
+    
+    # Test maximum time range
+    response = client.get("/api/v1/statistics/summary?time_range=720")
+    assert response.status_code == 200
+    
+    # Test invalid time ranges
+    response = client.get("/api/v1/statistics/summary?time_range=0")
+    assert response.status_code in [400, 422]
+    
+    response = client.get("/api/v1/statistics/summary?time_range=721")
+    assert response.status_code in [400, 422]
+    
+    response = client.get("/api/v1/statistics/summary?time_range=-1")
+    assert response.status_code in [400, 422]
+    
+    # Test non-numeric time range
+    response = client.get("/api/v1/statistics/summary?time_range=abc")
+    assert response.status_code in [400, 422]
+    
+    # Verify time range affects results
+    short_range = client.get("/api/v1/statistics/summary?time_range=1").json()
+    long_range = client.get("/api/v1/statistics/summary?time_range=24").json()
+    
+    # The longer time range should include at least as many alerts as the shorter one
+    assert long_range["total_alerts"] >= short_range["total_alerts"] 
