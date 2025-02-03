@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, text
 from ....database.config import get_db
-from ....models.prelude import Alert, DetectTime, Impact, Classification, Analyzer, Node, Address
-from ....schemas.prelude import TimelineResponse, TimelineDataPoint, GroupedAlertResponse, GroupedAlert, GroupedAlertDetail, StatisticsSummary
+from ....models.prelude import Alert, DetectTime, Impact, Classification, Analyzer, Address
+from ....schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
 from enum import Enum
 from fastapi import HTTPException
 
