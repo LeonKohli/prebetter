@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
-
+from functools import lru_cache
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Prebetter Backend"
@@ -19,10 +19,6 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}"
     
-    # Security settings
-    SECRET_KEY: str = "your-secret-key-here"  # In production, this should be set via environment variable
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    
     # CORS settings
     BACKEND_CORS_ORIGINS: list[str] = ["*"]
     
@@ -33,6 +29,6 @@ class Settings(BaseSettings):
     )
 
 
-#@lru_cache()
+@lru_cache()
 def get_settings() -> Settings:
     return Settings() 
