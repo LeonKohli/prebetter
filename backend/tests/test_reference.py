@@ -1,6 +1,6 @@
-def test_get_unique_classifications(client):
+def test_get_unique_classifications(auth_client):
     """Test getting classifications from the real database"""
-    response = client.get("/api/v1/classifications")
+    response = auth_client.get("/api/v1/classifications")
     
     # Verify response structure
     assert response.status_code == 200
@@ -25,9 +25,9 @@ def test_get_unique_classifications(client):
     if len(classifications) > 0:
         print(f"Sample classifications: {classifications[:3]}")
 
-def test_get_unique_severities(client):
+def test_get_unique_severities(auth_client):
     """Test getting unique severity levels"""
-    response = client.get("/api/v1/severities")
+    response = auth_client.get("/api/v1/severities")
     
     # Verify response structure
     assert response.status_code == 200
@@ -48,13 +48,13 @@ def test_get_unique_severities(client):
     if severities:
         print(f"Available severities: {severities}")
 
-def test_get_unique_classifications_edge_cases(client):
+def test_get_unique_classifications_edge_cases(auth_client):
     """Test edge cases for the classifications endpoint"""
     # Test error handling by simulating database errors
     # Note: This assumes the endpoint handles database errors gracefully
     
     # Test response format consistency
-    response = client.get("/api/v1/classifications")
+    response = auth_client.get("/api/v1/classifications")
     assert response.status_code == 200
     data = response.json()
     
@@ -71,13 +71,13 @@ def test_get_unique_classifications_edge_cases(client):
     lower_case = [c.lower() for c in data]
     assert len(lower_case) == len(set(lower_case))
 
-def test_get_unique_severities_edge_cases(client):
+def test_get_unique_severities_edge_cases(auth_client):
     """Test edge cases for the severities endpoint"""
     # Test error handling by simulating database errors
     # Note: This assumes the endpoint handles database errors gracefully
     
     # Test response format consistency
-    response = client.get("/api/v1/severities")
+    response = auth_client.get("/api/v1/severities")
     assert response.status_code == 200
     data = response.json()
     
@@ -100,9 +100,9 @@ def test_get_unique_severities_edge_cases(client):
         found_severities = {s.lower() for s in data}
         assert any(s in found_severities for s in common_severities)
 
-def test_get_unique_analyzers(client):
+def test_get_unique_analyzers(auth_client):
     """Test getting unique analyzers from the database"""
-    response = client.get("/api/v1/analyzers")
+    response = auth_client.get("/api/v1/analyzers")
     
     # Verify response structure
     assert response.status_code == 200
@@ -123,13 +123,13 @@ def test_get_unique_analyzers(client):
     if analyzers:
         print(f"Sample analyzers: {analyzers[:3]}")
 
-def test_get_unique_analyzers_edge_cases(client):
+def test_get_unique_analyzers_edge_cases(auth_client):
     """Test edge cases for the analyzers endpoint"""
     # Test error handling by simulating database errors
     # Note: This assumes the endpoint handles database errors gracefully
     
     # Test response format consistency
-    response = client.get("/api/v1/analyzers")
+    response = auth_client.get("/api/v1/analyzers")
     assert response.status_code == 200
     data = response.json()
     

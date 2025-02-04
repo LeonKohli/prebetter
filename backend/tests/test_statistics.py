@@ -1,6 +1,6 @@
-def test_statistics_summary(client):
+def test_statistics_summary(auth_client):
     """Test getting statistics summary from the database"""
-    response = client.get("/api/v1/statistics/summary?time_range=24")
+    response = auth_client.get("/api/v1/statistics/summary?time_range=24")
     
     # Verify response structure
     assert response.status_code == 200
@@ -59,10 +59,10 @@ def test_statistics_summary(client):
     if data["alerts_by_classification"]:
         print(f"Top classification: {max(data['alerts_by_classification'].items(), key=lambda x: x[1])[0]}")
 
-def test_timeline(client):
+def test_timeline(auth_client):
     """Test getting timeline data with different time frames"""
     # Test hourly timeline
-    response = client.get("/api/v1/statistics/timeline?time_frame=hour")
+    response = auth_client.get("/api/v1/statistics/timeline?time_frame=hour")
     
     # Verify response structure
     assert response.status_code == 200
@@ -94,7 +94,7 @@ def test_timeline(client):
         assert timestamps == sorted(timestamps)
     
     # Test with filters
-    filtered_response = client.get(
+    filtered_response = auth_client.get(
         "/api/v1/statistics/timeline?time_frame=day&severity=high&classification=scan"
     )
     assert filtered_response.status_code == 200
@@ -111,12 +111,12 @@ def test_timeline(client):
         print(f"Total alerts in timeline: {total_alerts}")
         print(f"Time range: {data['start_date']} to {data['end_date']}")
 
-def test_timeline_time_frames(client):
+def test_timeline_time_frames(auth_client):
     """Test timeline endpoint with different time frames"""
     time_frames = ["hour", "day", "week", "month"]
     
     for time_frame in time_frames:
-        response = client.get(f"/api/v1/statistics/timeline?time_frame={time_frame}")
+        response = auth_client.get(f"/api/v1/statistics/timeline?time_frame={time_frame}")
         assert response.status_code == 200
         data = response.json()
         
@@ -140,15 +140,15 @@ def test_timeline_time_frames(client):
                 assert 28 <= time_diff.days <= 31
     
     # Test invalid time frame
-    response = client.get("/api/v1/statistics/timeline?time_frame=invalid")
+    response = auth_client.get("/api/v1/statistics/timeline?time_frame=invalid")
     assert response.status_code in [400, 422]
 
-def test_timeline_group_by(client):
+def test_timeline_group_by(auth_client):
     """Test timeline endpoint with different group by options"""
     group_by_options = ["severity", "classification", "analyzer", "source", "target"]
     
     for group_by in group_by_options:
-        response = client.get(f"/api/v1/statistics/timeline?time_frame=hour&group_by={group_by}")
+        response = auth_client.get(f"/api/v1/statistics/timeline?time_frame=hour&group_by={group_by}")
         assert response.status_code == 200
         data = response.json()
         
@@ -167,7 +167,7 @@ def test_timeline_group_by(client):
                 assert isinstance(point.get("target_ipv4"), str)
     
     # Test invalid group by - should return 200 but without grouped data
-    response = client.get("/api/v1/statistics/timeline?time_frame=hour&group_by=invalid")
+    response = auth_client.get("/api/v1/statistics/timeline?time_frame=hour&group_by=invalid")
     assert response.status_code == 200
     data = response.json()
     
@@ -182,33 +182,33 @@ def test_timeline_group_by(client):
         assert "count" in point
         assert len(point.keys()) == 2
 
-def test_statistics_summary_edge_cases(client):
+def test_statistics_summary_edge_cases(auth_client):
     """Test edge cases for statistics summary endpoint"""
     # Test minimum time range
-    response = client.get("/api/v1/statistics/summary?time_range=1")
+    response = auth_client.get("/api/v1/statistics/summary?time_range=1")
     assert response.status_code == 200
     
     # Test maximum time range
-    response = client.get("/api/v1/statistics/summary?time_range=720")
+    response = auth_client.get("/api/v1/statistics/summary?time_range=720")
     assert response.status_code == 200
     
     # Test invalid time ranges
-    response = client.get("/api/v1/statistics/summary?time_range=0")
+    response = auth_client.get("/api/v1/statistics/summary?time_range=0")
     assert response.status_code in [400, 422]
     
-    response = client.get("/api/v1/statistics/summary?time_range=721")
+    response = auth_client.get("/api/v1/statistics/summary?time_range=721")
     assert response.status_code in [400, 422]
     
-    response = client.get("/api/v1/statistics/summary?time_range=-1")
+    response = auth_client.get("/api/v1/statistics/summary?time_range=-1")
     assert response.status_code in [400, 422]
     
     # Test non-numeric time range
-    response = client.get("/api/v1/statistics/summary?time_range=abc")
+    response = auth_client.get("/api/v1/statistics/summary?time_range=abc")
     assert response.status_code in [400, 422]
     
     # Verify time range affects results
-    short_range = client.get("/api/v1/statistics/summary?time_range=1").json()
-    long_range = client.get("/api/v1/statistics/summary?time_range=24").json()
+    short_range = auth_client.get("/api/v1/statistics/summary?time_range=1").json()
+    long_range = auth_client.get("/api/v1/statistics/summary?time_range=24").json()
     
     # The longer time range should include at least as many alerts as the shorter one
     assert long_range["total_alerts"] >= short_range["total_alerts"]

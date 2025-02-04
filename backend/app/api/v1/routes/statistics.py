@@ -3,13 +3,14 @@ from typing import Optional
 from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, text
-from ....database.config import get_db
+from ....database.config import get_prelude_db
 from ....models.prelude import Alert, DetectTime, Impact, Classification, Analyzer, Address
 from ....schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
 from enum import Enum
 from fastapi import HTTPException
+from ..routes.auth import get_current_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 class GroupBy(str, Enum):
     SEVERITY = "severity"
@@ -32,7 +33,7 @@ async def get_timeline(
     severity: Optional[str] = None,
     classification: Optional[str] = None,
     analyzer_name: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_prelude_db),
 ) -> TimelineResponse:
     """
     Get alert timeline data grouped by the specified time frame.
@@ -167,7 +168,7 @@ async def get_timeline(
 @router.get("/summary", response_model=StatisticsSummary)
 async def get_statistics_summary(
     time_range: int = Query(24, ge=1, le=720, description="Time range in hours to analyze"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_prelude_db),
 ) -> StatisticsSummary:
     """
     Get alert statistics summary for the specified time range.
