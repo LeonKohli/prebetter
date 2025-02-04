@@ -32,9 +32,7 @@ async def ensure_database() -> None:
                     id=create_user_id(),
                     email="admin@example.com",
                     username="admin",
-                    full_name="Admin User",
                     hashed_password=get_password_hash("admin"),
-                    is_active=True,
                     is_superuser=True
                 )
                 db.add(superuser)

@@ -15,16 +15,18 @@ from ....core.security import (
 from ....database.config import get_prebetter_db
 from ....models.users import User
 from ....schemas.users import Token, TokenData, UserCreate, User as UserSchema
+from ....services.users import UserService
 
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
-def get_user(db: Session, username: str):
-    return db.query(User).filter(User.username == username).first()
+def get_user_service(db: Session = Depends(get_prebetter_db)) -> UserService:
+    return UserService(db)
 
-def authenticate_user(db: Session, username: str, password: str):
-    user = get_user(db, username)
+def authenticate_user(user_service: UserService, username: str, password: str) -> User | bool:
+    """Authenticate user by username and password."""
+    user = user_service.get_by_username(username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -33,8 +35,8 @@ def authenticate_user(db: Session, username: str, password: str):
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    db: Session = Depends(get_prebetter_db)
-):
+    user_service: UserService = Depends(get_user_service)
+) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -42,30 +44,24 @@ async def get_current_user(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        user_id: str = payload.get("sub")
+        if user_id is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+        token_data = TokenData(user_id=user_id)
     except jwt.PyJWTError:
         raise credentials_exception
-    user = get_user(db, username=token_data.username)
+    
+    user = user_service.get_by_id(token_data.user_id)
     if user is None:
         raise credentials_exception
     return user
 
-async def get_current_active_user(
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
-
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: Session = Depends(get_prebetter_db)
-):
-    user = authenticate_user(db, form_data.username, form_data.password)
+    user_service: UserService = Depends(get_user_service)
+) -> Token:
+    user = authenticate_user(user_service, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -74,12 +70,12 @@ async def login_for_access_token(
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.id}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/users/me", response_model=UserSchema)
 async def read_users_me(
-    current_user: Annotated[User, Depends(get_current_active_user)]
-):
+    current_user: Annotated[User, Depends(get_current_user)]
+) -> User:
     return current_user 

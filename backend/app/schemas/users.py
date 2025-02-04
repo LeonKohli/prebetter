@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, constr
 from datetime import datetime
 from typing import Optional
 from pydantic import ConfigDict
@@ -7,16 +7,22 @@ class UserBase(BaseModel):
     email: EmailStr
     username: str
     full_name: Optional[str] = None
-    is_active: Optional[bool] = True
 
 class UserCreate(UserBase):
     password: str
 
 class UserUpdate(BaseModel):
+    username: Optional[constr(min_length=1, strip_whitespace=True)] = None
     email: Optional[EmailStr] = None
-    username: Optional[str] = None
-    full_name: Optional[str] = None
+    full_name: Optional[constr(min_length=1, strip_whitespace=True)] = None
     password: Optional[str] = None
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class PasswordResetRequest(BaseModel):
+    new_password: str
 
 class UserInDBBase(UserBase):
     id: str
@@ -37,4 +43,4 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
-    username: Optional[str] = None 
+    user_id: str 
