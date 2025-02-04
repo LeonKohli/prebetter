@@ -25,7 +25,7 @@ async def ensure_database() -> None:
         db = Session(prebetter_engine)
         try:
             # Check if superuser exists
-            superuser = db.query(User).filter(User.is_superuser == True).first()
+            superuser = db.query(User).filter(User.is_superuser).first()
             if not superuser:
                 # Create superuser
                 superuser = User(
