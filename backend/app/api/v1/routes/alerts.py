@@ -4,7 +4,7 @@ from sqlalchemy import func, and_, literal_column, tuple_, distinct
 from typing import Optional
 from datetime import datetime
 from enum import Enum
-from ....database.config import get_db
+from ....database.config import get_prelude_db
 from ....models.prelude import (
     Alert,
     Impact,
@@ -66,7 +66,7 @@ async def list_alerts(
     source_ip: Optional[str] = None,
     target_ip: Optional[str] = None,
     analyzer_model: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_prelude_db),
 ) -> AlertListResponse:
     # Create aliases for source and target addresses
     source_addr = aliased(Address)
@@ -300,7 +300,7 @@ async def get_grouped_alerts(
     source_ip: Optional[str] = None,
     target_ip: Optional[str] = None,
     analyzer_model: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_prelude_db),
 ) -> GroupedAlertResponse:
     """
     Retrieve alerts grouped by source and target IP addresses.
@@ -534,7 +534,7 @@ async def get_grouped_alerts(
 async def get_alert_detail(
     alert_id: int,
     truncate_payload: bool = Query(False, description="Whether to truncate the payload data"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_prelude_db),
 ) -> AlertDetail:
     try:
         # Check if alert exists
