@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import distinct
-from typing import List
+from typing import List, Annotated
 from ....database.config import get_prelude_db
 from ....models.prelude import Alert, Classification, Impact, Analyzer
+from ....models.users import User
+from ..routes.auth import get_current_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/classifications", response_model=List[str])
 async def get_unique_classifications(

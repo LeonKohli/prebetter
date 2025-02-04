@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from functools import lru_cache
+from typing import Optional
+import secrets
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Prebetter Backend"
@@ -21,6 +23,10 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "your-secret-key"  # Change this in production!
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    # Security settings
+    SECRET_KEY: str = secrets.token_urlsafe(32)  # Generate a secure random key if not provided
+    ALGORITHM: str = "HS256"
     
     # Computed DATABASE_URLs
     @property
