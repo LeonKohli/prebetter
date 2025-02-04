@@ -1,9 +1,9 @@
 import pytest
 
-def test_list_alerts(client):
+def test_list_alerts(auth_client):
     """Test getting alerts list with various filters and sorting options"""
     # Test basic pagination
-    response = client.get("/api/v1/alerts/?page=1&size=10")
+    response = auth_client.get("/api/v1/alerts/?page=1&size=10")
     
     # Verify response structure
     assert response.status_code == 200
@@ -38,7 +38,7 @@ def test_list_alerts(client):
             assert "gmtoff" in alert["detect_time"]
     
     # Test sorting
-    sort_response = client.get("/api/v1/alerts/?sort_by=severity&sort_order=desc")
+    sort_response = auth_client.get("/api/v1/alerts/?sort_by=severity&sort_order=desc")
     assert sort_response.status_code == 200
     sort_data = sort_response.json()
     
@@ -55,7 +55,7 @@ def test_list_alerts(client):
         "start_date": "2024-01-01T00:00:00",
         "end_date": "2024-12-31T23:59:59"
     }
-    filter_response = client.get("/api/v1/alerts/", params=filter_params)
+    filter_response = auth_client.get("/api/v1/alerts/", params=filter_params)
     assert filter_response.status_code == 200
     filter_data = filter_response.json()
     
@@ -69,7 +69,7 @@ def test_list_alerts(client):
                   if item["classification_text"])
     
     # Test invalid page/size parameters
-    invalid_response = client.get("/api/v1/alerts/?page=0&size=1000")
+    invalid_response = auth_client.get("/api/v1/alerts/?page=0&size=1000")
     assert invalid_response.status_code in [400, 422]  # FastAPI validation error
     
     # Print some debug info
@@ -78,10 +78,10 @@ def test_list_alerts(client):
     if data['items']:
         print(f"Sample alert classifications: {[item['classification_text'] for item in data['items'][:3] if item['classification_text']]}")
 
-def test_alert_detail(client):
+def test_alert_detail(auth_client):
     """Test getting detailed information for a specific alert"""
     # First get a list of alerts to find a valid ID
-    list_response = client.get("/api/v1/alerts/?page=1&size=1")
+    list_response = auth_client.get("/api/v1/alerts/?page=1&size=1")
     assert list_response.status_code == 200
     alerts = list_response.json()
     
@@ -91,7 +91,7 @@ def test_alert_detail(client):
     alert_id = alerts["items"][0]["alert_id"]
     
     # Test getting alert detail
-    response = client.get(f"/api/v1/alerts/{alert_id}")
+    response = auth_client.get(f"/api/v1/alerts/{alert_id}")
     assert response.status_code == 200
     data = response.json()
     
@@ -127,11 +127,11 @@ def test_alert_detail(client):
         assert isinstance(data["analyzer"]["name"], str)
     
     # Test with payload truncation
-    truncated_response = client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=true")
+    truncated_response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=true")
     assert truncated_response.status_code == 200
     
     # Test invalid alert ID
-    invalid_response = client.get("/api/v1/alerts/999999999")
+    invalid_response = auth_client.get("/api/v1/alerts/999999999")
     assert invalid_response.status_code == 404
     
     # Print some debug info
@@ -141,10 +141,10 @@ def test_alert_detail(client):
     if "severity" in data:
         print(f"Severity: {data['severity']}")
 
-def test_grouped_alerts(client):
+def test_grouped_alerts(auth_client):
     """Test getting grouped alerts with various filters and sorting options"""
     # Test basic pagination
-    response = client.get("/api/v1/alerts/groups?page=1&size=10")
+    response = auth_client.get("/api/v1/alerts/groups?page=1&size=10")
     
     # Verify response structure
     assert response.status_code == 200
@@ -182,7 +182,7 @@ def test_grouped_alerts(client):
             assert "time" in alert
     
     # Test sorting
-    sort_response = client.get("/api/v1/alerts/groups?sort_by=severity&sort_order=desc")
+    sort_response = auth_client.get("/api/v1/alerts/groups?sort_by=severity&sort_order=desc")
     assert sort_response.status_code == 200
     
     # Test filtering
@@ -192,29 +192,29 @@ def test_grouped_alerts(client):
         "start_date": "2024-01-01T00:00:00",
         "end_date": "2024-12-31T23:59:59"
     }
-    filter_response = client.get("/api/v1/alerts/groups", params=filter_params)
+    filter_response = auth_client.get("/api/v1/alerts/groups", params=filter_params)
     assert filter_response.status_code == 200
     
     # Test invalid parameters
-    invalid_response = client.get("/api/v1/alerts/groups?page=0&size=1000")
+    invalid_response = auth_client.get("/api/v1/alerts/groups?page=0&size=1000")
     assert invalid_response.status_code in [400, 422]  # FastAPI validation error
 
-def test_list_alerts_edge_cases(client):
+def test_list_alerts_edge_cases(auth_client):
     """Test edge cases for the list alerts endpoint"""
     # Test empty filters
-    response = client.get("/api/v1/alerts/?severity=&classification=")
+    response = auth_client.get("/api/v1/alerts/?severity=&classification=")
     assert response.status_code == 200
     
     # Test invalid date format
-    response = client.get("/api/v1/alerts/?start_date=invalid-date")
+    response = auth_client.get("/api/v1/alerts/?start_date=invalid-date")
     assert response.status_code in [400, 422]
     
     # Test invalid sort field
-    response = client.get("/api/v1/alerts/?sort_by=invalid_field")
+    response = auth_client.get("/api/v1/alerts/?sort_by=invalid_field")
     assert response.status_code in [400, 422]
     
     # Test invalid sort order
-    response = client.get("/api/v1/alerts/?sort_order=invalid")
+    response = auth_client.get("/api/v1/alerts/?sort_order=invalid")
     assert response.status_code in [400, 422]
     
     # Test future date range
@@ -222,41 +222,41 @@ def test_list_alerts_edge_cases(client):
         "start_date": "2025-01-01T00:00:00",
         "end_date": "2025-12-31T23:59:59"
     }
-    response = client.get("/api/v1/alerts/", params=future_params)
+    response = auth_client.get("/api/v1/alerts/", params=future_params)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 0  # Should return empty result for future dates
 
-def test_alert_detail_edge_cases(client):
+def test_alert_detail_edge_cases(auth_client):
     """Test edge cases for the alert detail endpoint"""
     # Test non-numeric alert ID
-    response = client.get("/api/v1/alerts/abc")
+    response = auth_client.get("/api/v1/alerts/abc")
     assert response.status_code in [400, 422]
     
     # Test zero alert ID
-    response = client.get("/api/v1/alerts/0")
+    response = auth_client.get("/api/v1/alerts/0")
     assert response.status_code == 404
     
     # Test negative alert ID - should return 404 as negative IDs can't exist
-    response = client.get("/api/v1/alerts/-1")
+    response = auth_client.get("/api/v1/alerts/-1")
     assert response.status_code == 404
     
     # Test very large alert ID
-    response = client.get("/api/v1/alerts/999999999999999")
+    response = auth_client.get("/api/v1/alerts/999999999999999")
     assert response.status_code == 404
     
     # Test truncate_payload parameter variations
-    list_response = client.get("/api/v1/alerts/?page=1&size=1")
+    list_response = auth_client.get("/api/v1/alerts/?page=1&size=1")
     if list_response.json()["items"]:
         alert_id = list_response.json()["items"][0]["alert_id"]
         
         # Test explicit true/false values
-        response = client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=true")
+        response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=true")
         assert response.status_code == 200
         
-        response = client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=false")
+        response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=false")
         assert response.status_code == 200
         
         # Test invalid truncate_payload value
-        response = client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=invalid")
+        response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=invalid")
         assert response.status_code in [400, 422] 

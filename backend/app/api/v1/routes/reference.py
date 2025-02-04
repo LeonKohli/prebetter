@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from ....database.config import get_db
+from ....database.config import get_prelude_db
 from ....models.prelude import Classification, Impact, Analyzer
+from ..routes.auth import get_current_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/classifications", response_model=List[str])
 async def get_unique_classifications(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_prelude_db),
 ) -> List[str]:
     """Get a list of unique classification texts."""
     try:
@@ -28,7 +29,7 @@ async def get_unique_classifications(
 
 @router.get("/severities", response_model=List[str])
 async def get_unique_severities(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_prelude_db),
 ) -> List[str]:
     """Get a list of unique impact severities."""
     try:
@@ -48,7 +49,7 @@ async def get_unique_severities(
 
 @router.get("/analyzers", response_model=List[str])
 async def get_unique_analyzers(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_prelude_db),
 ) -> List[str]:
     """Get a list of unique analyzer names."""
     try:
