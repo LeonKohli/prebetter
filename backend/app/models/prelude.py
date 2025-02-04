@@ -1,5 +1,5 @@
 from sqlalchemy.ext.automap import automap_base
-from ..database.config import prelude_metadata, prelude_engine
+from ..database.config import prelude_engine
 
 # Create the base class
 Base = automap_base()
