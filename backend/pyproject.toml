@@ -51,4 +51,7 @@ dependencies = [
     "watchfiles==1.0.3",
     "websockets==14.1",
     "ruff>=0.9.4",
+    "passlib[bcrypt]>=1.7.4",
+    "pyjwt>=2.10.1",
+    "python-jose[cryptography]>=3.3.0",
 ]
