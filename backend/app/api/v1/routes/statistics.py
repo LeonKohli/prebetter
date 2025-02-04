@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from typing import Optional, Annotated
+from typing import Optional
 from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, text
@@ -8,7 +8,6 @@ from ....models.prelude import Alert, DetectTime, Impact, Classification, Analyz
 from ....schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
 from enum import Enum
 from fastapi import HTTPException
-from ....models.users import User
 from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])

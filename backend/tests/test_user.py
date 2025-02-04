@@ -1,9 +1,8 @@
 import uuid
 import pytest
-from fastapi.testclient import TestClient
 
 from app.models.users import User
-from app.core.security import get_password_hash, verify_password
+from app.core.security import get_password_hash
 
 # Define test data for a superuser.
 TEST_SUPERUSER = {
