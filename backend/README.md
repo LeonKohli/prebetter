@@ -1,8 +1,18 @@
 # Prelude SIEM API
 
-A FastAPI-based REST API for accessing Prelude IDS/SIEM data in read-only mode. This API provides comprehensive access to security alerts and related information from your Prelude SIEM system.
+A FastAPI-based REST API for accessing Prelude IDS/SIEM data with user management and authentication. This API provides comprehensive access to security alerts and related information from your Prelude SIEM system.
 
 ## Features
+
+### User Management & Authentication
+- **User Authentication:** JWT-based authentication system
+- **Role-Based Access:** Superuser and regular user roles
+- **User Operations:** 
+  - Create/Update/Delete users (superuser only)
+  - Password management (change/reset)
+  - Email and username validation
+  - Pagination for user listing
+- **Concurrent Operation Handling:** Protection against race conditions in user operations
 
 ### Alert Management
 - **Paginated Alerts Listing:** Browse alerts with rich filtering options.
@@ -33,17 +43,25 @@ app/
 │   └── v1/
 │       └── routes/        # API endpoint implementations
 │           ├── alerts.py      # Alert management endpoints
+│           ├── auth.py        # Authentication endpoints
+│           ├── users.py       # User management endpoints
 │           ├── reference.py   # Reference data endpoints
 │           └── statistics.py  # Statistics endpoints
 ├── core/                  # Core functionality
 │   ├── config.py          # Environment & app configuration
+│   ├── security.py        # Authentication & security utilities
 │   └── logging.py         # Logging configuration
 ├── database/             # Database layer
-│   └── config.py         # Database connection management
+│   ├── config.py         # Database connection management
+│   └── init_db.py        # Database initialization
 ├── models/               # Database models
-│   └── prelude.py        # SQLAlchemy models
+│   ├── prelude.py        # SQLAlchemy models for SIEM
+│   └── users.py          # User models
 ├── schemas/              # API schemas
-│   └── prelude.py        # Pydantic models
+│   ├── prelude.py        # SIEM Pydantic models
+│   └── users.py          # User Pydantic models
+├── services/            # Business logic
+│   └── users.py         # User service layer
 └── main.py              # Application entry point
 ```
 
@@ -63,10 +81,14 @@ app/
    ```
 
 4. **Configure Environment Variables:**
-   - Copy the example file and update your database credentials:
+   - Copy the example file and update your credentials:
      ```bash
      cp .env.example .env
      ```
+   - Required variables:
+     - Database credentials (as before)
+     - `SECRET_KEY`: For JWT token generation
+     - `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time
 
 5. **Import the Prelude Database (if needed):**
    ```bash
@@ -79,6 +101,27 @@ app/
    ```
 
 ## API Endpoints
+
+### Authentication & User Management
+
+- **Login**: `POST /api/v1/auth/token`
+  - Request body: username and password
+  - Returns: JWT access token
+
+- **Current User**: `GET /api/v1/auth/users/me`
+  - Returns current authenticated user's details
+
+- **Users (Superuser Only)**:
+  - List: `GET /api/v1/users/`
+    - Supports pagination with `skip` and `limit` parameters
+  - Create: `POST /api/v1/users/`
+  - Get: `GET /api/v1/users/{user_id}`
+  - Update: `PUT /api/v1/users/{user_id}`
+  - Delete: `DELETE /api/v1/users/{user_id}`
+
+- **Password Management**:
+  - Change Password: `POST /api/v1/users/change-password`
+  - Reset Password (Superuser): `POST /api/v1/users/{user_id}/reset-password`
 
 ### Alert Management
 
@@ -140,6 +183,8 @@ app/
 - `MYSQL_HOST`: MySQL host (default: localhost)
 - `MYSQL_PORT`: MySQL port (default: 3306)
 - `MYSQL_DB`: MySQL database name (default: prelude)
+- `SECRET_KEY`: Secret key for JWT token generation
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes
 
 ## Testing
 
@@ -159,25 +204,35 @@ The test suite includes:
 - Timeline and statistics tests.
 - Edge case handling tests.
 - Reference data validation.
+- Authentication and authorization tests
+- User management tests
+- Edge case handling for user operations
+- Concurrent user operation tests
 
 ## Performance Features
 
 - **Optimized Database Queries:** Uses efficient joins with aliases, separate count queries, distinct selections, and proper indexing on key fields.
 - **Efficient Payload Handling:** Supports optional payload truncation.
 - **Error Handling:** Provides specific error messages and robust exception handling.
-- **Database Connection Pooling:** Managed via SQLAlchemy’s connection pooling.
+- **Database Connection Pooling:** Managed via SQLAlchemy's connection pooling.
 - **Asynchronous Request Handling:** Endpoints are defined as asynchronous functions for improved performance.
 
-## Security Notes
+## Security Features
 
-- **Read-Only API:** Prevents data modifications to ensure safety.
-- **CORS Configuration:** Supports customizable origins.
-- **Secure Credential Handling:** Uses environment variables for database credentials.
-- **Input Validation:** Employs Pydantic models to validate all incoming data.
-- **Error Handling:** Sanitizes error messages to avoid leaking sensitive information.
-- **Rate Limiting:** Consider adding rate limiting for production deployments.
+- **JWT Authentication:** Secure token-based authentication system
+- **Password Hashing:** Secure password storage using hashing
+- **Role-Based Access Control:** Superuser and regular user permissions
+- **Input Validation:** Comprehensive validation for user data
+- **Unique Constraints:** Username and email uniqueness enforcement
+- **Last Superuser Protection:** Prevents deletion of the last superuser
 
 ## Data Models
+
+### User Models
+- **User Base:** Email, username, and optional full name
+- **User Create:** Includes password for user creation
+- **User Update:** Optional fields for updating user details
+- **User in DB:** Complete user model with system fields
 
 ### Alert List Item
 
