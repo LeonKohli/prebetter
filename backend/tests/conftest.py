@@ -1,5 +1,6 @@
 import pytest
 import uuid
+from typing import Generator
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app.main import app
@@ -26,7 +27,7 @@ def client() -> TestClient:
     return TestClient(app)
 
 @pytest.fixture
-def test_db() -> Session:
+def test_db() -> Generator[Session, None, None]:
     """
     Provide a SQLAlchemy session with a clean test user database.
     This fixture cleans up non-admin users before and after each test.
