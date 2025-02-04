@@ -14,7 +14,7 @@ from ....core.security import (
 )
 from ....database.config import get_prebetter_db
 from ....models.users import User
-from ....schemas.users import Token, TokenData, UserCreate, User as UserSchema
+from ....schemas.users import Token, TokenData, User as UserSchema
 from ....services.users import UserService
 
 router = APIRouter()

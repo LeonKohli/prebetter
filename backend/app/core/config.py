@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from functools import lru_cache
-from typing import Optional
 import secrets
 
 class Settings(BaseSettings):

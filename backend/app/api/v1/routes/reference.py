@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import distinct
-from typing import List, Annotated
+from typing import List
 from ....database.config import get_prelude_db
-from ....models.prelude import Alert, Classification, Impact, Analyzer
-from ....models.users import User
+from ....models.prelude import Classification, Impact, Analyzer
 from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])

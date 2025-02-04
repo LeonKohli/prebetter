@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, literal_column, tuple_, distinct
-from typing import Optional, Annotated
+from typing import Optional
 from datetime import datetime
 from enum import Enum
 from ....database.config import get_prelude_db
@@ -36,7 +36,6 @@ from ....schemas.prelude import (
     GroupedAlert,
     GroupedAlertDetail,
 )
-from ....models.users import User
 from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
