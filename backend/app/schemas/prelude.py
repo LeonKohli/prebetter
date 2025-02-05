@@ -4,6 +4,25 @@ from datetime import datetime
 from enum import Enum
 
 
+class NodeInfo(BaseModel):
+    name: Optional[str] = None
+    location: Optional[str] = None
+    category: Optional[str] = None
+    ident: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProcessInfo(BaseModel):
+    name: Optional[str] = None
+    pid: Optional[int] = None
+    path: Optional[str] = None
+    args: List[str] = []
+    env: List[str] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class AddressCategory(str, Enum):
     UNKNOWN = "unknown"
     ATM = "atm"
@@ -32,6 +51,11 @@ class NetworkInfo(BaseModel):
     ident: Optional[str] = None
     ip_version: Optional[int] = None
     ip_hlen: Optional[int] = None
+    protocol: Optional[str] = None
+    protocol_number: Optional[int] = None
+    node: Optional[NodeInfo] = None  # Node information for source/target
+    heartbeat_process: Optional[ProcessInfo] = None  # Process information from heartbeat
+    addresses: List[str] = []  # All addresses associated with this source/target
 
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
@@ -57,29 +81,27 @@ class ServiceInfo(BaseModel):
     port: Optional[int] = None
     protocol: Optional[str] = None
     direction: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class NodeInfo(BaseModel):
+    ip_version: Optional[int] = None
     name: Optional[str] = None
-    location: Optional[str] = None
-    category: Optional[str] = None
+    iana_protocol_number: Optional[int] = None
+    iana_protocol_name: Optional[str] = None
+    portlist: Optional[str] = None
     ident: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class ProcessInfo(BaseModel):
-    name: Optional[str] = None
-    pid: Optional[int] = None
-    path: Optional[str] = None
+class AnalyzerTimeInfo(BaseModel):
+    time: datetime
+    usec: Optional[int] = None
+    gmtoff: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class AnalyzerInfo(BaseModel):
     name: str
+    analyzer_id: Optional[str] = None
     node: Optional[NodeInfo] = None
     model: Optional[str] = None
     manufacturer: Optional[str] = None
@@ -88,6 +110,24 @@ class AnalyzerInfo(BaseModel):
     ostype: Optional[str] = None
     osversion: Optional[str] = None
     process: Optional[ProcessInfo] = None
+    analyzer_time: Optional[AnalyzerTimeInfo] = None
+    chain_index: Optional[int] = None  # Position in analyzer chain
+    role: Optional[str] = None  # Role in analyzer chain (e.g., "Primary", "Concentrator")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WebServiceInfo(BaseModel):
+    url: str
+    cgi: Optional[str] = None
+    http_method: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AlertIdentInfo(BaseModel):
+    alertident: str
+    analyzerid: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -154,9 +194,11 @@ class AlertDetail(BaseModel):
     impact_type: Optional[str] = None
     source: Optional[NetworkInfo] = None
     target: Optional[NetworkInfo] = None
-    analyzer: Optional[AnalyzerInfo] = None
+    analyzers: List[AnalyzerInfo] = []  # Changed from single analyzer to list
     references: List[ReferenceInfo] = []
     services: List[ServiceInfo] = []
+    web_services: List[WebServiceInfo] = []
+    alert_idents: List[AlertIdentInfo] = []
     additional_data: dict = {}
 
     model_config = ConfigDict(from_attributes=True)
