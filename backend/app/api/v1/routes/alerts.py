@@ -20,6 +20,11 @@ from ....models.prelude import (
     Process,
     Source,
     Target,
+    WebService,
+    Alertident,
+    ProcessArg,
+    ProcessEnv,
+    AnalyzerTime,
 )
 from ....schemas.prelude import (
     AlertListResponse,
@@ -32,6 +37,9 @@ from ....schemas.prelude import (
     ProcessInfo,
     ReferenceInfo,
     ServiceInfo,
+    WebServiceInfo,
+    AlertIdentInfo,
+    AnalyzerTimeInfo,
     GroupedAlertResponse,
     GroupedAlert,
     GroupedAlertDetail,
@@ -560,9 +568,9 @@ async def get_alert_detail(
             .first()
         )
 
-        # Get source information with complete address details
+        # Get source information with complete details
         source_info = (
-            db.query(Source, Address)
+            db.query(Source, Address, Service, Node, Process)
             .outerjoin(
                 Address,
                 and_(
@@ -571,13 +579,46 @@ async def get_alert_detail(
                     Address._parent0_index == Source._index,
                 ),
             )
+            .outerjoin(
+                Service,
+                and_(
+                    Service._message_ident == Source._message_ident,
+                    Service._parent_type == "S",
+                    Service._parent0_index == Source._index,
+                ),
+            )
+            .outerjoin(
+                Node,
+                and_(
+                    Node._message_ident == Source._message_ident,
+                    Node._parent_type == "S",
+                ),
+            )
+            .outerjoin(
+                Process,
+                and_(
+                    Process._message_ident == Source._message_ident,
+                    Process._parent_type == "H",  # Get heartbeat process info
+                ),
+            )
             .filter(Source._message_ident == alert_id)
             .first()
         )
 
-        # Get target information with complete address details
+        # Get all source addresses
+        source_addresses = (
+            db.query(Address.address)
+            .filter(
+                Address._message_ident == alert_id,
+                Address._parent_type == "S",
+            )
+            .distinct()
+            .all()
+        )
+
+        # Get target information with complete details
         target_info = (
-            db.query(Target, Address)
+            db.query(Target, Address, Service, Node, Process)
             .outerjoin(
                 Address,
                 and_(
@@ -586,13 +627,46 @@ async def get_alert_detail(
                     Address._parent0_index == Target._index,
                 ),
             )
+            .outerjoin(
+                Service,
+                and_(
+                    Service._message_ident == Target._message_ident,
+                    Service._parent_type == "T",
+                    Service._parent0_index == Target._index,
+                ),
+            )
+            .outerjoin(
+                Node,
+                and_(
+                    Node._message_ident == Target._message_ident,
+                    Node._parent_type == "T",
+                ),
+            )
+            .outerjoin(
+                Process,
+                and_(
+                    Process._message_ident == Target._message_ident,
+                    Process._parent_type == "H",  # Get heartbeat process info
+                ),
+            )
             .filter(Target._message_ident == alert_id)
             .first()
         )
 
-        # Get analyzer information
-        analyzer = (
-            db.query(Analyzer, Node, Process)
+        # Get all target addresses
+        target_addresses = (
+            db.query(Address.address)
+            .filter(
+                Address._message_ident == alert_id,
+                Address._parent_type == "T",
+            )
+            .distinct()
+            .all()
+        )
+
+        # Get all analyzers in the chain with their details
+        analyzers_query = (
+            db.query(Analyzer, Node, Process, AnalyzerTime)
             .outerjoin(
                 Node,
                 and_(
@@ -609,13 +683,104 @@ async def get_alert_detail(
                     Process._parent0_index == Analyzer._index,
                 ),
             )
+            .outerjoin(
+                AnalyzerTime,
+                and_(
+                    AnalyzerTime._message_ident == Analyzer._message_ident,
+                    AnalyzerTime._parent_type == "A",
+                ),
+            )
             .filter(
                 Analyzer._message_ident == alert_id,
                 Analyzer._parent_type == "A",
-                Analyzer._index == -1,
             )
-            .first()
+            .order_by(Analyzer._index)  # Order by chain position
+            .all()
         )
+
+        # Build list of analyzer info objects
+        analyzers_info = []
+        for analyzer in analyzers_query:
+            # Get process arguments for this analyzer
+            process_args = (
+                db.query(ProcessArg.arg)
+                .filter(
+                    ProcessArg._message_ident == alert_id,
+                    ProcessArg._parent_type == "A",
+                    ProcessArg._parent0_index == analyzer[0]._index,
+                )
+                .order_by(ProcessArg._index)
+                .all()
+            )
+
+            # Get process environment variables for this analyzer
+            process_env = (
+                db.query(ProcessEnv.env)
+                .filter(
+                    ProcessEnv._message_ident == alert_id,
+                    ProcessEnv._parent_type == "A",
+                    ProcessEnv._parent0_index == analyzer[0]._index,
+                )
+                .order_by(ProcessEnv._index)
+                .all()
+            )
+
+            # Build node info
+            node_info = None
+            if analyzer[1]:  # If Node exists
+                node_info = NodeInfo(
+                    ident=analyzer[1].ident,
+                    category=analyzer[1].category,
+                    location=analyzer[1].location,
+                    name=analyzer[1].name,
+                )
+
+            # Build process info
+            process_info = None
+            if analyzer[2]:  # If Process exists
+                process_info = ProcessInfo(
+                    name=analyzer[2].name,
+                    pid=analyzer[2].pid,
+                    path=analyzer[2].path,
+                    args=[arg[0] for arg in process_args],
+                    env=[env[0] for env in process_env],
+                )
+
+            # Build analyzer time info
+            analyzer_time_info = None
+            if analyzer[3]:  # If AnalyzerTime exists
+                analyzer_time_info = AnalyzerTimeInfo(
+                    time=analyzer[3].time,
+                    usec=analyzer[3].usec,
+                    gmtoff=analyzer[3].gmtoff,
+                )
+
+            # Determine analyzer role based on class and position
+            role = None
+            if analyzer[0]._index == -1:
+                role = "Primary"
+            elif getattr(analyzer[0], "class", "") == "Concentrator":
+                role = "Concentrator"
+            else:
+                role = "Secondary"
+
+            # Build analyzer info
+            analyzer_info = AnalyzerInfo(
+                name=analyzer[0].name,
+                analyzer_id=analyzer[0].analyzerid,
+                node=node_info,
+                model=analyzer[0].model,
+                manufacturer=analyzer[0].manufacturer,
+                version=analyzer[0].version,
+                class_type=getattr(analyzer[0], "class", None),
+                ostype=analyzer[0].ostype,
+                osversion=analyzer[0].osversion,
+                process=process_info,
+                analyzer_time=analyzer_time_info,
+                chain_index=analyzer[0]._index,
+                role=role,
+            )
+            analyzers_info.append(analyzer_info)
 
         # Get references (prevent duplicates)
         references = (
@@ -625,10 +790,26 @@ async def get_alert_detail(
             .all()
         )
 
-        # Get services (prevent duplicates)
+        # Get services with complete details
         services = (
             db.query(Service)
             .filter(Service._message_ident == alert_id)
+            .distinct()
+            .all()
+        )
+
+        # Get web services
+        web_services = (
+            db.query(WebService)
+            .filter(WebService._message_ident == alert_id)
+            .distinct()
+            .all()
+        )
+
+        # Get alert idents
+        alert_idents = (
+            db.query(Alertident)
+            .filter(Alertident._message_ident == alert_id)
             .distinct()
             .all()
         )
@@ -678,9 +859,30 @@ async def get_alert_detail(
             except Exception as e:
                 additional_data[row.meaning] = f"Error decoding data: {str(e)}"
 
-        # Build source network info with complete address details
+        # Build source network info with complete details
         source = None
         if source_info and source_info[1]:  # Check if Address info exists
+            # Build node info for source
+            source_node = None
+            if source_info[3]:  # If Node exists
+                source_node = NodeInfo(
+                    name=source_info[3].name,
+                    location=source_info[3].location,
+                    category=source_info[3].category,
+                    ident=source_info[3].ident,
+                )
+
+            # Build heartbeat process info
+            source_process = None
+            if source_info[4]:  # If Process exists
+                source_process = ProcessInfo(
+                    name=source_info[4].name,
+                    pid=source_info[4].pid,
+                    path=source_info[4].path,
+                    args=[],  # Process args not relevant for heartbeat
+                    env=[],   # Process env not relevant for heartbeat
+                )
+
             source = NetworkInfo(
                 interface=source_info[0].interface,
                 category=source_info[1].category,
@@ -695,11 +897,37 @@ async def get_alert_detail(
                 ip_hlen=next(
                     (int(d.data) for d in add_data_rows if d.meaning == "ip_hlen"), None
                 ),
+                protocol=source_info[2].iana_protocol_name if source_info[2] else None,
+                protocol_number=source_info[2].iana_protocol_number if source_info[2] else None,
+                node=source_node,
+                heartbeat_process=source_process,
+                addresses=[addr[0] for addr in source_addresses],
             )
 
-        # Build target network info with complete address details
+        # Build target network info with complete details
         target = None
         if target_info and target_info[1]:  # Check if Address info exists
+            # Build node info for target
+            target_node = None
+            if target_info[3]:  # If Node exists
+                target_node = NodeInfo(
+                    name=target_info[3].name,
+                    location=target_info[3].location,
+                    category=target_info[3].category,
+                    ident=target_info[3].ident,
+                )
+
+            # Build heartbeat process info
+            target_process = None
+            if target_info[4]:  # If Process exists
+                target_process = ProcessInfo(
+                    name=target_info[4].name,
+                    pid=target_info[4].pid,
+                    path=target_info[4].path,
+                    args=[],  # Process args not relevant for heartbeat
+                    env=[],   # Process env not relevant for heartbeat
+                )
+
             target = NetworkInfo(
                 interface=target_info[0].interface,
                 category=target_info[1].category,
@@ -714,6 +942,11 @@ async def get_alert_detail(
                 ip_hlen=next(
                     (int(d.data) for d in add_data_rows if d.meaning == "ip_hlen"), None
                 ),
+                protocol=target_info[2].iana_protocol_name if target_info[2] else None,
+                protocol_number=target_info[2].iana_protocol_number if target_info[2] else None,
+                node=target_node,
+                heartbeat_process=target_process,
+                addresses=[addr[0] for addr in target_addresses],
             )
 
         # Build analyzer info
@@ -731,20 +964,21 @@ async def get_alert_detail(
             process_info = None
             if analyzer[2]:
                 process_info = ProcessInfo(
-                    name=analyzer[2].name, pid=analyzer[2].pid, path=analyzer[2].path
+                    name=analyzer[2].name,
+                    pid=analyzer[2].pid,
+                    path=analyzer[2].path,
+                    args=[arg[0] for arg in process_args],
+                    env=[env[0] for env in process_env],
                 )
 
-            analyzer_info = AnalyzerInfo(
-                name=analyzer[0].name,
-                node=node_info,
-                model=analyzer[0].model,
-                manufacturer=analyzer[0].manufacturer,
-                version=analyzer[0].version,
-                class_type=getattr(analyzer[0], "class", None),
-                ostype=analyzer[0].ostype,
-                osversion=analyzer[0].osversion,
-                process=process_info,
-            )
+            analyzer_time_info = None
+            if analyzer[3]:
+                analyzer_time_info = AnalyzerTimeInfo(
+                    time=analyzer[3].time,
+                    usec=analyzer[3].usec,
+                    gmtoff=analyzer[3].gmtoff,
+                )
+
 
         # Remove duplicate services while preserving order
         seen_services = set()
@@ -783,7 +1017,7 @@ async def get_alert_detail(
             impact_type=alert[4].type if alert[4] else None,
             source=source,
             target=target,
-            analyzer=analyzer_info,
+            analyzers=analyzers_info,  # Now using the list of analyzers
             references=[
                 ReferenceInfo(
                     origin=ref.origin, name=ref.name, url=ref.url, meaning=ref.meaning
@@ -793,14 +1027,35 @@ async def get_alert_detail(
             services=[
                 ServiceInfo(
                     port=svc.port,
-                    protocol=svc.iana_protocol_name,
+                    protocol=svc.protocol,
                     direction="source" if svc._parent_type == "S" else "target",
+                    ip_version=svc.ip_version,
+                    name=svc.name,
+                    iana_protocol_number=svc.iana_protocol_number,
+                    iana_protocol_name=svc.iana_protocol_name,
+                    portlist=svc.portlist,
+                    ident=svc.ident,
                 )
                 for svc in unique_services
+            ],
+            web_services=[
+                WebServiceInfo(
+                    url=ws.url,
+                    cgi=ws.cgi,
+                    http_method=ws.http_method,
+                )
+                for ws in web_services
+            ],
+            alert_idents=[
+                AlertIdentInfo(
+                    alertident=ai.alertident,
+                    analyzerid=ai.analyzerid,
+                )
+                for ai in alert_idents
             ],
             additional_data=additional_data,
         )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}")
