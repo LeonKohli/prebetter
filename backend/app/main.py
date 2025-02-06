@@ -22,16 +22,18 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialization complete.")
     yield
 
+
 # Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="API for accessing Prelude data and managing users",
+    description="API for accessing Prelude data",
     version=settings.VERSION,
     lifespan=lifespan,
     license_info={
         "name": "GPLv3",
         "url": "https://www.gnu.org/licenses/gpl-3.0.en.html",
     },
+    openapi_url="/api/v1/openapi.json",
 )
 
 # Add CORS middleware
