@@ -27,7 +27,11 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="API for accessing Prelude data and managing users",
     version=settings.VERSION,
-    lifespan=lifespan
+    lifespan=lifespan,
+    license_info={
+        "name": "GPLv3",
+        "url": "https://www.gnu.org/licenses/gpl-3.0.en.html",
+    },
 )
 
 # Add CORS middleware
