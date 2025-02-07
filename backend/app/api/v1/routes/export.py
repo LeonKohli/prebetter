@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Query, Response, Path
+from fastapi import APIRouter, Depends, Query, Path, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_
-from typing import Optional
+from typing import Optional, Iterator
 from datetime import datetime
 import csv
 from io import StringIO
@@ -22,30 +23,74 @@ from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+
 class ExportFormat(str, Enum):
     CSV = "csv"
 
+
+def generate_csv(results: Iterator, header: list) -> Iterator[str]:
+    """
+    A generator that yields CSV lines.
+    """
+    output = StringIO()
+    writer = csv.writer(output)
+
+    # Write header row and yield it
+    writer.writerow(header)
+    yield output.getvalue()
+    output.seek(0)
+    output.truncate(0)
+
+    # Write data rows one by one
+    for row in results:
+        writer.writerow(
+            [
+                row._ident,
+                row.messageid,
+                row.detect_time.isoformat() if row.detect_time else "",
+                row.create_time.isoformat() if row.create_time else "",
+                row.classification_text or "",
+                row.severity or "",
+                row.source_ipv4 or "",
+                row.target_ipv4 or "",
+                row.analyzer_name or "",
+                row.analyzer_host or "",
+                row.analyzer_model or "",
+            ]
+        )
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+
 @router.get("/alerts/{format}")
 async def export_alerts(
-    format: ExportFormat = Path(..., description="Export format (currently only supports 'csv')"),
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    source_ip: Optional[str] = None,
-    target_ip: Optional[str] = None,
-    analyzer_model: Optional[str] = None,
+    format: ExportFormat = Path(
+        ..., description="Export format (currently only supports 'csv')"
+    ),
+    alert_ids: Optional[list[int]] = Query(
+        None, description="List of specific alert IDs to export"
+    ),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    severity: Optional[str] = Query(None),
+    classification: Optional[str] = Query(None),
+    source_ip: Optional[str] = Query(None),
+    target_ip: Optional[str] = Query(None),
+    analyzer_model: Optional[str] = Query(None),
     db: Session = Depends(get_prelude_db),
-) -> Response:
-    """Export alerts in the specified format with filtering options."""
+) -> StreamingResponse:
+    """Export alerts in CSV format with filtering options."""
     if format != ExportFormat.CSV:
-        raise NotImplementedError(f"Export format '{format}' is not yet supported")
+        raise HTTPException(
+            status_code=501, detail=f"Export format '{format}' is not yet supported"
+        )
 
     # Create aliases for source and target addresses
     source_addr = aliased(Address)
     target_addr = aliased(Address)
 
-    # Base query for alerts with essential joins
+    # Base query for alerts with necessary joins
     query = (
         db.query(
             Alert._ident,
@@ -61,14 +106,22 @@ async def export_alerts(
             Analyzer.model.label("analyzer_model"),
         )
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .outerjoin(CreateTime, and_(CreateTime._message_ident == Alert._ident, CreateTime._parent_type == "A"))
+        .outerjoin(
+            CreateTime,
+            and_(
+                CreateTime._message_ident == Alert._ident,
+                CreateTime._parent_type == "A",
+            ),
+        )
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
         .outerjoin(
             source_addr,
             and_(
                 source_addr._message_ident == Alert._ident,
-                source_addr._parent_type == "S",
+                source_addr._parent_type == "S",  # Explicitly limit to source
+                source_addr._parent0_index == -1,  # Primary source entry
+                source_addr._index == -1,          # Final filter for primary address
                 source_addr.category == "ipv4-addr",
             ),
         )
@@ -76,7 +129,9 @@ async def export_alerts(
             target_addr,
             and_(
                 target_addr._message_ident == Alert._ident,
-                target_addr._parent_type == "T",
+                target_addr._parent_type == "T",  # Explicitly limit to target
+                target_addr._parent0_index == -1,  # Primary target entry
+                target_addr._index == -1,          # Final filter for primary address
                 target_addr.category == "ipv4-addr",
             ),
         )
@@ -85,7 +140,7 @@ async def export_alerts(
             and_(
                 Analyzer._message_ident == Alert._ident,
                 Analyzer._parent_type == "A",
-                Analyzer._index == -1,
+                Analyzer._index == -1,  # Primary analyzer
             ),
         )
         .outerjoin(
@@ -93,12 +148,14 @@ async def export_alerts(
             and_(
                 Node._message_ident == Alert._ident,
                 Node._parent_type == "A",
-                Node._parent0_index == -1,
+                Node._parent0_index == -1,  # Primary node entry
             ),
         )
     )
 
     # Apply filters
+    if alert_ids:
+        query = query.filter(Alert._ident.in_(alert_ids))
     if severity:
         query = query.filter(Impact.severity == severity)
     if classification:
@@ -117,15 +174,11 @@ async def export_alerts(
     # Order by detect time descending
     query = query.order_by(DetectTime.time.desc())
 
-    # Execute query
-    results = query.all()
+    # Use yield_per to fetch rows in batches instead of loading all at once
+    results = query.yield_per(1000)
 
-    # Create CSV file in memory
-    output = StringIO()
-    writer = csv.writer(output)
-
-    # Write header
-    writer.writerow([
+    # Define CSV header row
+    header = [
         "Alert ID",
         "Message ID",
         "Detect Time",
@@ -136,32 +189,10 @@ async def export_alerts(
         "Target IP",
         "Analyzer Name",
         "Analyzer Host",
-        "Analyzer Model"
-    ])
+        "Analyzer Model",
+    ]
 
-    # Write data rows
-    for row in results:
-        writer.writerow([
-            row._ident,
-            row.messageid,
-            row.detect_time.isoformat() if row.detect_time else "",
-            row.create_time.isoformat() if row.create_time else "",
-            row.classification_text or "",
-            row.severity or "",
-            row.source_ipv4 or "",
-            row.target_ipv4 or "",
-            row.analyzer_name or "",
-            row.analyzer_host or "",
-            row.analyzer_model or ""
-        ])
-
-    # Create response with CSV file
-    response = Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename=alerts.{format}"
-        }
-    )
-
-    return response
+    # Create the streaming response using the CSV generator
+    csv_stream = generate_csv(results, header)
+    headers = {"Content-Disposition": "attachment; filename=alerts.csv"}
+    return StreamingResponse(csv_stream, media_type="text/csv", headers=headers)
