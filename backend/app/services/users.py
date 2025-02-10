@@ -115,7 +115,7 @@ class UserService:
 
         # Prevent deleting the last superuser
         if db_user.is_superuser:
-            superuser_count = self.db.query(User).filter(User.is_superuser == True).count()
+            superuser_count = self.db.query(User).filter(User.is_superuser is True).count()
             if superuser_count <= 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
