@@ -387,11 +387,3 @@ class TreeHostInfo(BaseModel):
     agents: list[TreeAgentInfo]
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class HeartbeatTreeResponse(BaseModel):
-    hosts: dict[str, TreeHostInfo]
-    total_hosts: int
-    total_agents: int
-
-    model_config = ConfigDict(from_attributes=True)
