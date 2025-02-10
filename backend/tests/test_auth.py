@@ -68,7 +68,7 @@ def test_protected_endpoints_without_auth(client, test_db):
     endpoints = [
         "/api/v1/alerts/",
         "/api/v1/statistics/summary",
-        "/api/v1/classifications"
+        "/api/v1/reference/classifications"
     ]
     
     for endpoint in endpoints:
