@@ -116,8 +116,6 @@ class AnalyzerInfo(BaseModel):
     analyzer_time: Optional[AnalyzerTimeInfo] = None
     chain_index: Optional[int] = None  # Position in analyzer chain
     role: Optional[str] = None  # Role in analyzer chain (e.g., "Primary", "Concentrator")
-    last_heartbeat: datetime | None
-    status: str
 
     model_config = ConfigDict(from_attributes=True)
 
