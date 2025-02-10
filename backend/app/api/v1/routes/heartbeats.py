@@ -10,6 +10,7 @@ from ....models.prelude import (
     Analyzer,
     AnalyzerTime,
     Node,
+    Address,
 )
 from ....schemas.prelude import (
     HeartbeatTreeResponse,
@@ -137,18 +138,17 @@ async def list_heartbeats_tree(
 async def list_heartbeats_timeline(
     hours: int = Query(24, ge=1, le=168, description="Hours of history to show"),
     db: Session = Depends(get_prelude_db),
-    page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(100, ge=1, le=1000, description="Number of items per page"),
 ) -> HeartbeatTimelineResponse:
     """Get heartbeat timeline data"""
     cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-    
+
     # Optimized query with specific column selection and proper join order
     query = (
         db.query(
             AnalyzerTime.time.label('timestamp'),
             Analyzer.name.label('agent'),
             Node.name.label('node_name'),
+            Address.address.label('node_address'),
             Analyzer.model,
         )
         .select_from(AnalyzerTime)
@@ -174,19 +174,27 @@ async def list_heartbeats_timeline(
                 Node._parent_type == 'H'
             )
         )
-        .filter(AnalyzerTime.time >= cutoff_time)
+        .outerjoin(  # Using outer join in case some nodes don't have addresses
+            Address,
+            and_(
+                Address._message_ident == Node._message_ident,
+                Address._parent_type == Node._parent_type
+            )
+        )
+        .filter(AnalyzerTime.time >= cutoff_time) # Apply the time filter
         .order_by(AnalyzerTime.time.desc())
     )
 
     total = query.count()
 
-    results = query.offset((page - 1) * size).limit(size).all()
+    results = query.all()
 
 
     items = [{
         "timestamp": r.timestamp,
         "agent": r.agent,
         "node_name": r.node_name,
+        "node_address": r.node_address if r.node_address else r.node_name,  # Fallback to node_name if no address
         "model": r.model,
     } for r in results]
 
