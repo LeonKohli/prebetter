@@ -8,8 +8,10 @@ class UserBase(BaseModel):
     username: str
     full_name: Optional[str] = None
 
+
 class UserCreate(UserBase):
     password: str
+
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -24,12 +26,15 @@ class UserUpdate(BaseModel):
             raise ValueError("Field cannot be empty or whitespace only")
         return v
 
+
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
 
+
 class PasswordResetRequest(BaseModel):
     new_password: str
+
 
 class UserInDBBase(UserBase):
     id: str
@@ -39,15 +44,22 @@ class UserInDBBase(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class User(UserInDBBase):
+    """
+    Schema for returning user data.
+    """
     pass
+
 
 class UserInDB(UserInDBBase):
     hashed_password: str
+
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 class TokenData(BaseModel):
-    user_id: str 
+    user_id: str
