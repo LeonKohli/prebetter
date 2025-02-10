@@ -259,4 +259,56 @@ def test_alert_detail_edge_cases(auth_client):
         
         # Test invalid truncate_payload value
         response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=invalid")
-        assert response.status_code in [400, 422] 
+        assert response.status_code in [400, 422]
+
+def test_delete_alert(auth_client):
+    """Test deleting an alert"""
+    # First get an existing alert
+    response = auth_client.get("/api/v1/alerts/?page=1&size=1")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"]
+    
+    alert_id = data["items"][0]["alert_id"]
+    
+    # Delete the alert
+    delete_response = auth_client.delete(f"/api/v1/alerts/{alert_id}")
+    assert delete_response.status_code == 200
+    delete_data = delete_response.json()
+    assert "message" in delete_data
+    assert delete_data["message"] == f"Alert {alert_id} and all related data successfully deleted"
+    
+    # Verify the alert is deleted by trying to fetch it
+    get_response = auth_client.get(f"/api/v1/alerts/{alert_id}")
+    assert get_response.status_code == 404
+    assert get_response.json()["detail"] == "Alert not found"
+    
+    # Verify it's also removed from the list
+    list_response = auth_client.get("/api/v1/alerts/?page=1&size=10")
+    assert list_response.status_code == 200
+    list_data = list_response.json()
+    alert_ids = [alert["alert_id"] for alert in list_data["items"]]
+    assert alert_id not in alert_ids
+
+def test_delete_alert_edge_cases(auth_client):
+    """Test edge cases for alert deletion"""
+    # Test deleting non-existent alert
+    response = auth_client.delete("/api/v1/alerts/999999999")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Alert not found"
+    
+    # Test deleting with invalid alert ID format
+    response = auth_client.delete("/api/v1/alerts/invalid")
+    assert response.status_code == 422  # FastAPI validation error
+    
+    # Test deleting already deleted alert
+    # First get and delete an alert
+    list_response = auth_client.get("/api/v1/alerts/?page=1&size=1")
+    if list_response.json()["items"]:
+        alert_id = list_response.json()["items"][0]["alert_id"]
+        auth_client.delete(f"/api/v1/alerts/{alert_id}")
+        
+        # Try to delete it again
+        second_delete = auth_client.delete(f"/api/v1/alerts/{alert_id}")
+        assert second_delete.status_code == 404
+        assert second_delete.json()["detail"] == "Alert not found" 

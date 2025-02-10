@@ -27,3 +27,5 @@ ProcessArg = Base.classes.Prelude_ProcessArg
 ProcessEnv = Base.classes.Prelude_ProcessEnv
 AnalyzerTime = Base.classes.Prelude_AnalyzerTime
 Alertident = Base.classes.Prelude_Alertident
+Assessment = Base.classes.Prelude_Assessment
+Heartbeat = Base.classes.Prelude_Heartbeat
