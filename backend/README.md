@@ -5,30 +5,37 @@ A FastAPI-based REST API for accessing Prelude IDS/SIEM data with user managemen
 ## Features
 
 ### User Management & Authentication
-- **User Authentication:** JWT-based authentication system
-- **Role-Based Access:** Superuser and regular user roles
-- **User Operations:** 
-  - Create/Update/Delete users (superuser only)
-  - Password management (change/reset)
-  - Email and username validation
-  - Pagination for user listing
-- **Concurrent Operation Handling:** Protection against race conditions in user operations
+
+- **User Authentication:** JWT-based authentication system.
+- **Role-Based Access:** Superuser and regular user roles.
+- **User Operations:**
+  - Create/Update/Delete users (superuser only).
+  - Password management (change/reset).
+  - Email and username validation.
+  - Pagination for user listing.
+- **Concurrent Operation Handling:** Protection against race conditions in user operations.
 
 ### Alert Management
+
 - **Paginated Alerts Listing:** Browse alerts with rich filtering options.
 - **Detailed Alert Information:** Retrieve comprehensive details including source, target, and analyzer information.
 - **Alert Grouping:** Group alerts by source and target IP addresses.
 - **Payload Access:** View full payload data with an option to truncate for efficiency.
 - **Multi-Format Support:** Handles multiple alert formats and protocols.
 
-### Advanced Filtering
-- **Date Range Filtering:** Filter alerts by start and end dates (ISO format) with timezone support.
-- **Severity & Classification Filtering:** Narrow down alerts by severity level and partial classification text.
-- **IP-Based Filtering:** Filter by exact source and target IP addresses.
-- **Analyzer Filtering:** Filter alerts by analyzer model.
-- **Sorting Options:** Multiple fields available for sorting (e.g., detect time, create time, severity, etc.).
+### Export Functionality
+
+- **Export Alerts:** Export alerts in CSV format.
+  - Supports filtering by alert IDs, date ranges, severity, classification, source IP, target IP, and analyzer model.
+  - Returns a downloadable CSV file with headers and alert data.
+
+### Heartbeat Monitoring
+
+- **Heartbeats Tree View:** Retrieve a tree view of hosts and their associated agents including operating system information, last heartbeat timestamps, and current status.
+- **Heartbeats Timeline:** Generate a timeline of heartbeat events over a specified period, useful for monitoring agent activity.
 
 ### Data Analysis
+
 - **Timeline Visualization:** Generate timelines based on hourly, daily, weekly, or monthly intervals.
 - **Statistical Summaries:** View total alert counts and distributions by severity, classification, and analyzer.
 - **Top Metrics:** Identify top classifications and source/target IPs.
@@ -36,33 +43,35 @@ A FastAPI-based REST API for accessing Prelude IDS/SIEM data with user managemen
 
 ## Project Structure
 
-```
+```bash
 app/
-├── api/                    # API implementation
-│   ├── base.py            # Main router configuration
+├── api/                    
+│   ├── base.py            # Main router configuration that includes all v1 routes
 │   └── v1/
-│       └── routes/        # API endpoint implementations
+│       └── routes/        
 │           ├── alerts.py      # Alert management endpoints
 │           ├── auth.py        # Authentication endpoints
 │           ├── users.py       # User management endpoints
 │           ├── reference.py   # Reference data endpoints
-│           └── statistics.py  # Statistics endpoints
-├── core/                  # Core functionality
+│           ├── statistics.py  # Statistics endpoints
+│           ├── export.py      # Export alerts endpoint (CSV)
+│           └── heartbeats.py  # Heartbeat monitoring endpoints
+├── core/                  
 │   ├── config.py          # Environment & app configuration
 │   ├── security.py        # Authentication & security utilities
 │   └── logging.py         # Logging configuration
-├── database/             # Database layer
-│   ├── config.py         # Database connection management
-│   └── init_db.py        # Database initialization
-├── models/               # Database models
-│   ├── prelude.py        # SQLAlchemy models for SIEM
-│   └── users.py          # User models
-├── schemas/              # API schemas
-│   ├── prelude.py        # SIEM Pydantic models
-│   └── users.py          # User Pydantic models
-├── services/            # Business logic
-│   └── users.py         # User service layer
-└── main.py              # Application entry point
+├── database/             
+│   ├── config.py          # Database connection management
+│   └── init_db.py         # Database initialization and superuser setup
+├── models/               
+│   ├── prelude.py         # SQLAlchemy models for SIEM (reflected via automap)
+│   └── users.py           # User models
+├── schemas/              
+│   ├── prelude.py         # SIEM Pydantic models
+│   └── users.py           # User Pydantic models
+├── services/             
+│   └── users.py           # Business logic for user operations
+└── main.py                # Application entry point and lifespan configuration
 ```
 
 ## Setup
@@ -70,106 +79,140 @@ app/
 1. **Clone the repository**
 
 2. **Create a Virtual Environment:**
+
    ```bash
-   python -m venv venv
+   uv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install Dependencies:**
+
    ```bash
-   pip install -r requirements.txt
+   uv add -r requirements.txt
    ```
 
 4. **Configure Environment Variables:**
    - Copy the example file and update your credentials:
+
      ```bash
      cp .env.example .env
      ```
-   - Required variables:
-     - Database credentials (as before)
-     - `SECRET_KEY`: For JWT token generation
-     - `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time
 
-5. **Import the Prelude Database (if needed):**
+   - Required variables:
+     - Database credentials (MySQL settings for both Prelude and Prebetter).
+     - `SECRET_KEY`: For JWT token generation.
+     - `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time.
+
+5. **Import the Prelude Database (if needed for testing and development):**
+
    ```bash
    gunzip < prelude.sql.gz | mysql -u root -p prelude
    ```
 
 6. **Start the API Server:**
+
    ```bash
-   uvicorn app.main:app --reload
+   fastapi dev
    ```
 
 ## API Endpoints
 
 ### Authentication & User Management
 
-- **Login**: `POST /api/v1/auth/token`
-  - Request body: username and password
-  - Returns: JWT access token
+- **Login:** `POST /api/v1/auth/token`
+  - Request body: Form data with username and password.
+  - Returns: JWT access token.
 
-- **Current User**: `GET /api/v1/auth/users/me`
-  - Returns current authenticated user's details
+- **Current User:** `GET /api/v1/auth/users/me`
+  - Returns: Current authenticated user's details.
 
-- **Users (Superuser Only)**:
-  - List: `GET /api/v1/users/`
-    - Supports pagination with `skip` and `limit` parameters
-  - Create: `POST /api/v1/users/`
-  - Get: `GET /api/v1/users/{user_id}`
-  - Update: `PUT /api/v1/users/{user_id}`
-  - Delete: `DELETE /api/v1/users/{user_id}`
+- **Users (Superuser Only):**
+  - **List Users:** `GET /api/v1/users/`
+    - Supports pagination with `skip` and `limit` parameters.
+  - **Create User:** `POST /api/v1/users/`
+  - **Get User:** `GET /api/v1/users/{user_id}`
+  - **Update User:** `PUT /api/v1/users/{user_id}`
+  - **Delete User:** `DELETE /api/v1/users/{user_id}`
 
-- **Password Management**:
-  - Change Password: `POST /api/v1/users/change-password`
-  - Reset Password (Superuser): `POST /api/v1/users/{user_id}/reset-password`
+- **Password Management:**
+  - **Change Password:** `POST /api/v1/users/change-password`
+  - **Reset Password (Superuser):** `POST /api/v1/users/{user_id}/reset-password`
 
 ### Alert Management
 
-- **List Alerts**: `GET /api/v1/alerts/`
-    
-    - **Query Parameters:**
-        - `page`: Page number (default: 1)
-        - `size`: Items per page (default: 10, max: 100)
-        - `sort_by`: Sort field (`detect_time`, `create_time`, `severity`, `classification`, `source_ip`, `target_ip`, `analyzer`, `alert_id`)
-        - `sort_order`: Sort order (`asc`, `desc`)
-        - `severity`: Filter by severity
-        - `classification`: Filter by classification text (partial match supported)
-        - `start_date`: Start date in ISO format
-        - `end_date`: End date in ISO format
-        - `source_ip`: Filter by source IP (exact match)
-        - `target_ip`: Filter by target IP (exact match)
-        - `analyzer_model`: Filter by analyzer model
-- **Grouped Alerts**: `GET /api/v1/alerts/groups`
-    
-    - Supports the same query parameters as the alerts listing endpoint.
-    - Groups alerts by source and target IP addresses and provides a classification breakdown per group.
-- **Alert Detail**: `GET /api/v1/alerts/{alert_id}`
-    
-    - **Query Parameter:**
-        - `truncate_payload`: Boolean flag to truncate the payload data (default: false).
-    - Returns detailed alert information including network, TCP/IP, service, and full (or truncated) payload data.
+- **List Alerts:** `GET /api/v1/alerts/`
+  - **Query Parameters:**
+    - `page`: Page number (default: 1)
+    - `size`: Items per page (default: 10, max: 100)
+    - `sort_by`: Sort field (`detect_time`, `create_time`, `severity`, `classification`, `source_ip`, `target_ip`, `analyzer`, `alert_id`)
+    - `sort_order`: Sort order (`asc`, `desc`)
+    - `severity`: Filter by severity.
+    - `classification`: Filter by classification text (partial match supported).
+    - `start_date`: Start date in ISO format.
+    - `end_date`: End date in ISO format.
+    - `source_ip`: Filter by source IP (exact match).
+    - `target_ip`: Filter by target IP (exact match).
+    - `analyzer_model`: Filter by analyzer model.
+
+- **Grouped Alerts:** `GET /api/v1/alerts/groups`
+  - Supports the same query parameters as the alerts listing endpoint.
+  - Groups alerts by source and target IP addresses and provides a classification breakdown per group.
+
+- **Alert Detail:** `GET /api/v1/alerts/{alert_id}`
+  - **Query Parameter:**
+    - `truncate_payload`: Boolean flag to truncate the payload data (default: false).
+  - Returns: Detailed alert information including network, analyzer, and (optionally truncated) payload data.
+
+### Export Alerts
+
+- **Export Alerts (CSV):** `GET /api/v1/export/alerts/{format}`
+  - **Path Parameter:**
+    - `format`: Currently only supports `csv`.
+  - **Query Parameters:**
+    - `alert_ids`: A list of specific alert IDs to export.
+    - `start_date`: Start date for filtering (ISO format).
+    - `end_date`: End date for filtering (ISO format).
+    - `severity`: Filter by severity.
+    - `classification`: Filter by classification text.
+    - `source_ip`: Filter by source IP.
+    - `target_ip`: Filter by target IP.
+    - `analyzer_model`: Filter by analyzer model.
+  - Returns: A streaming CSV file containing alert data with a header row.
+
+### Heartbeat Monitoring
+
+- **Heartbeats Tree View:** `GET /api/v1/heartbeats/tree`
+  - Returns: A JSON tree view of hosts and their associated agents, including:
+    - Host OS information.
+    - List of agents with details such as analyzer name, model, version, class, last heartbeat timestamp, and online/offline status.
+
+- **Heartbeats Timeline:** `GET /api/v1/heartbeats/timeline`
+  - **Query Parameter:**
+    - `hours`: Number of past hours to include in the timeline (default: 24, min: 1, max: 168).
+  - Returns: Timeline data of heartbeat events with agent name, node details, timestamp, and model.
 
 ### Statistics and Analysis
 
-- **Timeline Data**: `GET /api/v1/statistics/timeline`
-    
-    - **Query Parameters:**
-        - `time_frame`: Grouping interval (`hour`, `day`, `week`, `month`)
-        - `start_date`: Start date for analysis (optional)
-        - `end_date`: End date for analysis (optional)
-        - `severity`: Filter by severity (optional)
-        - `classification`: Filter by classification (optional)
-        - `analyzer_name`: Filter by analyzer name (optional)
-- **Statistics Summary**: `GET /api/v1/statistics/summary`
-    
-    - **Query Parameter:**
-        - `time_range`: Time range in hours to analyze (default: 24, min: 1, max: 720)
+- **Timeline Data:** `GET /api/v1/statistics/timeline`
+  - **Query Parameters:**
+    - `time_frame`: Grouping interval (`hour`, `day`, `week`, `month`).
+    - `start_date`: Optional start date for analysis.
+    - `end_date`: Optional end date for analysis.
+    - `severity`: Optional filter by severity.
+    - `classification`: Optional filter by classification.
+    - `analyzer_name`: Optional filter by analyzer name.
+  - Returns: Timeline data points with counts aggregated per time bucket.
+
+- **Statistics Summary:** `GET /api/v1/statistics/summary`
+  - **Query Parameter:**
+    - `time_range`: Time range in hours to analyze (default: 24, min: 1, max: 720).
+  - Returns: Overall statistics including total alerts, distribution by severity, classification, analyzer, and top source/target IP addresses.
 
 ### Reference Data
 
-- **Classifications**: `GET /api/v1/classifications`
-- **Severities**: `GET /api/v1/severities`
-- **Analyzers**: `GET /api/v1/analyzers`
+- **Classifications:** `GET /api/v1/classifications`
+- **Severities:** `GET /api/v1/severities`
+- **Analyzers:** `GET /api/v1/analyzers`
 
 ## Documentation
 
@@ -178,13 +221,15 @@ app/
 
 ## Environment Variables
 
-- `MYSQL_USER`: MySQL username
-- `MYSQL_PASSWORD`: MySQL password
-- `MYSQL_HOST`: MySQL host (default: localhost)
-- `MYSQL_PORT`: MySQL port (default: 3306)
-- `MYSQL_DB`: MySQL database name (default: prelude)
-- `SECRET_KEY`: Secret key for JWT token generation
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes
+- `MYSQL_USER`: MySQL username.
+- `MYSQL_PASSWORD`: MySQL password.
+- `MYSQL_HOST`: MySQL host (default: localhost).
+- `MYSQL_PORT`: MySQL port (default: 3306).
+- `MYSQL_PRELUDE_DB`: Name of the Prelude database.
+- `MYSQL_PREBETTER_DB`: Name of the Prebetter database.
+- `SECRET_KEY`: Secret key for JWT token generation.
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes.
+- `BACKEND_CORS_ORIGINS`: Allowed origins for CORS (default: ["*"]).
 
 ## Testing
 
@@ -204,10 +249,9 @@ The test suite includes:
 - Timeline and statistics tests.
 - Edge case handling tests.
 - Reference data validation.
-- Authentication and authorization tests
-- User management tests
-- Edge case handling for user operations
-- Concurrent user operation tests
+- Authentication and authorization tests.
+- User management tests.
+- Edge case and concurrent operation tests.
 
 ## Performance Features
 
@@ -219,38 +263,41 @@ The test suite includes:
 
 ## Security Features
 
-- **JWT Authentication:** Secure token-based authentication system
-- **Password Hashing:** Secure password storage using hashing
-- **Role-Based Access Control:** Superuser and regular user permissions
-- **Input Validation:** Comprehensive validation for user data
-- **Unique Constraints:** Username and email uniqueness enforcement
-- **Last Superuser Protection:** Prevents deletion of the last superuser
+- **JWT Authentication:** Secure token-based authentication system.
+- **Password Hashing:** Secure password storage using hashing.
+- **Role-Based Access Control:** Superuser and regular user permissions.
+- **Input Validation:** Comprehensive validation for user data.
+- **Unique Constraints:** Enforcement of username and email uniqueness.
+- **Last Superuser Protection:** Prevents deletion of the last superuser.
 
 ## Data Models
 
 ### User Models
-- **User Base:** Email, username, and optional full name
-- **User Create:** Includes password for user creation
-- **User Update:** Optional fields for updating user details
-- **User in DB:** Complete user model with system fields
 
-### Alert List Item
+- **User Base:** Includes email, username, and an optional full name.
+- **User Create:** Extends the base with a password field for user creation.
+- **User Update:** Optional fields for updating user details.
+- **User in DB:** Complete user model with system-generated fields (ID, created/updated timestamps, and superuser flag).
 
-- **Identifiers:** Alert ID and message ID.
-- **Timestamps:** Creation and detection times with timezone information.
-- **Classification & Severity:** Classification text and severity level.
-- **Network Information:** Source and target IPv4 addresses.
-- **Analyzer Details:** Information about the analyzer that generated the alert.
+### Alert Models
 
-### Grouped Alert
+- **Alert List Item:**
+  - Identifiers: Alert ID and message ID.
+  - Timestamps: Creation and detection times (with timezone support).
+  - Classification & Severity: Classification text and severity level.
+  - Network Information: Source and target IPv4 addresses.
+  - Analyzer Details: Information about the analyzer that generated the alert.
+- **Grouped Alert:**
+  - Groups alerts by source and target IPv4 addresses.
+  - Provides aggregated counts and a breakdown of classifications.
+- **Alert Detail:**
+  - Full metadata including network, protocol, analyzer, process, references, services, and payload data.
+  - Optional truncation for large payloads.
 
-- **Grouping:** Alerts are grouped by source and target IPv4 addresses.
-- **Metrics:** Total alert count, classification breakdown, analyzer distribution, and latest detection times.
+### Export & Heartbeat Models
 
-### Alert Detail
-
-- **Metadata:** Full alert metadata.
-- **Network & Protocol Data:** Detailed network information (IPv4/IPv6) and TCP/IP protocol details.
-- **Analyzer & Process Information:** Analyzer details with associated node and process data.
-- **References & Services:** Lists of reference URLs and service details.
-- **Payload Data:** Decoded payload data, with optional truncation for large payloads.
+- **Export Alerts:**
+  - Exports alert data in CSV format including all relevant fields.
+- **Heartbeat Data:**
+  - **Tree View:** Groups agents under hosts with details such as OS information, analyzer data, and current online/offline status.
+  - **Timeline:** Aggregates heartbeat events over time with timestamps and agent identifiers.
