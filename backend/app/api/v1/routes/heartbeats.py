@@ -18,10 +18,10 @@ from ....schemas.prelude import (
     TreeHostInfo,
     TreeAgentInfo,
 )
-#from ..routes.auth import get_current_user
+from ..routes.auth import get_current_user
 
-router = APIRouter()
-# dependencies=[Depends(get_current_user)]
+router = APIRouter(dependencies=[Depends(get_current_user)])
+
 class SortField(str, Enum):
     LAST_HEARTBEAT = "last_heartbeat"
     AGENT = "agent"
