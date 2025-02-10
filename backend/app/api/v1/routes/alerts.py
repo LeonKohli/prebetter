@@ -25,6 +25,7 @@ from ....models.prelude import (
     ProcessArg,
     ProcessEnv,
     AnalyzerTime,
+    Assessment,
 )
 from ....schemas.prelude import (
     AlertListResponse,
@@ -1059,3 +1060,60 @@ async def get_alert_detail(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}")
+
+@router.delete("/{alert_id}")
+async def delete_alert(
+    alert_id: int,
+    db: Session = Depends(get_prelude_db),
+) -> dict:
+    """
+    Delete a specific alert and all its related data.
+    """
+    try:
+        # Check if alert exists
+        alert = db.query(Alert).filter(Alert._ident == alert_id).first()
+        if not alert:
+            raise HTTPException(status_code=404, detail="Alert not found")
+
+        # Delete related data in the correct order to maintain referential integrity
+        # The order matters due to foreign key constraints
+        related_tables = [
+            ProcessArg,      # Process arguments
+            ProcessEnv,      # Process environment variables
+            Process,         # Process information
+            Service,         # Service information
+            WebService,      # Web service information
+            Address,         # IP addresses
+            Reference,       # References
+            AdditionalData,  # Additional data
+            Alertident,      # Alert identifiers
+            AnalyzerTime,    # Analyzer timestamps
+            Node,           # Node information
+            Analyzer,        # Analyzer information
+            Source,         # Source information
+            Target,         # Target information
+            Impact,         # Impact information
+            Classification, # Classification information
+            DetectTime,     # Detection time
+            CreateTime,     # Creation time
+            Assessment,     # Alert assessment
+        ]
+
+        # Delete all related records (these use _message_ident)
+        for table in related_tables:
+            db.query(table).filter(table._message_ident == alert_id).delete(synchronize_session=False)
+
+        # Delete the alert itself (uses _ident)
+        db.query(Alert).filter(Alert._ident == alert_id).delete(synchronize_session=False)
+
+        # Commit the transaction
+        db.commit()
+
+        return {"message": f"Alert {alert_id} and all related data successfully deleted"}
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting alert: {str(e)}")
