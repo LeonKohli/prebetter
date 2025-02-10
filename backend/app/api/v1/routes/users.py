@@ -3,18 +3,30 @@ from sqlalchemy.orm import Session
 from typing import List, Annotated
 from ....database.config import get_prebetter_db
 from ....models.users import User
-from ....schemas.users import UserCreate, UserUpdate, User as UserSchema, PasswordChangeRequest, PasswordResetRequest
+from ....schemas.users import (
+    UserCreate,
+    UserUpdate,
+    User as UserSchema,
+    PasswordChangeRequest,
+    PasswordResetRequest,
+)
 from ..routes.auth import get_current_user
 from ....services.users import UserService
 
 router = APIRouter()
 
+
 def get_user_service(db: Session = Depends(get_prebetter_db)) -> UserService:
+    """Dependency to get a UserService instance."""
     return UserService(db)
+
 
 async def get_current_superuser(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
+    """
+    Ensure the current user is a superuser.
+    """
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -22,24 +34,31 @@ async def get_current_superuser(
         )
     return current_user
 
+
 @router.post("/", response_model=UserSchema)
 async def create_user(
     user: UserCreate,
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service)
 ) -> User:
-    """Create a new user (superuser only)"""
+    """
+    Create a new user (accessible by superusers only).
+    """
     return user_service.create_user(user)
+
 
 @router.get("/", response_model=List[UserSchema])
 async def list_users(
+    current_user: Annotated[User, Depends(get_current_superuser)],
+    user_service: UserService = Depends(get_user_service),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, gt=0, le=1000),
-    current_user: User = Depends(get_current_superuser),
-    user_service: UserService = Depends(get_user_service)
+    limit: int = Query(100, gt=0, le=1000)
 ) -> List[User]:
-    """List all users (superuser only)"""
+    """
+    List all users with pagination (superusers only).
+    """
     return user_service.list_users(skip=skip, limit=limit)
+
 
 @router.get("/{user_id}", response_model=UserSchema)
 async def get_user(
@@ -47,7 +66,9 @@ async def get_user(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service)
 ) -> User:
-    """Get user details (superuser only)"""
+    """
+    Retrieve details for a specific user by user_id (superusers only).
+    """
     user = user_service.get_by_id(user_id)
     if not user:
         raise HTTPException(
@@ -56,6 +77,7 @@ async def get_user(
         )
     return user
 
+
 @router.put("/{user_id}", response_model=UserSchema)
 async def update_user(
     user_id: str,
@@ -63,8 +85,11 @@ async def update_user(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service)
 ) -> User:
-    """Update user details (superuser only)"""
+    """
+    Update a user's details (superusers only).
+    """
     return user_service.update_user(user_id, user_update)
+
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
@@ -72,8 +97,11 @@ async def delete_user(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service)
 ) -> None:
-    """Delete a user (superuser only)"""
+    """
+    Delete a user by user_id (superusers only).
+    """
     user_service.delete_user(user_id)
+
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(
@@ -81,8 +109,11 @@ async def change_password(
     current_user: Annotated[User, Depends(get_current_user)],
     user_service: UserService = Depends(get_user_service)
 ) -> None:
-    """Change own password (any user)"""
+    """
+    Allow any authenticated user to change their own password.
+    """
     user_service.change_password(current_user, payload)
+
 
 @router.post("/{user_id}/reset-password", response_model=UserSchema)
 async def reset_user_password(
@@ -91,5 +122,7 @@ async def reset_user_password(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service)
 ) -> User:
-    """Reset a user's password (superuser only)"""
-    return user_service.reset_password(user_id, payload) 
+    """
+    Reset a user's password (accessible by superusers only).
+    """
+    return user_service.reset_password(user_id, payload)

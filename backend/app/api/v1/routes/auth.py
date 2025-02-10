@@ -1,9 +1,10 @@
 from datetime import timedelta
-from typing import Annotated
+from typing import Annotated, Union
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import jwt
+from jwt import PyJWTError
 
 from ....core.security import (
     verify_password,
@@ -21,11 +22,17 @@ router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
+
 def get_user_service(db: Session = Depends(get_prebetter_db)) -> UserService:
+    """Dependency to get a UserService instance."""
     return UserService(db)
 
-def authenticate_user(user_service: UserService, username: str, password: str) -> User | bool:
-    """Authenticate user by username and password."""
+
+def authenticate_user(user_service: UserService, username: str, password: str) -> Union[User, bool]:
+    """
+    Authenticate a user given a username and password.
+    Returns the user if authentication is successful; otherwise, returns False.
+    """
     user = user_service.get_by_username(username)
     if not user:
         return False
@@ -33,10 +40,14 @@ def authenticate_user(user_service: UserService, username: str, password: str) -
         return False
     return user
 
+
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     user_service: UserService = Depends(get_user_service)
 ) -> User:
+    """
+    Retrieve the current user based on the provided JWT token.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -45,22 +56,26 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
-        if user_id is None:
+        if not user_id:
             raise credentials_exception
         token_data = TokenData(user_id=user_id)
-    except jwt.PyJWTError:
+    except PyJWTError:
         raise credentials_exception
-    
+
     user = user_service.get_by_id(token_data.user_id)
-    if user is None:
+    if not user:
         raise credentials_exception
     return user
+
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     user_service: UserService = Depends(get_user_service)
 ) -> Token:
+    """
+    Authenticate the user and return an access token.
+    """
     user = authenticate_user(user_service, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -74,8 +89,12 @@ async def login_for_access_token(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+
 @router.get("/users/me", response_model=UserSchema)
 async def read_users_me(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    return current_user 
+    """
+    Retrieve the profile of the authenticated user.
+    """
+    return current_user

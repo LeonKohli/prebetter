@@ -1,6 +1,6 @@
 def test_get_unique_classifications(auth_client):
     """Test getting classifications from the real database"""
-    response = auth_client.get("/api/v1/classifications")
+    response = auth_client.get("/api/v1/reference/classifications")
     
     # Verify response structure
     assert response.status_code == 200
@@ -27,7 +27,7 @@ def test_get_unique_classifications(auth_client):
 
 def test_get_unique_severities(auth_client):
     """Test getting unique severity levels"""
-    response = auth_client.get("/api/v1/severities")
+    response = auth_client.get("/api/v1/reference/severities")
     
     # Verify response structure
     assert response.status_code == 200
@@ -54,7 +54,7 @@ def test_get_unique_classifications_edge_cases(auth_client):
     # Note: This assumes the endpoint handles database errors gracefully
     
     # Test response format consistency
-    response = auth_client.get("/api/v1/classifications")
+    response = auth_client.get("/api/v1/reference/classifications")
     assert response.status_code == 200
     data = response.json()
     
@@ -77,7 +77,7 @@ def test_get_unique_severities_edge_cases(auth_client):
     # Note: This assumes the endpoint handles database errors gracefully
     
     # Test response format consistency
-    response = auth_client.get("/api/v1/severities")
+    response = auth_client.get("/api/v1/reference/severities")
     assert response.status_code == 200
     data = response.json()
     
@@ -102,7 +102,7 @@ def test_get_unique_severities_edge_cases(auth_client):
 
 def test_get_unique_analyzers(auth_client):
     """Test getting unique analyzers from the database"""
-    response = auth_client.get("/api/v1/analyzers")
+    response = auth_client.get("/api/v1/reference/analyzers")
     
     # Verify response structure
     assert response.status_code == 200
@@ -129,7 +129,7 @@ def test_get_unique_analyzers_edge_cases(auth_client):
     # Note: This assumes the endpoint handles database errors gracefully
     
     # Test response format consistency
-    response = auth_client.get("/api/v1/analyzers")
+    response = auth_client.get("/api/v1/reference/analyzers")
     assert response.status_code == 200
     data = response.json()
     
