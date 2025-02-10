@@ -9,6 +9,9 @@ class NodeInfo(BaseModel):
     location: Optional[str] = None
     category: Optional[str] = None
     ident: Optional[str] = None
+    address: Optional[str] = None
+    os: Optional[str] = None
+    agents_count: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -289,5 +292,106 @@ class StatisticsSummary(BaseModel):
     time_range_hours: int
     start_time: datetime
     end_time: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatStatus(str, Enum):
+    ONLINE = "online"
+    OFFLINE = "offline"
+
+
+class HeartbeatListItem(BaseModel):
+    id: int = Field(..., description="Heartbeat ID")
+    message_id: Optional[str] = Field(None, description="Message ID")
+    heartbeat_interval: Optional[int] = Field(None, description="Heartbeat interval in seconds")
+    analyzer: AnalyzerInfo
+    node: NodeInfo
+    last_heartbeat: datetime = Field(..., description="Last heartbeat timestamp")
+    status: HeartbeatStatus = Field(..., description="Current status (online/offline)")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatListResponse(BaseModel):
+    items: List[HeartbeatListItem]
+    total: int
+    page: int
+    size: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatDetail(HeartbeatListItem):
+    analyzer: AnalyzerInfo  # Extended analyzer info with OS details
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatTreeItem(BaseModel):
+    host: str = Field(..., description="Host name")
+    os: Optional[str] = Field(None, description="Operating System")
+    name: str = Field(..., description="Analyzer name")
+    model: str = Field(..., description="Model")
+    version: str = Field(..., description="Version")
+    class_: Optional[str] = Field(None, alias="class", description="Class")
+    last_heartbeat: datetime = Field(..., description="Last heartbeat timestamp")
+    status: HeartbeatStatus = Field(..., description="Current status")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HostInfo(BaseModel):
+    os: str | None
+    analyzers: list[AnalyzerInfo]
+
+
+class HeartbeatTreeResponse(BaseModel):
+    hosts: dict[str, HostInfo]
+    total_hosts: int
+    total_analyzers: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatTimelineItem(BaseModel):
+    timestamp: datetime = Field(..., description="Heartbeat timestamp")
+    agent: str = Field(..., description="Agent name")
+    node_address: str = Field(..., description="Node address")
+    node_name: str = Field(..., description="Node name")
+    model: str = Field(..., description="Model")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatTimelineResponse(BaseModel):
+    items: List[HeartbeatTimelineItem]
+    total: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TreeAgentInfo(BaseModel):
+    name: str
+    model: str
+    version: str
+    class_: str = Field(..., alias='class')
+    last_heartbeat: datetime | None
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TreeHostInfo(BaseModel):
+    os: str | None
+    agents: list[TreeAgentInfo]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatTreeResponse(BaseModel):
+    hosts: dict[str, TreeHostInfo]
+    total_hosts: int
+    total_agents: int
 
     model_config = ConfigDict(from_attributes=True)
