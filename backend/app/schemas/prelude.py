@@ -4,6 +4,33 @@ from datetime import datetime
 from enum import Enum
 
 
+class AgentInfo(BaseModel):
+    name: str
+    model: str
+    version: str
+    class_: str = Field(..., alias="class")
+    latest_heartbeat: str
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatNodeInfo(BaseModel):
+    name: str
+    os: str | None
+    agents: list[AgentInfo]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HeartbeatTreeResponse(BaseModel):
+    nodes: list[HeartbeatNodeInfo]
+    total_nodes: int
+    total_agents: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class NodeInfo(BaseModel):
     name: Optional[str] = None
     location: Optional[str] = None
@@ -329,14 +356,13 @@ class HeartbeatDetail(HeartbeatListItem):
 
 
 class HeartbeatTreeItem(BaseModel):
-    host: str = Field(..., description="Host name")
-    os: Optional[str] = Field(None, description="Operating System")
-    name: str = Field(..., description="Analyzer name")
-    model: str = Field(..., description="Model")
-    version: str = Field(..., description="Version")
-    class_: Optional[str] = Field(None, alias="class", description="Class")
-    last_heartbeat: datetime = Field(..., description="Last heartbeat timestamp")
-    status: HeartbeatStatus = Field(..., description="Current status")
+    name: str
+    model: str
+    version: str
+    class_: str = Field(..., alias="class")
+    last_heartbeat: str
+    status: str
+    node_location: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -346,27 +372,12 @@ class HostInfo(BaseModel):
     analyzers: list[AnalyzerInfo]
 
 
-class HeartbeatTreeResponse(BaseModel):
-    hosts: dict[str, HostInfo]
-    total_hosts: int
-    total_analyzers: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class HeartbeatTimelineItem(BaseModel):
-    timestamp: datetime = Field(..., description="Heartbeat timestamp")
-    agent: str = Field(..., description="Agent name")
-    node_address: str = Field(..., description="Node address")
-    node_name: str = Field(..., description="Node name")
-    model: str = Field(..., description="Model")
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class HeartbeatTimelineResponse(BaseModel):
-    items: List[HeartbeatTimelineItem]
-    total: int
+    Date: str
+    Agent: str
+    Node_Address: str
+    Node_Name: str
+    Model: str
 
     model_config = ConfigDict(from_attributes=True)
 
