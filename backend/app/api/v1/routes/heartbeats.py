@@ -1,204 +1,226 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, case, literal
 from datetime import datetime, timedelta
-from enum import Enum
+from typing import List
+from collections import defaultdict
 
 from ....database.config import get_prelude_db
-from ....models.prelude import (
-    Heartbeat,
-    Analyzer,
-    AnalyzerTime,
-    Node,
-    Address,
-)
+from ....models.prelude import Heartbeat, Analyzer, AnalyzerTime, Node, Address
 from ....schemas.prelude import (
     HeartbeatTreeResponse,
-    HeartbeatTimelineResponse,
-    TreeHostInfo,
-    TreeAgentInfo,
+    HeartbeatNodeInfo,
+    AgentInfo,
+    HeartbeatTimelineItem,
 )
 from ..routes.auth import get_current_user
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
-
-class SortField(str, Enum):
-    LAST_HEARTBEAT = "last_heartbeat"
-    AGENT = "agent"
-    STATUS = "status"
-
-class SortOrder(str, Enum):
-    ASC = "asc"
-    DESC = "desc"
+router = APIRouter()
+# dependencies=[Depends(get_current_user)]
 
 @router.get("/tree", response_model=HeartbeatTreeResponse)
-async def list_heartbeats_tree(
-    db: Session = Depends(get_prelude_db),
-) -> HeartbeatTreeResponse:
-    """Get the latest heartbeat for each agent for the tree view"""
-    
-    # First get all agents (both from alerts and heartbeats)
-    agents_subq = (
+async def tree_heartbeats(db: Session = Depends(get_prelude_db)):
+    """
+    Returns a list of nodes with their agents and total counts.
+    """
+    current_time = datetime.utcnow()
+
+    # Single query: gather everything in one pass.
+    q = (
         db.query(
-            Node.name.label('host'),
-            Analyzer.osversion,
-            Analyzer.name,
-            Analyzer.model,
-            Analyzer.version,
-            getattr(Analyzer, 'class').label('class_'),
-            Analyzer._message_ident.label('message_ident'),
-            AnalyzerTime.time.label('heartbeat_time'),
-            Heartbeat.heartbeat_interval,
-            func.row_number().over(
-                partition_by=[Node.name, Analyzer.name],
-                order_by=AnalyzerTime.time.desc()
-            ).label('rn')
+            Analyzer.name.label("name"),
+            Analyzer.model.label("model"),
+            Analyzer.version.label("version"),
+            getattr(Analyzer, "class").label("class_"),
+            Node.name.label("node_name"),
+            # Combine ostype and osversion for OS info
+            case(
+                (
+                    Analyzer.ostype.isnot(None),
+                    func.concat(
+                        Analyzer.ostype,
+                        literal(" "),
+                        func.coalesce(Analyzer.osversion, "")
+                    )
+                ),
+                else_=None
+            ).label("os"),
+            func.max(AnalyzerTime.time).label("last_heartbeat"),
+            func.max(Heartbeat.heartbeat_interval).label("heartbeat_interval"),
         )
         .select_from(Analyzer)
-        .join(
+        .outerjoin(
             Node,
             and_(
                 Node._message_ident == Analyzer._message_ident,
-                Node._parent_type == Analyzer._parent_type
-            )
+                Node._parent_type == Analyzer._parent_type,
+            ),
         )
-        .join(
+        .outerjoin(
+            Heartbeat,
+            Heartbeat._ident == Analyzer._message_ident,
+        )
+        .outerjoin(
             AnalyzerTime,
             and_(
                 AnalyzerTime._message_ident == Analyzer._message_ident,
-                AnalyzerTime._parent_type == 'H'
+                AnalyzerTime._parent_type == "H",
             ),
-            isouter=True
         )
-        .join(
-            Heartbeat,
-            Heartbeat._ident == Analyzer._message_ident,
-            isouter=True
+        .filter(Analyzer._parent_type == "H")
+        .group_by(
+            Analyzer.name,
+            Analyzer.model,
+            Analyzer.version,
+            getattr(Analyzer, "class"),
+            Node.name,
+            Analyzer.ostype,
+            Analyzer.osversion,
         )
-        .filter(or_(Analyzer._parent_type == 'H', Analyzer._parent_type == 'A'))
-        .subquery()
+        .order_by(Node.name, Analyzer.name)
     )
 
-    # Then get only the latest entry for each agent on each host
-    results = (
-        db.query(
-            agents_subq.c.host,
-            agents_subq.c.osversion,
-            agents_subq.c.name,
-            agents_subq.c.model,
-            agents_subq.c.version,
-            agents_subq.c.class_,
-            agents_subq.c.heartbeat_time.label('last_heartbeat'),
-            agents_subq.c.heartbeat_interval,
-        )
-        .select_from(agents_subq)
-        .filter(agents_subq.c.rn == 1)
-        .order_by(agents_subq.c.host, agents_subq.c.name)
-        .all()
-    )
-
-    # Group by host
-    hosts: dict[str, TreeHostInfo] = {}
-    total_agents = 0
-    current_time = datetime.utcnow()
+    rows = q.all()
     
-    for r in results:
-        if not r.host:
-            continue  # Skip entries without host
-            
-        # If no heartbeat_interval is configured, use 10 minutes (600 seconds)
-        timeout = timedelta(seconds=r.heartbeat_interval * 2 if r.heartbeat_interval else 600)
-        # If last_heartbeat is None, the agent has never sent a heartbeat
-        status = "offline" if r.last_heartbeat is None else "online" if (current_time - r.last_heartbeat) <= timeout else "offline"
+    # Group by node
+    nodes_dict = defaultdict(lambda: {"name": "", "os": None, "agents": []})
+    total_agents = 0
+
+    for row in rows:
+        last_hb_time = row.last_heartbeat
+        if last_hb_time:
+            delta = current_time - last_hb_time
+            seconds = int(delta.total_seconds())
+            if seconds < 60:
+                rel_time = f"{seconds} seconds ago"
+            elif seconds < 3600:
+                rel_time = f"{seconds // 60} minutes ago"
+            else:
+                rel_time = f"{seconds // 3600} hours ago"
+        else:
+            rel_time = "No heartbeat"
+
+        interval = row.heartbeat_interval or 600
+        timeout_seconds = interval * 2
+        status = "Offline"
+        if last_hb_time and (current_time - last_hb_time) <= timedelta(
+            seconds=timeout_seconds
+        ):
+            status = "Online"
+
+        node_name = row.node_name or "(no node)"
         
-        if r.host not in hosts:
-            hosts[r.host] = TreeHostInfo(
-                os=f"Linux {r.osversion}" if r.osversion else None,
-                agents=[]
-            )
-            
-        agent_info = {
-            "name": r.name,
-            "model": r.model,
-            "version": r.version,
-            "class": r.class_,
-            "last_heartbeat": r.last_heartbeat,
+        # Add agent to the node
+        if not nodes_dict[node_name]["os"] and row.os:
+            nodes_dict[node_name]["os"] = row.os
+        nodes_dict[node_name]["name"] = node_name
+        nodes_dict[node_name]["agents"].append({
+            "name": row.name,
+            "model": row.model,
+            "version": row.version,
+            "class": row.class_,
+            "latest_heartbeat": rel_time,
             "status": status,
-        }
-        hosts[r.host].agents.append(TreeAgentInfo(**agent_info))
+        })
         total_agents += 1
 
+    # Convert to list and create response
+    nodes = [HeartbeatNodeInfo(**node_data) for node_data in nodes_dict.values()]
+    
     return HeartbeatTreeResponse(
-        hosts=hosts,
-        total_hosts=len(hosts),
-        total_agents=total_agents,
+        nodes=nodes,
+        total_nodes=len(nodes),
+        total_agents=total_agents
     )
 
-@router.get("/timeline", response_model=HeartbeatTimelineResponse)
-async def list_heartbeats_timeline(
+
+@router.get("/timeline", response_model=List[HeartbeatTimelineItem])
+async def timeline_heartbeats(
     hours: int = Query(24, ge=1, le=168, description="Hours of history to show"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_prelude_db),
-) -> HeartbeatTimelineResponse:
-    """Get heartbeat timeline data"""
+):
+    """
+    Returns a list of timeline heartbeat records, with optional pagination.
+    [
+      {
+        "Date": "11 Feb 2025, 10:35:30",
+        "Agent": "snort-eno5",
+        "Node_Address": "10.129.9.52",
+        "Node_Name": "beis-00072-012.lvnbb.de",
+        "Model": "Snort"
+      },
+      ...
+    ]
+    """
     cutoff_time = datetime.utcnow() - timedelta(hours=hours)
 
-    # Optimized query with specific column selection and proper join order
-    query = (
+    base_query = (
         db.query(
-            AnalyzerTime.time.label('timestamp'),
-            Analyzer.name.label('agent'),
-            Node.name.label('node_name'),
-            Address.address.label('node_address'),
-            Analyzer.model,
+            AnalyzerTime.time.label("timestamp"),
+            Analyzer.name.label("agent"),
+            Node.name.label("node_name"),
+            Address.address.label("node_address"),
+            Analyzer.model.label("model"),
         )
-        .select_from(AnalyzerTime)
         .join(
             Heartbeat,
             and_(
                 Heartbeat._ident == AnalyzerTime._message_ident,
-                AnalyzerTime._parent_type == 'H'
-            )
+                AnalyzerTime._parent_type == "H",
+            ),
         )
         .join(
             Analyzer,
             and_(
                 Analyzer._message_ident == Heartbeat._ident,
-                Analyzer._parent_type == 'H',
-                Analyzer._index == 0
-            )
+                Analyzer._parent_type == "H",
+                # you could remove this if you want *all* analyzers,
+                # but let's keep it if your logic expects index=0 = primary
+                Analyzer._index == 0,
+            ),
         )
-        .join(
+        .outerjoin(
             Node,
             and_(
                 Node._message_ident == Heartbeat._ident,
-                Node._parent_type == 'H'
-            )
+                Node._parent_type == "H",
+                Node._parent0_index == 0,
+            ),
         )
-        .outerjoin(  # Using outer join in case some nodes don't have addresses
+        .outerjoin(
             Address,
             and_(
                 Address._message_ident == Node._message_ident,
-                Address._parent_type == Node._parent_type
-            )
+                Address._parent_type == Node._parent_type,
+                Address._parent0_index == Node._parent0_index,
+                Address._index == 0,
+            ),
         )
-        .filter(AnalyzerTime.time >= cutoff_time) # Apply the time filter
-        .order_by(AnalyzerTime.time.desc())
+        .filter(AnalyzerTime.time >= cutoff_time)
     )
 
-    total = query.count()
+    total_count = base_query.count()
 
-    results = query.all()
+    results = (
+        base_query.order_by(AnalyzerTime.time.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
 
+    output = []
+    for row in results:
+        formatted_date = row.timestamp.strftime("%d %b %Y, %H:%M:%S")
+        output.append(
+            {
+                "Date": formatted_date,
+                "Agent": row.agent,
+                "Node_Address": row.node_address if row.node_address else row.node_name,
+                "Node_Name": row.node_name,
+                "Model": row.model,
+            }
+        )
 
-    items = [{
-        "timestamp": r.timestamp,
-        "agent": r.agent,
-        "node_name": r.node_name,
-        "node_address": r.node_address if r.node_address else r.node_name,  # Fallback to node_name if no address
-        "model": r.model,
-    } for r in results]
-
-    return {
-        "items": items,
-        "total": total,
-    }
+    return output

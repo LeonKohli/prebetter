@@ -1,0 +1,24 @@
+WITH RECURSIVE latest_heartbeats AS (SELECT h._ident, h.messageid, at.time as heartbeat_time FROM Prelude_Heartbeat h JOIN Prelude_AnalyzerTime at ON h._ident = at._message_ident WHERE at.time >= DATE_SUB(NOW(), INTERVAL 1 DAY)), heartbeats AS (SELECT n.name as host_name, a.name as analyzer_name, MAX(lh.heartbeat_time) as last_heartbeat FROM latest_heartbeats lh JOIN Prelude_Analyzer a ON a._message_ident = lh._ident AND a._parent_type = 'H' JOIN Prelude_Node n ON n._message_ident = lh._ident AND n._parent_type = 'H' GROUP BY n.name, a.name), analyzers AS (SELECT DISTINCT n.name as host_name, a.name as analyzer_name, a.model, a.version, a.class FROM Prelude_Node n JOIN Prelude_Analyzer a ON a._message_ident = n._message_ident WHERE n._parent_type = 'A' AND n._parent0_index = -1) SELECT a.host_name, a.analyzer_name, a.model, a.version, a.class, COALESCE(h.last_heartbeat, 'Never') as last_heartbeat, COALESCE(TIMESTAMPDIFF(SECOND, h.last_heartbeat, NOW()), -1) as seconds_ago, CASE WHEN TIMESTAMPDIFF(SECOND, h.last_heartbeat, NOW()) <= 600 THEN 'online' ELSE 'offline' END as status FROM analyzers a LEFT JOIN heartbeats h ON a.host_name = h.host_name AND a.analyzer_name = h.analyzer_name ORDER BY a.host_name, a.analyzer_name;
++-------------------------+--------------------+--------------------+---------+--------------+---------------------+-------------+---------+
+| host_name               | analyzer_name      | model              | version | class        | last_heartbeat      | seconds_ago | status  |
++-------------------------+--------------------+--------------------+---------+--------------+---------------------+-------------+---------+
+| beis-00072-010.lvnbb.de | prelude-manager    | Prelude Manager    | 5.2.0   | Concentrator | 2025-02-11 08:00:08 |       31694 | offline |
+| beis-00072-010.lvnbb.de | snort-eno5         | Snort              | 1.14    | NIDS         | 2025-02-11 08:00:08 |       31694 | offline |
+| beis-00072-010.lvnbb.de | snort-eno6         | Snort              | 1.14    | NIDS         | 2025-02-11 08:00:08 |       31694 | offline |
+| beis-00072-011.lvnbb.de | prelude-manager    | Prelude Manager    | 5.2.0   | Concentrator | 2025-02-11 07:55:25 |       31977 | offline |
+| beis-00072-011.lvnbb.de | snort-eno5         | Snort              | 1.14    | NIDS         | 2025-02-11 07:55:13 |       31989 | offline |
+| beis-00072-011.lvnbb.de | snort-eno6         | Snort              | 1.14    | NIDS         | 2025-02-11 07:55:25 |       31977 | offline |
+| beis-00072-012.lvnbb.de | prelude-manager    | Prelude Manager    | 5.2.0   | Concentrator | 2025-02-11 07:55:30 |       31972 | offline |
+| beis-00072-012.lvnbb.de | snort-eno5         | Snort              | 1.14    | NIDS         | 2025-02-11 07:55:30 |       31972 | offline |
+| beis-00072-012.lvnbb.de | snort-eno6         | Snort              | 1.14    | NIDS         | 2025-02-11 07:55:29 |       31973 | offline |
+| beis-00072-014.lvnbb.de | prelude-manager    | Prelude Manager    | 5.2.0   | Concentrator | 2025-02-11 07:58:42 |       31780 | offline |
+| beis-00072-014.lvnbb.de | snort-eno5         | Snort              | 1.14    | NIDS         | 2025-02-11 07:58:41 |       31781 | offline |
+| beis-00072-014.lvnbb.de | snort-eno6         | Snort              | 1.14    | NIDS         | 2025-02-11 07:58:42 |       31780 | offline |
+| beis-00072-016.lvnbb.de | prelude-manager    | Prelude Manager    | 5.2.0   | Concentrator | 2025-02-11 08:01:54 |       31588 | offline |
+| beis-00072-016.lvnbb.de | snort-eno5         | Snort              | 1.14    | NIDS         | 2025-02-11 08:01:54 |       31588 | offline |
+| beis-00072-016.lvnbb.de | snort-eno6         | Snort              | 1.14    | NIDS         | 2025-02-11 08:01:50 |       31592 | offline |
+| beis-00072-020.lvnbb.de | prelude-correlator | Prelude Correlator | 5.2.0   | Correlator   | 2025-02-11 07:57:42 |       31840 | offline |
+| beis-00072-020.lvnbb.de | prelude-manager    | Prelude Manager    | 5.2.0   | Concentrator | 2025-02-11 08:01:54 |       31588 | offline |
+| beis-00072-020.lvnbb.de | snort-eno5         | Snort              | 1.14    | NIDS         | 2025-02-11 08:01:54 |       31588 | offline |
+| beis-00072-020.lvnbb.de | snort-eno6         | Snort              | 1.14    | NIDS         | 2025-02-11 08:01:50 |       31592 | offline |
++-------------------------+--------------------+--------------------+---------+--------------+---------------------+-------------+---------+
