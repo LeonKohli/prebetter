@@ -1,17 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Annotated
-from ....database.config import get_prebetter_db
-from ....models.users import User
-from ....schemas.users import (
+from app.database.config import get_prebetter_db
+from app.models.users import User
+from app.schemas.users import (
     UserCreate,
     UserUpdate,
     User as UserSchema,
     PasswordChangeRequest,
     PasswordResetRequest,
 )
-from ..routes.auth import get_current_user
-from ....services.users import UserService
+from app.api.v1.routes.auth import get_current_user
+from app.services.users import UserService
 
 router = APIRouter()
 

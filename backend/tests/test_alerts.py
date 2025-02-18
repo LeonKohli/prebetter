@@ -1,6 +1,6 @@
 import pytest
-from datetime import datetime, timedelta, UTC
-from app.core.datetime_utils import get_current_time, ensure_timezone
+from datetime import timedelta
+from app.core.datetime_utils import get_current_time
 
 future_start_date = get_current_time() + timedelta(days=365)
 future_end_date = get_current_time() + timedelta(days=365 + 365)

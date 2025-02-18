@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, UTC
-from app.core.datetime_utils import get_current_time, ensure_timezone, format_datetime
+from datetime import datetime, timedelta
+from app.core.datetime_utils import get_current_time, ensure_timezone
 import pytest
 pytestmark = pytest.mark.skip(reason="Skipping all tests in this file")
 def test_heartbeats_tree(auth_client):

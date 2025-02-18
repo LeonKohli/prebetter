@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, literal_column, tuple_, distinct
 from typing import Optional
-from datetime import datetime, UTC
+from datetime import datetime
 from enum import Enum
 from app.database.config import get_prelude_db
 from app.models.prelude import (

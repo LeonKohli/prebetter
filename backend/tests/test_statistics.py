@@ -1,6 +1,5 @@
-from datetime import datetime, timedelta, UTC
-from app.core.datetime_utils import get_current_time, ensure_timezone, format_datetime
-import pytest
+from datetime import datetime
+from app.core.datetime_utils import ensure_timezone
 
 def test_statistics_summary(auth_client):
     """Test getting statistics summary from the database"""
