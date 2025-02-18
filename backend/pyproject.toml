@@ -54,4 +54,5 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "pyjwt>=2.10.1",
     "python-jose[cryptography]>=3.3.0",
+    "pytest-cov>=6.0.0",
 ]
