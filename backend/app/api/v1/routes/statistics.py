@@ -3,12 +3,13 @@ from typing import Optional
 from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, text
-from ....database.config import get_prelude_db
-from ....models.prelude import Alert, DetectTime, Impact, Classification, Analyzer, Address
-from ....schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
+from app.database.config import get_prelude_db
+from app.models.prelude import Alert, DetectTime, Impact, Classification, Analyzer, Address
+from app.schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
 from enum import Enum
 from fastapi import HTTPException
-from ..routes.auth import get_current_user
+from app.api.v1.routes.auth import get_current_user
+from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -40,9 +41,12 @@ async def get_timeline(
     Supports filtering by severity, classification, and analyzer.
     """
     try:
-        # Set default time range if not provided
+        # Set default time range if not provided and ensure timezone awareness
         if not end_date:
-            end_date = datetime.now(UTC)
+            end_date = get_current_time()
+        else:
+            end_date = ensure_timezone(end_date)
+
         if not start_date:
             if time_frame == TimeFrame.HOUR:
                 start_date = end_date - timedelta(hours=24)
@@ -52,6 +56,8 @@ async def get_timeline(
                 start_date = end_date - timedelta(weeks=12)
             else:  # month
                 start_date = end_date - timedelta(days=365)
+        else:
+            start_date = ensure_timezone(start_date)
 
         # Create aliases for tables
         aliased(Address)
@@ -188,9 +194,8 @@ async def get_statistics_summary(
     and top source/target IPs.
     """
     try:
-        # Calculate time range
-        end_time = datetime.now(UTC)
-        start_time = end_time - timedelta(hours=time_range)
+        # Calculate time range using utility function
+        start_time, end_time = get_time_range(time_range)
 
         # Create aliases for source and target addresses
         source_addr = aliased(Address)

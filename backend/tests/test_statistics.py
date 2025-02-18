@@ -1,3 +1,7 @@
+from datetime import datetime, timedelta, UTC
+from app.core.datetime_utils import get_current_time, ensure_timezone, format_datetime
+import pytest
+
 def test_statistics_summary(auth_client):
     """Test getting statistics summary from the database"""
     response = auth_client.get("/api/v1/statistics/summary?time_range=24")
@@ -125,8 +129,7 @@ def test_timeline_time_frames(auth_client):
         
         # Verify data points are properly spaced
         if len(data["data"]) > 1:
-            from datetime import datetime
-            timestamps = [datetime.fromisoformat(point["timestamp"]) for point in data["data"]]
+            timestamps = [ensure_timezone(datetime.fromisoformat(point["timestamp"])) for point in data["data"]]
             time_diff = timestamps[1] - timestamps[0]
             
             # Verify time difference based on time frame
