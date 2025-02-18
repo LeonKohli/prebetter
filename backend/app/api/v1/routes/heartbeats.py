@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func, case, literal
-from datetime import datetime, timedelta, UTC
+from datetime import timedelta
 from typing import List
 from collections import defaultdict
 
@@ -10,11 +10,9 @@ from app.models.prelude import Heartbeat, Analyzer, AnalyzerTime, Node, Address
 from app.schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
-    AgentInfo,
     HeartbeatTimelineItem,
 )
-from app.api.v1.routes.auth import get_current_user
-from app.core.datetime_utils import get_current_time, ensure_timezone, format_datetime, get_time_range
+from app.core.datetime_utils import get_current_time, format_datetime, get_time_range
 
 router = APIRouter()
 # dependencies=[Depends(get_current_user)]
@@ -223,4 +221,9 @@ async def timeline_heartbeats(
             }
         )
 
-    return output
+    return {
+        "items": output,
+        "total": total_count,
+        "page": page,
+        "page_size": page_size
+    }
