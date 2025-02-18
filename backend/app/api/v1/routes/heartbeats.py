@@ -1,19 +1,20 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func, case, literal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import List
 from collections import defaultdict
 
-from ....database.config import get_prelude_db
-from ....models.prelude import Heartbeat, Analyzer, AnalyzerTime, Node, Address
-from ....schemas.prelude import (
+from app.database.config import get_prelude_db
+from app.models.prelude import Heartbeat, Analyzer, AnalyzerTime, Node, Address
+from app.schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
     AgentInfo,
     HeartbeatTimelineItem,
 )
-from ..routes.auth import get_current_user
+from app.api.v1.routes.auth import get_current_user
+from app.core.datetime_utils import get_current_time, ensure_timezone, format_datetime, get_time_range
 
 router = APIRouter()
 # dependencies=[Depends(get_current_user)]
@@ -23,7 +24,7 @@ async def tree_heartbeats(db: Session = Depends(get_prelude_db)):
     """
     Returns a list of nodes with their agents and total counts.
     """
-    current_time = datetime.utcnow()
+    current_time = get_current_time()
 
     # Single query: gather everything in one pass.
     q = (
@@ -145,7 +146,7 @@ async def timeline_heartbeats(
     Returns a list of timeline heartbeat records, with optional pagination.
     [
       {
-        "Date": "11 Feb 2025, 10:35:30",
+        "Date": "11 Feb 2025, 10:35:30 UTC",
         "Agent": "snort-eno5",
         "Node_Address": "10.129.9.52",
         "Node_Name": "server-001\.example\.internal",
@@ -154,7 +155,7 @@ async def timeline_heartbeats(
       ...
     ]
     """
-    cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+    cutoff_time, _ = get_time_range(hours)
 
     base_query = (
         db.query(
@@ -176,8 +177,6 @@ async def timeline_heartbeats(
             and_(
                 Analyzer._message_ident == Heartbeat._ident,
                 Analyzer._parent_type == "H",
-                # you could remove this if you want *all* analyzers,
-                # but let's keep it if your logic expects index=0 = primary
                 Analyzer._index == 0,
             ),
         )
@@ -212,7 +211,8 @@ async def timeline_heartbeats(
 
     output = []
     for row in results:
-        formatted_date = row.timestamp.strftime("%d %b %Y, %H:%M:%S")
+        # Format the timestamp using utility function
+        formatted_date = format_datetime(row.timestamp) if row.timestamp else ""
         output.append(
             {
                 "Date": formatted_date,

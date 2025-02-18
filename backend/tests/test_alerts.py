@@ -1,7 +1,9 @@
 import pytest
-from datetime import datetime, timedelta
-future_start_date = datetime.now() + timedelta(days=365)
-future_end_date = datetime.now() + timedelta(days=365 + 365)
+from datetime import datetime, timedelta, UTC
+from app.core.datetime_utils import get_current_time, ensure_timezone
+
+future_start_date = get_current_time() + timedelta(days=365)
+future_end_date = get_current_time() + timedelta(days=365 + 365)
     
 def test_list_alerts(auth_client):
     """Test getting alerts list with various filters and sorting options"""

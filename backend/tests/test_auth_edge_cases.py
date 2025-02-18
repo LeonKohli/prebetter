@@ -86,8 +86,6 @@ def test_concurrent_login(client, test_db):
     """
     Test concurrent login attempts for the same user.
     """
-    # Add a small delay between requests to ensure unique tokens
-
     # Simulate concurrent login requests
     responses = []
     for _ in range(5):
@@ -99,7 +97,6 @@ def test_concurrent_login(client, test_db):
             }
         )
         responses.append(response)
-        time.sleep(1)  # Use a 1-second delay to ensure unique tokens
 
     # All requests should succeed and return valid tokens
     tokens = set()
@@ -110,6 +107,12 @@ def test_concurrent_login(client, test_db):
 
     # Each token should be unique
     assert len(tokens) == len(responses), "Duplicate tokens were issued"
+
+    # Verify all tokens are valid by using them
+    for token in tokens:
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.get("/api/v1/auth/users/me", headers=headers)
+        assert response.status_code == 200, "Token validation failed"
 
 def test_auth_headers_validation(client):
     """

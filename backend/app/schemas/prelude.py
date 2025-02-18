@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List, Dict
 from datetime import datetime
 from enum import Enum
+from app.core.datetime_utils import ensure_timezone
 
 
 class AgentInfo(BaseModel):
@@ -95,6 +96,10 @@ class TimeInfo(BaseModel):
     usec: Optional[int] = None
     gmtoff: Optional[int] = None
 
+    @field_validator('time')
+    def ensure_timezone_aware(cls, v):
+        return ensure_timezone(v)
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -125,6 +130,10 @@ class AnalyzerTimeInfo(BaseModel):
     time: datetime
     usec: Optional[int] = None
     gmtoff: Optional[int] = None
+
+    @field_validator('time')
+    def ensure_timezone_aware(cls, v):
+        return ensure_timezone(v)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -268,6 +277,10 @@ class TimelineDataPoint(BaseModel):
     by_classification: Dict[str, int]
     by_analyzer: Dict[str, int]
 
+    @field_validator('timestamp')
+    def ensure_timezone_aware(cls, v):
+        return ensure_timezone(v)
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -276,6 +289,10 @@ class TimelineResponse(BaseModel):
     start_date: datetime
     end_date: datetime
     data: List[TimelineDataPoint]
+
+    @field_validator('start_date', 'end_date')
+    def ensure_timezone_aware(cls, v):
+        return ensure_timezone(v)
 
     model_config = ConfigDict(from_attributes=True)
 

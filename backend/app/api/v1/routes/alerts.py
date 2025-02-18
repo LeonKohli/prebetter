@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, literal_column, tuple_, distinct
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
-from ....database.config import get_prelude_db
-from ....models.prelude import (
+from app.database.config import get_prelude_db
+from app.models.prelude import (
     Alert,
     Impact,
     Classification,
@@ -27,7 +27,7 @@ from ....models.prelude import (
     AnalyzerTime,
     Assessment,
 )
-from ....schemas.prelude import (
+from app.schemas.prelude import (
     AlertListResponse,
     AlertListItem,
     AlertDetail,
@@ -45,7 +45,8 @@ from ....schemas.prelude import (
     GroupedAlert,
     GroupedAlertDetail,
 )
-from ..routes.auth import get_current_user
+from app.api.v1.routes.auth import get_current_user
+from app.core.datetime_utils import ensure_timezone
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -78,6 +79,10 @@ async def list_alerts(
     analyzer_model: Optional[str] = None,
     db: Session = Depends(get_prelude_db),
 ) -> AlertListResponse:
+    # Ensure start_date and end_date are timezone-aware using utility function
+    start_date = ensure_timezone(start_date)
+    end_date = ensure_timezone(end_date)
+
     # Create aliases for source and target addresses
     source_addr = aliased(Address)
     target_addr = aliased(Address)
@@ -318,6 +323,10 @@ async def get_grouped_alerts(
     Supports pagination and filtering.
     """
     try:
+        # Ensure start_date and end_date are timezone-aware using utility function
+        start_date = ensure_timezone(start_date)
+        end_date = ensure_timezone(end_date)
+
         # Create aliases for source and target addresses
         source_addr = aliased(Address, name="source_addr")
         target_addr = aliased(Address, name="target_addr")

@@ -3,13 +3,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_
 from typing import Optional, Iterator
-from datetime import datetime
+from datetime import datetime, UTC
 import csv
 from io import StringIO
 from enum import Enum
 
-from ....database.config import get_prelude_db
-from ....models.prelude import (
+from app.database.config import get_prelude_db
+from app.models.prelude import (
     Alert,
     Impact,
     Classification,
@@ -19,7 +19,8 @@ from ....models.prelude import (
     Node,
     CreateTime,
 )
-from ..routes.auth import get_current_user
+from app.api.v1.routes.auth import get_current_user
+from app.core.datetime_utils import ensure_timezone, format_datetime
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -43,12 +44,16 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
 
     # Write data rows one by one
     for row in results:
+        # Ensure timezone information is preserved using utility function
+        detect_time = ensure_timezone(row.detect_time)
+        create_time = ensure_timezone(row.create_time)
+        
         writer.writerow(
             [
                 row._ident,
                 row.messageid,
-                row.detect_time.isoformat() if row.detect_time else "",
-                row.create_time.isoformat() if row.create_time else "",
+                detect_time.isoformat() if detect_time else "",
+                create_time.isoformat() if create_time else "",
                 row.classification_text or "",
                 row.severity or "",
                 row.source_ipv4 or "",
@@ -85,6 +90,10 @@ async def export_alerts(
         raise HTTPException(
             status_code=501, detail=f"Export format '{format}' is not yet supported"
         )
+
+    # Ensure start_date and end_date are timezone-aware using utility function
+    start_date = ensure_timezone(start_date)
+    end_date = ensure_timezone(end_date)
 
     # Create aliases for source and target addresses
     source_addr = aliased(Address)
