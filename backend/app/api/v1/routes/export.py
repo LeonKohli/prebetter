@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_
 from typing import Optional, Iterator
-from datetime import datetime, UTC
+from datetime import datetime
 import csv
 from io import StringIO
 from enum import Enum
@@ -20,7 +20,7 @@ from app.models.prelude import (
     CreateTime,
 )
 from app.api.v1.routes.auth import get_current_user
-from app.core.datetime_utils import ensure_timezone, format_datetime
+from app.core.datetime_utils import ensure_timezone
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 

@@ -1,7 +1,7 @@
 from sqlalchemy import text
-from .config import prebetter_engine, PrebetterBase
-from ..models.users import User  # Import all models here
-from ..core.security import get_password_hash, create_user_id
+from app.database.config import prebetter_engine, PrebetterBase
+from app.models.users import User  # Import all models here
+from app.core.security import get_password_hash, create_user_id
 import logging
 import asyncio
 

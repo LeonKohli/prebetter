@@ -1,7 +1,6 @@
 import jwt
 from datetime import datetime, timedelta, UTC
 from app.core.security import create_access_token, ALGORITHM
-import time
 
 def test_token_expiration(auth_client, client):
     """
