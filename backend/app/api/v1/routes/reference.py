@@ -4,6 +4,7 @@ from typing import List
 from ....database.config import get_prelude_db
 from ....models.prelude import Classification, Impact, Analyzer
 from ..routes.auth import get_current_user
+from sqlalchemy.sql import func
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -37,7 +38,7 @@ async def get_unique_severities(
             db.query(Impact.severity)
             .filter(Impact.severity.isnot(None))
             .distinct()
-            .order_by(Impact.severity)
+            .order_by(func.lower(Impact.severity))
             .all()
         )
         return [result[0] for result in results]

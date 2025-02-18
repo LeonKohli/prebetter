@@ -83,10 +83,10 @@ def test_timeline(auth_client):
     # Verify timeline data points
     for point in data["data"]:
         assert "timestamp" in point
-        assert "count" in point
+        assert "total" in point
         assert isinstance(point["timestamp"], str)
-        assert isinstance(point["count"], int)
-        assert point["count"] >= 0  # Count should never be negative
+        assert isinstance(point["total"], int)
+        assert point["total"] >= 0  # Total should never be negative
     
     # Verify chronological order
     if len(data["data"]) > 1:
@@ -102,12 +102,12 @@ def test_timeline(auth_client):
     
     # Verify filtered data structure
     assert isinstance(filtered_data["data"], list)
-    assert all(isinstance(point["count"], int) for point in filtered_data["data"])
+    assert all(isinstance(point["total"], int) for point in filtered_data["data"])
     
     # Print some debug info
     print(f"\nTimeline data points: {len(data['data'])}")
     if data["data"]:
-        total_alerts = sum(point["count"] for point in data["data"])
+        total_alerts = sum(point["total"] for point in data["data"])
         print(f"Total alerts in timeline: {total_alerts}")
         print(f"Time range: {data['start_date']} to {data['end_date']}")
 
@@ -179,7 +179,7 @@ def test_timeline_group_by(auth_client):
         
         # Should only contain timestamp and count
         assert "timestamp" in point
-        assert "count" in point
+        assert "total" in point
         assert len(point.keys()) == 2
 
 def test_statistics_summary_edge_cases(auth_client):
