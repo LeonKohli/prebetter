@@ -138,18 +138,30 @@ async def get_timeline(
             data_point["total"] += result.total
 
             if result.severity:
-                data_point["by_severity"][result.severity] = data_point["by_severity"].get(result.severity, 0) + result.total
+                if result.severity not in data_point["by_severity"]:
+                    data_point["by_severity"][result.severity] = 0
+                data_point["by_severity"][result.severity] += result.total
             
             if result.classification:
-                data_point["by_classification"][result.classification] = data_point["by_classification"].get(result.classification, 0) + result.total
+                if result.classification not in data_point["by_classification"]:
+                    data_point["by_classification"][result.classification] = 0
+                data_point["by_classification"][result.classification] += result.total
             
             if result.analyzer:
-                data_point["by_analyzer"][result.analyzer] = data_point["by_analyzer"].get(result.analyzer, 0) + result.total
+                if result.analyzer not in data_point["by_analyzer"]:
+                    data_point["by_analyzer"][result.analyzer] = 0
+                data_point["by_analyzer"][result.analyzer] += result.total
 
         # Convert to list and sort by timestamp
         timeline_points = [
-            TimelineDataPoint(**data)
-            for data in timeline_data.values()
+            TimelineDataPoint(
+                timestamp=timestamp,
+                total=data["total"],
+                by_severity=data["by_severity"],
+                by_classification=data["by_classification"],
+                by_analyzer=data["by_analyzer"]
+            )
+            for timestamp, data in timeline_data.items()
         ]
         timeline_points.sort(key=lambda x: x.timestamp)
 

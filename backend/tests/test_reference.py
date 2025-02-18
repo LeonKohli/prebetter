@@ -40,8 +40,9 @@ def test_get_unique_severities(auth_client):
     # Verify no duplicates
     assert len(severities) == len(set(severities))
     
-    # Verify the list is sorted
-    assert severities == sorted(severities)
+    # Sort the list and then verify it is sorted
+    sorted_severities = sorted(severities)
+    assert severities == sorted_severities
     
     # Print some debug info
     print(f"\nFound {len(severities)} unique severity levels")
