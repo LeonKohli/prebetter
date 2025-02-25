@@ -1,5 +1,10 @@
 import pytest
+from datetime import timedelta
+from app.core.datetime_utils import get_current_time
 
+future_start_date = get_current_time() + timedelta(days=365)
+future_end_date = get_current_time() + timedelta(days=365 + 365)
+    
 def test_list_alerts(auth_client):
     """Test getting alerts list with various filters and sorting options"""
     # Test basic pagination
@@ -218,9 +223,10 @@ def test_list_alerts_edge_cases(auth_client):
     assert response.status_code in [400, 422]
     
     # Test future date range
+
     future_params = {
-        "start_date": "2025-01-01T00:00:00",
-        "end_date": "2025-12-31T23:59:59"
+        "start_date": future_start_date.isoformat(),
+        "end_date": future_end_date.isoformat()
     }
     response = auth_client.get("/api/v1/alerts/", params=future_params)
     assert response.status_code == 200

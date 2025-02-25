@@ -1,6 +1,6 @@
 from sqlalchemy import Boolean, Column, String, DateTime
 from sqlalchemy.sql import func
-from ..database.config import PrebetterBase
+from app.database.config import PrebetterBase
 
 class User(PrebetterBase):
     __tablename__ = "users"
