@@ -48,8 +48,8 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
             [
                 row._ident,
                 row.messageid,
-                row.detect_time.isoformat() if row.detect_time else "",
-                row.create_time.isoformat() if row.create_time else "",
+                row.detect_time.isoformat() + 'Z' if row.detect_time else "",
+                row.create_time.isoformat() + 'Z' if row.create_time else "",
                 row.classification_text or "",
                 row.severity or "",
                 row.source_ipv4 or "",
@@ -92,6 +92,7 @@ async def export_alerts(
     
     # Modify the query to select only the fields we need for export
     # (We're not using build_alert_base_query directly to avoid selecting unnecessary fields)
+    # Use DISTINCT ON to ensure we get exactly one row per alert ID
     query = query.with_entities(
         Alert._ident,
         Alert.messageid,
@@ -104,7 +105,7 @@ async def export_alerts(
         Analyzer.name.label("analyzer_name"),
         Node.name.label("analyzer_host"),
         Analyzer.model.label("analyzer_model"),
-    )
+    ).distinct(Alert._ident)
 
     # Apply standard filters
     query = apply_standard_alert_filters(
@@ -125,7 +126,19 @@ async def export_alerts(
     
     # Apply additional filter for alert IDs (this is not part of standard filters)
     if alert_ids:
-        query = query.filter(Alert._ident.in_(alert_ids))
+        # Convert to list if it's not already
+        if not isinstance(alert_ids, list):
+            alert_ids = [alert_ids]
+        # Convert string IDs to integers if needed
+        alert_id_ints = []
+        for aid in alert_ids:
+            try:
+                alert_id_ints.append(int(aid))
+            except (ValueError, TypeError):
+                # Skip invalid IDs
+                continue
+        if alert_id_ints:
+            query = query.filter(Alert._ident.in_(alert_id_ints))
 
     # Order by detect time descending
     query = query.order_by(DetectTime.time.desc())
