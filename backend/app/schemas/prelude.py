@@ -11,6 +11,7 @@ class AgentInfo(BaseModel):
     version: str
     class_: str = Field(..., alias="class")
     latest_heartbeat: str
+    seconds_ago: int = Field(-1, description="Seconds since last heartbeat")
     status: str
 
     model_config = ConfigDict(from_attributes=True)
