@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_
+from sqlalchemy.orm import Session
 from typing import Optional, Iterator
 from datetime import datetime
 import csv
@@ -14,7 +13,6 @@ from ....models.prelude import (
     Alert,
     Impact,
     Classification,
-    Address,
     DetectTime,
     Analyzer,
     Node,

@@ -6,7 +6,7 @@ API schema models, providing consistent transformation logic across the applicat
 """
 
 from typing import Optional, List, Any, Dict, Union
-from datetime import datetime, timedelta
+from datetime import timedelta
 from sqlalchemy.engine.row import Row
 
 from ..schemas.prelude import (

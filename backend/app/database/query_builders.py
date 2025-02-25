@@ -6,8 +6,7 @@ the application to reduce code duplication and maintain consistent query pattern
 """
 
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, literal_column, tuple_, distinct, text, case, literal
-from typing import Optional, Dict, List, Any
+from sqlalchemy import func, and_, literal_column, tuple_, text, case, literal
 from datetime import datetime
 
 from ..models.prelude import (
@@ -27,18 +26,12 @@ from ..models.prelude import (
     Target,
     WebService,
     Alertident,
-    ProcessArg,
-    ProcessEnv,
     AnalyzerTime,
-    Assessment,
     Heartbeat,
 )
 from .config import (
     get_analyzer_join_conditions,
-    get_source_address_join_conditions,
-    get_target_address_join_conditions,
     get_node_join_conditions,
-    apply_standard_alert_filters,
 )
 
 
