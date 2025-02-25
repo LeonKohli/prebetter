@@ -1,9 +1,9 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from ..models.users import User
-from ..schemas.users import UserCreate, UserUpdate, PasswordChangeRequest, PasswordResetRequest
-from ..core.security import get_password_hash, verify_password, create_user_id
+from app.models.users import User
+from app.schemas.users import UserCreate, UserUpdate, PasswordChangeRequest, PasswordResetRequest
+from app.core.security import get_password_hash, verify_password, create_user_id
 from sqlalchemy.exc import IntegrityError
 
 class UserService:

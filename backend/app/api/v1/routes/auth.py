@@ -6,17 +6,17 @@ from sqlalchemy.orm import Session
 import jwt
 from jwt import PyJWTError
 
-from ....core.security import (
+from app.core.security import (
     verify_password,
     create_access_token,
     SECRET_KEY,
     ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
-from ....database.config import get_prebetter_db
-from ....models.users import User
-from ....schemas.users import Token, TokenData, User as UserSchema
-from ....services.users import UserService
+from app.database.config import get_prebetter_db
+from app.models.users import User
+from app.schemas.users import Token, TokenData, User as UserSchema
+from app.services.users import UserService
 
 router = APIRouter()
 

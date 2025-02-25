@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import Optional
 import jwt
 from passlib.context import CryptContext
 import uuid
 from .config import get_settings
+from .datetime_utils import get_current_time
 
 settings = get_settings()
 
@@ -33,14 +34,19 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
     Create a JWT access token with expiration and issued-at claims.
+    Includes microsecond precision to ensure unique tokens in rapid succession.
     """
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
+    now = get_current_time()
     if expires_delta:
         expire = now + expires_delta
     else:
         expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "iat": now})
+    to_encode.update({
+        "exp": expire,
+        "iat": now,
+        "jti": f"{now.timestamp()}-{uuid.uuid4()}"  # Add a unique token ID with timestamp and UUID
+    })
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
