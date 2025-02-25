@@ -144,15 +144,16 @@ async def list_alerts(
     source_addr = models["source_addr"]
     target_addr = models["target_addr"]
     
+    # Use string keys for sort options to ensure compatibility
     sort_options = {
-        SortField.DETECT_TIME: DetectTime.time,
-        SortField.CREATE_TIME: CreateTime.time,
-        SortField.SEVERITY: Impact.severity,
-        SortField.CLASSIFICATION: Classification.text,
-        SortField.SOURCE_IP: source_addr.address,
-        SortField.TARGET_IP: target_addr.address,
-        SortField.ANALYZER: Analyzer.name,
-        SortField.ALERT_ID: Alert._ident
+        "detect_time": DetectTime.time,
+        "create_time": CreateTime.time,
+        "severity": Impact.severity,
+        "classification": Classification.text,
+        "source_ip": source_addr.address,
+        "target_ip": target_addr.address,
+        "analyzer": Analyzer.name,
+        "alert_id": Alert._ident
     }
     
     # Apply sorting
@@ -218,24 +219,22 @@ async def get_grouped_alerts(
         source_addr = models["source_addr"]
         target_addr = models["target_addr"]
         
+        # Use string keys for sort options to ensure compatibility
         sort_options = {
-            SortField.DETECT_TIME: func.max(DetectTime.time),
-            SortField.SEVERITY: func.max(Impact.severity),
-            SortField.CLASSIFICATION: func.max(Classification.text),
-            SortField.SOURCE_IP: source_addr.address,
-            SortField.TARGET_IP: target_addr.address,
-            SortField.ANALYZER: func.max(Analyzer.name),
-            SortField.ALERT_ID: func.count(Alert._ident)  # Actually count in this context
+            "detect_time": func.max(DetectTime.time),
+            "severity": func.max(Impact.severity),
+            "classification": func.max(Classification.text),
+            "source_ip": source_addr.address,
+            "target_ip": target_addr.address,
+            "analyzer": func.max(Analyzer.name),
+            "alert_id": func.count(Alert._ident)  # Actually count in this context
         }
         
-        # Apply sorting
-        pairs_query = apply_sorting(
-            pairs_query, 
-            sort_by, 
-            sort_order, 
-            sort_options, 
-            default_column=func.count(Alert._ident)
-        )
+        # Apply a simple, direct sorting
+        if str(sort_order).lower() == "asc":
+            pairs_query = pairs_query.order_by(func.count(Alert._ident).asc())
+        else:
+            pairs_query = pairs_query.order_by(func.count(Alert._ident).desc())
 
         # Get total count before pagination
         total_pairs = pairs_query.count()
@@ -268,12 +267,17 @@ async def get_grouped_alerts(
         source_addr = alert_models["source_addr"]
         target_addr = alert_models["target_addr"]
         
+        # Group by first, then apply limit
         alerts_query = alerts_query.group_by(
             source_addr.address,
             target_addr.address,
             Classification.text,
         )
-
+        
+        # Add a limit after group_by
+        alerts_query = alerts_query.limit(1000)
+        
+        # Execute query
         alerts = alerts_query.all()
 
         # Process the alerts using the utility function

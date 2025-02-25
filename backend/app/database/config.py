@@ -173,8 +173,13 @@ def apply_sorting(query, sort_by, sort_order, sort_options, default_column=None)
     Returns:
         Sorted SQLAlchemy query
     """
+    # Convert sort_by to string if it's an enum
+    sort_key = sort_by
+    if hasattr(sort_by, "value"):
+        sort_key = sort_by.value
+    
     # Get the sort column from options, or use default
-    sort_column = sort_options.get(str(sort_by))
+    sort_column = sort_options.get(sort_key)
     if not sort_column and default_column:
         sort_column = default_column
         

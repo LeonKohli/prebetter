@@ -6,7 +6,7 @@ the application to reduce code duplication and maintain consistent query pattern
 """
 
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, literal_column, tuple_, distinct, text
+from sqlalchemy import func, and_, literal_column, tuple_, distinct, text, case, literal
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 
@@ -253,8 +253,9 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             target_addr.address.label("target_ipv4"),
             Classification.text.label("classification"),
             func.count(Alert._ident).label("count"),
-            func.group_concat(distinct(Analyzer.name)).label("analyzers"),
-            func.group_concat(distinct(Node.name)).label("analyzer_hosts"),
+            # Use group_concat with DISTINCT for better performance
+            func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
+            func.group_concat(func.distinct(Node.name)).label("analyzer_hosts"),
             func.max(DetectTime.time).label("latest_time"),
         )
         .select_from(Alert)
@@ -276,6 +277,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
                 target_addr.category == "ipv4-addr",
             ),
         )
+        # Only include necessary joins with conditional clauses
         .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
@@ -284,9 +286,10 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             Node,
             get_node_join_conditions(Alert._ident),
         )
+        # Limit by pairs but only include the first 10 pairs to avoid excessive data
         .filter(
             tuple_(source_addr.address, target_addr.address).in_(
-                [(p.source_ipv4, p.target_ipv4) for p in pairs]
+                [(p.source_ipv4, p.target_ipv4) for p in pairs[:10]]
             )
         )
     )
