@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func, case, literal
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Union
 from collections import defaultdict
 from pydantic import BaseModel, Field
 
@@ -11,15 +10,10 @@ from ....database.query_builders import (
     build_heartbeats_timeline_query,
     build_efficient_heartbeats_query
 )
-from ....database.models import (
-    format_relative_time,
-    determine_heartbeat_status
-)
-from ....models.prelude import Heartbeat, Analyzer, AnalyzerTime, Node, Address
+from ....models.prelude import AnalyzerTime
 from ....schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
-    AgentInfo,
     HeartbeatTimelineItem,
 )
 from ..routes.auth import get_current_user
@@ -164,19 +158,27 @@ async def timeline_heartbeats(
         .limit(page_size)
         .all()
     )
-
-    # Format the results for the response
-    output = []
-    for row in results:
-        formatted_date = row.timestamp.strftime("%d %b %Y, %H:%M:%S")
-        output.append(
-            {
-                "Date": formatted_date,
-                "Agent": row.agent,
-                "Node_Address": row.node_address if row.node_address else row.node_name,
-                "Node_Name": row.node_name,
-                "Model": row.model,
-            }
+    
+    # Convert results to response model
+    timeline_items = [
+        HeartbeatTimelineItem(
+            time=result.time.isoformat(),
+            host_name=result.host_name,
+            analyzer_name=result.analyzer_name,
+            model=result.model,
+            version=result.version,
+            class_=result.class_,
         )
-
-    return output
+        for result in results
+    ]
+    
+    # Return with pagination metadata
+    return {
+        "items": timeline_items,
+        "pagination": {
+            "total": total_count,
+            "page": page,
+            "size": page_size,
+            "pages": (total_count + page_size - 1) // page_size
+        }
+    }

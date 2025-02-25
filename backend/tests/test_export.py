@@ -198,7 +198,6 @@ def test_export_specific_alerts(auth_client):
         # Test export with specific alert IDs - FastAPI may not handle list params correctly in tests
         # Each ID is passed separately, which means they may not be correctly filtered
         # Instead of strict count validation, just verify that the alert IDs we requested are included
-        alert_ids_str = [str(aid) for aid in alert_ids]
         response = auth_client.get("/api/v1/export/alerts/csv", params={"alert_ids": alert_ids})
         assert response.status_code == 200
         rows = get_csv_rows(response.content.decode("utf-8"))

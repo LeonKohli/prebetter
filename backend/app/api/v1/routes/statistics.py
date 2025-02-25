@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
 from datetime import datetime, timedelta, UTC
-from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, text
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from ....database.config import get_prelude_db, apply_standard_alert_filters
 from ....database.query_builders import (
     build_alerts_timeline_query,
     build_alerts_statistics_query
 )
-from ....models.prelude import Alert, DetectTime, Impact, Classification, Analyzer, Address
+from ....models.prelude import DetectTime, Impact, Classification, Analyzer
 from ....schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
 from enum import Enum
 from ..routes.auth import get_current_user
