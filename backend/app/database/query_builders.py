@@ -751,3 +751,145 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
     )
     
     return timeline_query
+
+
+def build_efficient_heartbeats_query(db: Session, days: int = 1):
+    """
+    Build an efficient query for heartbeats status using Common Table Expressions (CTEs).
+    
+    This implements the optimized query that:
+    1. Gets the latest heartbeats within the specified time period
+    2. Joins with analyzer and node information
+    3. Calculates the online/offline status based on heartbeat time
+    
+    Args:
+        db: SQLAlchemy database session
+        days: Number of days to look back for heartbeats (default: 1)
+        
+    Returns:
+        SQLAlchemy query object for efficient heartbeat status
+    """
+    # Define the cutoff time for heartbeats
+    cutoff_time = func.date_sub(func.now(), text(f"INTERVAL {days} DAY"))
+    
+    # CTE 1: Get latest heartbeats within time period
+    latest_heartbeats = (
+        db.query(
+            Heartbeat._ident,
+            Heartbeat.messageid,
+            AnalyzerTime.time.label("heartbeat_time")
+        )
+        .join(
+            AnalyzerTime,
+            and_(
+                Heartbeat._ident == AnalyzerTime._message_ident,
+                AnalyzerTime._parent_type == "H"
+            )
+        )
+        .filter(AnalyzerTime.time >= cutoff_time)
+        .cte("latest_heartbeats")
+    )
+    
+    # CTE 2: Group heartbeats by host and analyzer, getting the latest time
+    heartbeats = (
+        db.query(
+            Node.name.label("host_name"),
+            Analyzer.name.label("analyzer_name"),
+            func.max(latest_heartbeats.c.heartbeat_time).label("last_heartbeat")
+        )
+        .select_from(latest_heartbeats)
+        .join(
+            Analyzer,
+            and_(
+                Analyzer._message_ident == latest_heartbeats.c._ident,
+                Analyzer._parent_type == "H"
+            )
+        )
+        .join(
+            Node,
+            and_(
+                Node._message_ident == latest_heartbeats.c._ident,
+                Node._parent_type == "H"
+            )
+        )
+        .group_by(Node.name, Analyzer.name)
+        .cte("heartbeats")
+    )
+    
+    # CTE 3: Get distinct analyzer information
+    # Use GROUP BY to ensure we get only one entry per host+analyzer combination
+    analyzers = (
+        db.query(
+            Node.name.label("host_name"),
+            Analyzer.name.label("analyzer_name"),
+            # Use first() to get a single value for each group
+            func.min(Analyzer.model).label("model"),
+            func.min(Analyzer.version).label("version"),
+            func.min(getattr(Analyzer, "class")).label("class_"),
+            # Add OS information - use min() to get a single value
+            func.min(
+                case(
+                    (
+                        Analyzer.ostype.isnot(None),
+                        func.concat(
+                            Analyzer.ostype,
+                            literal(" "),
+                            func.coalesce(Analyzer.osversion, "")
+                        )
+                    ),
+                    else_=None
+                )
+            ).label("os")
+        )
+        .select_from(Node)
+        .join(
+            Analyzer,
+            Analyzer._message_ident == Node._message_ident
+        )
+        .filter(
+            Node._parent_type == "A",
+            Node._parent0_index == -1
+        )
+        # Group by host_name and analyzer_name to ensure uniqueness
+        .group_by(Node.name, Analyzer.name)
+        .cte("analyzers")
+    )
+    
+    # Final query: Join the CTEs and calculate status
+    # Ensure the output format exactly matches the SQL query
+    final_query = (
+        db.query(
+            analyzers.c.host_name,
+            analyzers.c.analyzer_name,
+            analyzers.c.model,
+            analyzers.c.version,
+            analyzers.c.class_,
+            analyzers.c.os,
+            # Use literal 'Never' for null heartbeats to match SQL query
+            func.coalesce(heartbeats.c.last_heartbeat, literal("Never")).label("last_heartbeat"),
+            # Use -1 for null seconds_ago to match SQL query
+            func.coalesce(
+                func.timestampdiff(text("SECOND"), heartbeats.c.last_heartbeat, func.now()),
+                literal(-1)
+            ).label("seconds_ago"),
+            # Status calculation based on seconds_ago
+            case(
+                (
+                    func.timestampdiff(text("SECOND"), heartbeats.c.last_heartbeat, func.now()) <= 600,
+                    literal("online")
+                ),
+                else_=literal("offline")
+            ).label("status")
+        )
+        .select_from(analyzers)
+        .outerjoin(
+            heartbeats,
+            and_(
+                analyzers.c.host_name == heartbeats.c.host_name,
+                analyzers.c.analyzer_name == heartbeats.c.analyzer_name
+            )
+        )
+        .order_by(analyzers.c.host_name, analyzers.c.analyzer_name)
+    )
+    
+    return final_query
