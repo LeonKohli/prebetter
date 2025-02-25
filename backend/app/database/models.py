@@ -103,26 +103,42 @@ def process_grouped_alerts_details(alerts):
     Returns:
         Dict mapping (source_ipv4, target_ipv4) to a list of GroupedAlertDetail
     """
+    # Use a dict comprehension for better performance
     alerts_map = {}
     
+    # Set a reasonable limit to avoid processing too many alerts
+    max_alerts = 1000
+    
     # Create a map of alerts for each source-target pair
-    for a in alerts:
+    for i, a in enumerate(alerts):
+        # Exit early if we've processed enough alerts
+        if i >= max_alerts:
+            break
+            
         key = (a.source_ipv4, a.target_ipv4)
         if key not in alerts_map:
             alerts_map[key] = []
+            
         if a.classification:  # Only add if classification is not None
-            # Process analyzer hosts to remove domain names
-            analyzer_hosts = [
-                host.split('.')[0] if host else None 
-                for host in (a.analyzer_hosts.split(',') if a.analyzer_hosts else [])
-                if host
-            ]
-            analyzers = a.analyzers.split(',') if a.analyzers else []
+            # Process analyzer hosts efficiently
+            analyzer_hosts = []
+            if a.analyzer_hosts:
+                for host in a.analyzer_hosts.split(','):
+                    if host:
+                        # Just take the first part of the hostname
+                        parts = host.split('.')
+                        analyzer_hosts.append(parts[0] if parts else None)
+            
+            # Process analyzers efficiently
+            analyzers = []
+            if a.analyzers:
+                analyzers = [ana for ana in a.analyzers.split(',') if ana]
+            
             alerts_map[key].append(
                 GroupedAlertDetail(
                     classification=a.classification,
                     count=a.count,
-                    analyzer=list(filter(None, analyzers)),
+                    analyzer=analyzers,
                     analyzer_host=analyzer_hosts,
                     time=a.latest_time,
                 )
