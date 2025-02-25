@@ -79,14 +79,14 @@ query = apply_standard_alert_filters(
     Analyzer=Analyzer
 )
 
-# Apply sorting
+# Apply sorting - always use string keys in sort_options
 sort_options = {
     "detect_time": DetectTime.time,
     "severity": Impact.severity,
     "classification": Classification.text,
     # ... other options
 }
-query = apply_sorting(query, sort_by, sort_order, sort_options)
+query = apply_sorting(query, sort_by, sort_order, sort_options, default_column=Alert._ident)
 
 # Process results
 items = [alert_result_to_list_item(result) for result in results]
@@ -170,10 +170,19 @@ The application uses common join conditions for various tables. These are centra
 
 ### Query Helpers
 
-The application also provides helper functions for common query operations:
+The application provides helper functions for common query operations:
 
 - `apply_standard_alert_filters`: Apply standard filters to a query
 - `apply_sorting`: Apply sorting to a query based on sort field and order
+
+### Processing Large Result Sets
+
+For operations that process a large number of records, always consider:
+
+1. Using `limit()` to restrict the total number of records
+2. Use `.distinct()` when appropriate to eliminate duplicates
+3. For raw data export, use generators like in `generate_csv()` function
+4. Consider adding early exit conditions in processing functions
 
 ## Troubleshooting Common Issues
 
@@ -184,7 +193,18 @@ If queries are slow:
 1. Check if the correct indexes are being used in MySQL (use `EXPLAIN`)
 2. Consider if the query can be optimized (fewer joins, more specific conditions)
 3. Look at fetching only the specific columns needed
-4. Consider pagination or limiting results
+4. Add appropriate limits to queries:
+   ```python
+   # Limit results to a reasonable number
+   query = query.limit(1000)
+   ```
+5. Use `.distinct()` to eliminate duplicate rows
+6. For grouped data, ensure that group_by clauses come before limit/offset clauses
+7. For exports and large datasets, use `yield_per()` to process in batches:
+   ```python
+   # Process in batches instead of loading all at once
+   results = query.yield_per(1000)
+   ```
 
 ### SQLAlchemy Join Conditions
 
@@ -199,4 +219,31 @@ For complex join conditions, remember the pattern:
         # Additional conditions...
     ),
 )
+```
+
+### Enum Handling
+
+When working with Enum values:
+
+1. Always use string keys in dictionaries, not Enum values:
+```python
+# Correct
+sort_options = {
+    "detect_time": DetectTime.time,
+    "severity": Impact.severity,
+}
+
+# Incorrect - will lead to errors
+sort_options = {
+    SortField.DETECT_TIME: DetectTime.time,
+    SortField.SEVERITY: Impact.severity,
+}
+```
+
+2. Convert Enum values to strings when using as keys:
+```python
+# Extract string value from enum
+sort_key = sort_by
+if hasattr(sort_by, "value"):
+    sort_key = sort_by.value
 ```
