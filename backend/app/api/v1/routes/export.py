@@ -90,7 +90,7 @@ async def export_alerts(
     
     # Modify the query to select only the fields we need for export
     # (We're not using build_alert_base_query directly to avoid selecting unnecessary fields)
-    # Use DISTINCT ON to ensure we get exactly one row per alert ID
+    # Use a standard approach instead of DISTINCT ON to ensure uniqueness
     query = query.with_entities(
         Alert._ident,
         Alert.messageid,
@@ -103,7 +103,7 @@ async def export_alerts(
         Analyzer.name.label("analyzer_name"),
         Node.name.label("analyzer_host"),
         Analyzer.model.label("analyzer_model"),
-    ).distinct(Alert._ident)
+    ).group_by(Alert._ident)
 
     # Apply standard filters
     query = apply_standard_alert_filters(
