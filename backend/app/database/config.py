@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, MetaData, and_, func
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
-from typing import Generator, Optional, Dict, Any
+from typing import Generator, Optional
 from datetime import datetime
 from ..core.config import get_settings
 
