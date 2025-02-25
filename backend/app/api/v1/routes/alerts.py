@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, literal_column, tuple_, distinct
+from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional
 from datetime import datetime
 from enum import Enum
@@ -19,8 +19,7 @@ from ....database.models import (
     build_analyzer_info,
     build_node_info,
     build_process_info,
-    process_additional_data,
-    clean_byte_string
+    process_additional_data
 )
 from ....models.prelude import (
     Alert,
@@ -46,12 +45,9 @@ from ....models.prelude import (
 )
 from ....schemas.prelude import (
     AlertListResponse,
-    AlertListItem,
     AlertDetail,
     TimeInfo,
     NetworkInfo,
-    AnalyzerInfo,
-    NodeInfo,
     ProcessInfo,
     ReferenceInfo,
     ServiceInfo,
@@ -59,8 +55,6 @@ from ....schemas.prelude import (
     AlertIdentInfo,
     AnalyzerTimeInfo,
     GroupedAlertResponse,
-    GroupedAlert,
-    GroupedAlertDetail,
 )
 from ..routes.auth import get_current_user
 
@@ -219,8 +213,8 @@ async def get_grouped_alerts(
         source_addr = models["source_addr"]
         target_addr = models["target_addr"]
         
-        # Use string keys for sort options to ensure compatibility
-        sort_options = {
+        # Define sort options for grouped alerts
+        sort_option = {
             "detect_time": func.max(DetectTime.time),
             "severity": func.max(Impact.severity),
             "classification": func.max(Classification.text),
@@ -230,11 +224,12 @@ async def get_grouped_alerts(
             "alert_id": func.count(Alert._ident)  # Actually count in this context
         }
         
-        # Apply a simple, direct sorting
-        if str(sort_order).lower() == "asc":
-            pairs_query = pairs_query.order_by(func.count(Alert._ident).asc())
-        else:
-            pairs_query = pairs_query.order_by(func.count(Alert._ident).desc())
+        # Apply the selected sort option
+        order_by_clause = sort_option.get(sort_by.value)
+        if order_by_clause is not None:
+            if sort_order == SortOrder.DESC:
+                order_by_clause = order_by_clause.desc()
+            pairs_query = pairs_query.order_by(order_by_clause)
 
         # Get total count before pagination
         total_pairs = pairs_query.count()
