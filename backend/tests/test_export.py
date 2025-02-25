@@ -1,7 +1,7 @@
 import csv
 import io
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 def get_csv_rows(response_text: str):
     """Helper function to read CSV content into a list of rows."""
@@ -63,12 +63,14 @@ def test_export_csv_default(auth_client):
         # Validate data types and formats
         if row[2]:  # Detect Time
             try:
-                datetime.fromisoformat(row[2])
+                dt = datetime.fromisoformat(row[2])
+                assert dt.tzinfo is not None, "Datetime should be timezone-aware"
             except ValueError:
                 pytest.fail(f"Invalid datetime format for Detect Time: {row[2]}")
         if row[3]:  # Create Time
             try:
-                datetime.fromisoformat(row[3])
+                dt = datetime.fromisoformat(row[3])
+                assert dt.tzinfo is not None, "Datetime should be timezone-aware"
             except ValueError:
                 pytest.fail(f"Invalid datetime format for Create Time: {row[3]}")
 
@@ -83,7 +85,7 @@ def test_export_csv_with_filters(auth_client):
         assert all(row[5] == "high" for row in rows[1:]), "All rows should have high severity"
 
     # Test with multiple filters
-    end_date = datetime.utcnow()
+    end_date = datetime.now(UTC)
     start_date = end_date - timedelta(days=7)
     params = {
         "severity": "high",
