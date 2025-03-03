@@ -9,6 +9,7 @@ from enum import Enum
 
 from ....database.config import get_prelude_db, apply_standard_alert_filters
 from ....database.query_builders import build_alert_base_query
+from ....core.datetime_utils import ensure_timezone, get_current_time
 from ....models.prelude import (
     Alert,
     Impact,
@@ -27,6 +28,20 @@ class ExportFormat(str, Enum):
     CSV = "csv"
 
 
+def format_iso_datetime(dt):
+    """
+    Format a datetime object to ISO 8601 format.
+    Ensures proper timezone representation without duplicate information.
+    """
+    if dt is None:
+        return ""
+    
+    # Ensure datetime has timezone info
+    dt = ensure_timezone(dt)
+    # Return ISO format - the datetime.isoformat() method already handles timezone
+    return dt.isoformat()
+
+
 def generate_csv(results: Iterator, header: list) -> Iterator[str]:
     """
     A generator that yields CSV lines.
@@ -42,12 +57,16 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
 
     # Write data rows one by one
     for row in results:
+        # Format datetime values using the helper function
+        detect_time_str = format_iso_datetime(row.detect_time)
+        create_time_str = format_iso_datetime(row.create_time)
+        
         writer.writerow(
             [
                 row._ident,
                 row.messageid,
-                row.detect_time.isoformat() + 'Z' if row.detect_time else "",
-                row.create_time.isoformat() + 'Z' if row.create_time else "",
+                detect_time_str,
+                create_time_str,
                 row.classification_text or "",
                 row.severity or "",
                 row.source_ipv4 or "",
@@ -70,16 +89,31 @@ async def export_alerts(
     alert_ids: Optional[list[int]] = Query(
         None, description="List of specific alert IDs to export"
     ),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
-    severity: Optional[str] = Query(None),
-    classification: Optional[str] = Query(None),
-    source_ip: Optional[str] = Query(None),
-    target_ip: Optional[str] = Query(None),
-    analyzer_model: Optional[str] = Query(None),
+    start_date: Optional[datetime] = Query(None, description="Start date for filtering alerts"),
+    end_date: Optional[datetime] = Query(None, description="End date for filtering alerts"),
+    severity: Optional[str] = Query(None, description="Filter by severity level"),
+    classification: Optional[str] = Query(None, description="Filter by classification"),
+    source_ip: Optional[str] = Query(None, description="Filter by source IP address"),
+    target_ip: Optional[str] = Query(None, description="Filter by target IP address"),
+    analyzer_model: Optional[str] = Query(None, description="Filter by analyzer model"),
+    hours_back: Optional[int] = Query(None, description="Export alerts from the past N hours (alternative to start/end dates)"),
     db: Session = Depends(get_prelude_db),
 ) -> StreamingResponse:
-    """Export alerts in CSV format with filtering options."""
+    """
+    Export alerts in the specified format.
+    Supports filtering by criteria and exporting specific alert IDs.
+    
+    If hours_back is specified, it overrides start_date and end_date parameters.
+    """
+    # Handle the hours_back parameter if provided
+    if hours_back is not None and hours_back > 0:
+        end_date = get_current_time()
+        start_date = end_date - datetime.timedelta(hours=hours_back)
+    
+    # Ensure dates have timezone information
+    start_date = ensure_timezone(start_date)
+    end_date = ensure_timezone(end_date)
+
     if format != ExportFormat.CSV:
         raise HTTPException(
             status_code=501, detail=f"Export format '{format}' is not yet supported"
@@ -89,8 +123,6 @@ async def export_alerts(
     query, models = build_alert_base_query(db)
     
     # Modify the query to select only the fields we need for export
-    # (We're not using build_alert_base_query directly to avoid selecting unnecessary fields)
-    # Use a standard approach instead of DISTINCT ON to ensure uniqueness
     query = query.with_entities(
         Alert._ident,
         Alert.messageid,
@@ -105,7 +137,7 @@ async def export_alerts(
         Analyzer.model.label("analyzer_model"),
     ).group_by(Alert._ident)
 
-    # Apply standard filters
+    # Apply standard filters - explicitly pass model classes for filtering
     query = apply_standard_alert_filters(
         query=query,
         severity=severity,
@@ -115,14 +147,14 @@ async def export_alerts(
         source_ip=source_ip,
         target_ip=target_ip,
         analyzer_model=analyzer_model,
-        **models,
-        Impact=Impact,
-        Classification=Classification,
-        DetectTime=DetectTime,
-        Analyzer=Analyzer
+        **models,  # Use models from build_alert_base_query
+        Impact=Impact,  # Explicitly pass Impact model for severity filtering
+        Classification=Classification,  # Explicitly pass for classification filtering
+        DetectTime=DetectTime,  # Explicitly pass for date filtering
+        Analyzer=Analyzer  # Explicitly pass for analyzer_model filtering
     )
     
-    # Apply additional filter for alert IDs (this is not part of standard filters)
+    # Apply additional filter for alert IDs
     if alert_ids:
         # Convert to list if it's not already
         if not isinstance(alert_ids, list):
@@ -144,7 +176,7 @@ async def export_alerts(
     # Use yield_per to fetch rows in batches instead of loading all at once
     results = query.yield_per(1000)
 
-    # Define CSV header row
+    # Define CSV header row - match the exact order expected by tests
     header = [
         "Alert ID",
         "Message ID",
@@ -160,6 +192,6 @@ async def export_alerts(
     ]
 
     # Create the streaming response using the CSV generator
-    csv_stream = generate_csv(results, header)
+    # Use alerts.csv as filename to match the tests
     headers = {"Content-Disposition": "attachment; filename=alerts.csv"}
-    return StreamingResponse(csv_stream, media_type="text/csv", headers=headers)
+    return StreamingResponse(generate_csv(results, header), media_type="text/csv", headers=headers)
