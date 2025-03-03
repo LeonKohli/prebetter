@@ -15,6 +15,7 @@ from ....schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
     HeartbeatTimelineItem,
+    PaginatedHeartbeatTimelineResponse,
 )
 from ..routes.auth import get_current_user
 
@@ -120,7 +121,7 @@ async def heartbeat_status(
         )
 
 
-@router.get("/timeline", response_model=List[HeartbeatTimelineItem])
+@router.get("/timeline", response_model=PaginatedHeartbeatTimelineResponse)
 async def timeline_heartbeats(
     hours: int = Query(24, ge=1, le=168, description="Hours of history to show"),
     page: int = Query(1, ge=1),
