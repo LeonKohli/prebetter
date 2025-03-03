@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
 from typing import List, Union
 from collections import defaultdict
 from pydantic import BaseModel, Field
@@ -10,6 +9,7 @@ from ....database.query_builders import (
     build_heartbeats_timeline_query,
     build_efficient_heartbeats_query
 )
+from ....core.datetime_utils import get_time_range
 from ....models.prelude import AnalyzerTime
 from ....schemas.prelude import (
     HeartbeatTreeResponse,
@@ -48,14 +48,12 @@ async def heartbeat_status(
     The response includes:
     - host_name: The name of the host
     - analyzer_name: The name of the analyzer
-    - model: The model of the analyzer
-    - version: The version of the analyzer
-    - class: The class of the analyzer
-    - last_heartbeat: The timestamp of the last heartbeat
+    - model: The analyzer model
+    - version: The analyzer version
+    - class: Classification of the analyzer
+    - last_heartbeat: Timestamp of the most recent heartbeat
     - seconds_ago: Seconds since the last heartbeat
-    - status: Current status (online/offline)
-    
-    When group_by_host=True, results are grouped by host with nested analyzers.
+    - status: "online" or "offline" based on a threshold
     """
     # Use the efficient query builder
     query = build_efficient_heartbeats_query(db, days)
@@ -130,23 +128,14 @@ async def timeline_heartbeats(
     db: Session = Depends(get_prelude_db),
 ):
     """
-    Returns a list of timeline heartbeat records, with optional pagination.
-    [
-      {
-        "Date": "11 Feb 2025, 10:35:30",
-        "Agent": "snort-eno5",
-        "Node_Address": "10.129.9.52",
-        "Node_Name": "server-001\.example\.internal",
-        "Model": "Snort"
-      },
-      ...
-    ]
+    Returns a timeline of heartbeats from analyzers.
+    Useful for monitoring the health of analyzers over time.
     """
-    # Calculate cutoff time based on requested hours
-    cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+    # Calculate time range using utility function
+    start_time, end_time = get_time_range(hours)
 
     # Use query builder to get the timeline query
-    timeline_query = build_heartbeats_timeline_query(db, cutoff_time)
+    timeline_query = build_heartbeats_timeline_query(db, start_time)
     
     # Get total count for pagination info
     total_count = timeline_query.count()

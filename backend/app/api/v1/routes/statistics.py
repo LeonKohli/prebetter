@@ -11,6 +11,7 @@ from ....database.query_builders import (
 )
 from ....models.prelude import DetectTime, Impact, Classification, Analyzer
 from ....schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
+from ....core.datetime_utils import get_current_time, ensure_timezone, get_time_range
 from enum import Enum
 from ..routes.auth import get_current_user
 
@@ -46,16 +47,21 @@ async def get_timeline(
     try:
         # Set default time range if not provided
         if not end_date:
-            end_date = datetime.now(UTC)
+            end_date = get_current_time()
         if not start_date:
+            # Set default start date based on time frame
             if time_frame == TimeFrame.HOUR:
-                start_date = end_date - timedelta(hours=24)
+                start_date = end_date - timedelta(days=1)  # Last 24 hours
             elif time_frame == TimeFrame.DAY:
-                start_date = end_date - timedelta(days=30)
+                start_date = end_date - timedelta(days=30)  # Last 30 days
             elif time_frame == TimeFrame.WEEK:
-                start_date = end_date - timedelta(weeks=12)
-            else:  # month
-                start_date = end_date - timedelta(days=365)
+                start_date = end_date - timedelta(days=90)  # Last ~3 months
+            else:  # TimeFrame.MONTH
+                start_date = end_date - timedelta(days=365)  # Last year
+        
+        # Ensure dates have timezone info
+        start_date = ensure_timezone(start_date)
+        end_date = ensure_timezone(end_date)
 
         # Determine the date format based on time frame
         if time_frame == TimeFrame.HOUR:
@@ -160,29 +166,27 @@ async def get_statistics_summary(
     db: Session = Depends(get_prelude_db),
 ) -> StatisticsSummary:
     """
-    Get alert statistics summary for the specified time range.
-    Includes total alerts, distribution by severity, classification, analyzer,
-    and top source/target IPs.
+    Get a statistical summary of alerts for the specified time range.
+    Includes counts by severity, classification, analyzer, and top source/target IPs.
     """
-    try:
-        # Calculate time range
-        end_time = datetime.now(UTC)
-        start_time = end_time - timedelta(hours=time_range)
+    # Get time range using utility function
+    start_date, end_date = get_time_range(time_range)
+    
+    # Build the query with the time range
+    query = build_alerts_statistics_query(db, start_date, end_date)
 
-        # Use query builder to get statistics queries
-        stat_queries = build_alerts_statistics_query(db, start_time, end_time)
-        
+    try:
         # Get total alerts
-        total_alerts = stat_queries["base"].distinct().count()
+        total_alerts = query["base"].distinct().count()
 
         # Get alerts by severity
-        alerts_by_severity = stat_queries["severity"].all()
+        alerts_by_severity = query["severity"].all()
         severity_distribution = {
             severity: count for severity, count in alerts_by_severity if severity
         }
 
         # Get alerts by classification
-        alerts_by_classification = stat_queries["classification"].all()
+        alerts_by_classification = query["classification"].all()
         classification_distribution = {
             classification: count 
             for classification, count in alerts_by_classification 
@@ -190,19 +194,19 @@ async def get_statistics_summary(
         }
 
         # Get alerts by analyzer
-        alerts_by_analyzer = stat_queries["analyzer"].all()
+        alerts_by_analyzer = query["analyzer"].all()
         analyzer_distribution = {
             analyzer: count for analyzer, count in alerts_by_analyzer if analyzer
         }
 
         # Get top source IPs
-        alerts_by_source_ip = stat_queries["source_ip"].all()
+        alerts_by_source_ip = query["source_ip"].all()
         source_ip_distribution = {
             ip: count for ip, count in alerts_by_source_ip if ip
         }
 
         # Get top target IPs
-        alerts_by_target_ip = stat_queries["target_ip"].all()
+        alerts_by_target_ip = query["target_ip"].all()
         target_ip_distribution = {
             ip: count for ip, count in alerts_by_target_ip if ip
         }
@@ -215,8 +219,8 @@ async def get_statistics_summary(
             alerts_by_source_ip=source_ip_distribution,
             alerts_by_target_ip=target_ip_distribution,
             time_range_hours=time_range,
-            start_time=start_time,
-            end_time=end_time,
+            start_time=start_date,
+            end_time=end_date,
         )
     except Exception as e:
         raise HTTPException(

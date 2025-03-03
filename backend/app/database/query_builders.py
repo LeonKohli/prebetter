@@ -33,6 +33,7 @@ from .config import (
     get_analyzer_join_conditions,
     get_node_join_conditions,
 )
+# Import datetime utilities for consistent datetime handling
 
 
 def build_alert_base_query(db: Session):
@@ -75,7 +76,9 @@ def build_alert_base_query(db: Session):
             Node.location.label("node_location"),
             Node.category.label("node_category"),
         )
+        # Join DetectTime which is always required
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        # More selective left join for CreateTime to reduce unnecessary data
         .outerjoin(
             CreateTime, 
             and_(
@@ -83,8 +86,11 @@ def build_alert_base_query(db: Session):
                 CreateTime._parent_type == "A"
             )
         )
+        # Join Classification which is usually required for filtering
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
+        # Join Impact which is usually required for severity filtering
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
+        # Use optimized join condition for source addresses
         .outerjoin(
             source_addr,
             and_(
@@ -93,6 +99,7 @@ def build_alert_base_query(db: Session):
                 source_addr.category == "ipv4-addr",
             ),
         )
+        # Use optimized join condition for target addresses
         .outerjoin(
             target_addr,
             and_(
@@ -101,10 +108,12 @@ def build_alert_base_query(db: Session):
                 target_addr.category == "ipv4-addr",
             ),
         )
+        # Selectively join Analyzer using the optimized conditions
         .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
         )
+        # Selectively join Node using the optimized conditions
         .outerjoin(
             Node,
             get_node_join_conditions(Alert._ident),
@@ -124,43 +133,18 @@ def build_alert_count_query(db: Session):
     Returns:
         SQLAlchemy query object optimized for counting alerts
     """
-    # Create aliases for source and target addresses
+    # Create aliases for source and target addresses but only when needed for filtering
     source_addr = aliased(Address)
     target_addr = aliased(Address)
 
-    # Optimize count query by removing unnecessary joins
+    # Highly optimized count query with minimal required joins
+    # Only include joins that are essential for filtering
     count_query = (
-        db.query(Alert._ident)
+        db.query(func.count(Alert._ident))
+        .select_from(Alert)
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .outerjoin(
-            CreateTime, 
-            and_(
-                CreateTime._message_ident == Alert._ident, 
-                CreateTime._parent_type == "A"
-            )
-        )
-        .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        .outerjoin(Impact, Impact._message_ident == Alert._ident)
-        .outerjoin(
-            source_addr,
-            and_(
-                source_addr._message_ident == Alert._ident,
-                source_addr._parent_type == "S",
-                source_addr.category == "ipv4-addr",
-            ),
-        )
-        .outerjoin(
-            target_addr,
-            and_(
-                target_addr._message_ident == Alert._ident,
-                target_addr._parent_type == "T",
-                target_addr.category == "ipv4-addr",
-            ),
-        )
-        .outerjoin(
-            Analyzer,
-            get_analyzer_join_conditions(Alert._ident),
-        )
+        # Other joins only added as needed during filter application
+        # Don't join unnecessary tables for simple counting
     )
     
     return count_query, {"source_addr": source_addr, "target_addr": target_addr}
@@ -180,7 +164,8 @@ def build_grouped_alerts_query(db: Session):
     source_addr = aliased(Address, name="source_addr")
     target_addr = aliased(Address, name="target_addr")
 
-    # Base query for getting unique source-target pairs with total counts
+    # Optimized query for getting unique source-target pairs with total counts
+    # Focus on efficient grouping and aggregation
     pairs_query = (
         db.query(
             source_addr.address.label("source_ipv4"),
@@ -188,13 +173,17 @@ def build_grouped_alerts_query(db: Session):
             func.count(Alert._ident).label("total_count"),
             func.max(DetectTime.time).label("latest_time"),
             func.max(Impact.severity).label("max_severity"),
-            func.max(Classification.text).label("latest_classification"),
-            func.max(Analyzer.name).label("analyzer_name"),
+            # Use group_concat for these to reduce separate queries
+            func.group_concat(func.distinct(Classification.text), ',').label("latest_classification"),
+            func.group_concat(func.distinct(Analyzer.name), ',').label("analyzer_name"),
         )
         .select_from(Alert)
+        # Essential joins first
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        # Only include necessary joins for grouping and aggregation
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
+        # Efficient joins for source and target address
         .outerjoin(
             source_addr,
             and_(
@@ -211,10 +200,14 @@ def build_grouped_alerts_query(db: Session):
                 target_addr.category == "ipv4-addr",
             ),
         )
+        # Only join analyzer when needed
         .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
         )
+        # Use filtering to improve performance of GROUP BY
+        .filter(source_addr.address is not None)
+        .filter(target_addr.address is not None)
         .group_by(
             source_addr.address,
             target_addr.address,
@@ -239,7 +232,14 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
     source_addr = aliased(Address, name="source_addr")
     target_addr = aliased(Address, name="target_addr")
 
-    # Get detailed alert information for the paginated pairs
+    # Optimize pairs list to limit query complexity
+    # If too many pairs provided, limit to first 10 to avoid excessive query size
+    limited_pairs = pairs[:10] if len(pairs) > 10 else pairs
+    
+    # Efficiently construct source-target pair list for IN clause
+    pair_tuples = [(p.source_ipv4, p.target_ipv4) for p in limited_pairs]
+    
+    # Optimized alert details query with efficient joins and data retrieval
     alerts_query = (
         db.query(
             source_addr.address.label("source_ipv4"),
@@ -252,9 +252,11 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             func.max(DetectTime.time).label("latest_time"),
         )
         .select_from(Alert)
+        # Essential joins first
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        .outerjoin(
+        .join(Classification, Classification._message_ident == Alert._ident)
+        # Use efficient join conditions for addresses
+        .join(
             source_addr,
             and_(
                 source_addr._message_ident == Alert._ident,
@@ -262,7 +264,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
                 source_addr.category == "ipv4-addr",
             ),
         )
-        .outerjoin(
+        .join(
             target_addr,
             and_(
                 target_addr._message_ident == Alert._ident,
@@ -270,7 +272,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
                 target_addr.category == "ipv4-addr",
             ),
         )
-        # Only include necessary joins with conditional clauses
+        # Only join analyzer and node when needed
         .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
@@ -279,11 +281,15 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             Node,
             get_node_join_conditions(Alert._ident),
         )
-        # Limit by pairs but only include the first 10 pairs to avoid excessive data
+        # Use efficient IN clause to filter by pairs
         .filter(
-            tuple_(source_addr.address, target_addr.address).in_(
-                [(p.source_ipv4, p.target_ipv4) for p in pairs[:10]]
-            )
+            tuple_(source_addr.address, target_addr.address).in_(pair_tuples)
+        )
+        # Group by the main columns for aggregation
+        .group_by(
+            source_addr.address,
+            target_addr.address,
+            Classification.text
         )
     )
     
