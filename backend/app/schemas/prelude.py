@@ -396,7 +396,7 @@ class HeartbeatTimelineItem(BaseModel):
     analyzer_name: str
     model: str
     version: str
-    class_: str = Field(..., alias="class")
+    class_: str
 
     model_config = ConfigDict(from_attributes=True)
 
