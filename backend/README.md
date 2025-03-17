@@ -33,12 +33,13 @@ A FastAPI-based REST API for accessing Prelude IDS/SIEM data with user managemen
 
 - **Heartbeats Tree View:** Retrieve a tree view of hosts and their associated agents including operating system information, last heartbeat timestamps, and current status.
 - **Heartbeats Timeline:** Generate a timeline of heartbeat events over a specified period, useful for monitoring agent activity.
+- **Heartbeats Status:** Get a flat list or grouped view of all analyzers with their current status (online/offline) and detailed information.
 
 ### Data Analysis
 
 - **Timeline Visualization:** Generate timelines based on hourly, daily, weekly, or monthly intervals.
 - **Statistical Summaries:** View total alert counts and distributions by severity, classification, and analyzer.
-- **Top Metrics:** Identify top classifications and source/target IPs.
+- **Top Metrics:** Identify top classifications and source/target IP addresses.
 - **Grouped Data:** Get alerts grouped by various metrics for an aggregated view.
 
 ## Project Structure
@@ -59,10 +60,12 @@ app/
 ├── core/                  
 │   ├── config.py          # Environment & app configuration
 │   ├── security.py        # Authentication & security utilities
-│   └── logging.py         # Logging configuration
+│   ├── logging.py         # Logging configuration
+│   └── datetime_utils.py  # Datetime handling utilities
 ├── database/             
 │   ├── config.py          # Database connection management
-│   └── init_db.py         # Database initialization and superuser setup
+│   ├── init_db.py         # Database initialization and superuser setup
+│   └── query_builders.py  # Query building utilities
 ├── models/               
 │   ├── prelude.py         # SQLAlchemy models for SIEM (reflected via automap)
 │   └── users.py           # User models
@@ -73,6 +76,19 @@ app/
 │   └── users.py           # Business logic for user operations
 └── main.py                # Application entry point and lifespan configuration
 ```
+
+## Database Structure
+
+The application uses two separate MySQL databases:
+
+1. **Prelude Database**: Contains all SIEM/IDS data including alerts, heartbeats, and analyzer information. This database is treated as read-only by the API.
+
+2. **Prebetter Database**: Contains user management data. This database is managed by the API for user authentication and authorization.
+
+The connection to these databases is handled through SQLAlchemy with:
+- Connection pooling (pool size: 5, max overflow: 10)
+- Connection validation via `pool_pre_ping`
+- Separate session factories for each database
 
 ## Setup
 
@@ -187,9 +203,17 @@ app/
     - List of agents with details such as analyzer name, model, version, class, last heartbeat timestamp, and online/offline status.
 
 - **Heartbeats Timeline:** `GET /api/v1/heartbeats/timeline`
-  - **Query Parameter:**
+  - **Query Parameters:**
     - `hours`: Number of past hours to include in the timeline (default: 24, min: 1, max: 168).
+    - `page`: Page number (default: 1).
+    - `page_size`: Items per page (default: 100, min: 1, max: 1000).
   - Returns: Timeline data of heartbeat events with agent name, node details, timestamp, and model.
+
+- **Heartbeats Status:** `GET /api/v1/heartbeats/status`
+  - **Query Parameters:**
+    - `days`: Number of days to look back (default: 1, min: 1, max: 30).
+    - `group_by_host`: Boolean flag to group results by host (default: false).
+  - Returns: List of analyzers with their current status (online/offline) or a tree structure grouped by host.
 
 ### Statistics and Analysis
 
@@ -225,11 +249,40 @@ app/
 - `MYSQL_PASSWORD`: MySQL password.
 - `MYSQL_HOST`: MySQL host (default: localhost).
 - `MYSQL_PORT`: MySQL port (default: 3306).
-- `MYSQL_PRELUDE_DB`: Name of the Prelude database.
-- `MYSQL_PREBETTER_DB`: Name of the Prebetter database.
-- `SECRET_KEY`: Secret key for JWT token generation.
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes.
+- `MYSQL_PRELUDE_DB`: Name of the Prelude database (default: prelude).
+- `MYSQL_PREBETTER_DB`: Name of the Prebetter database (default: prebetter).
+- `SECRET_KEY`: Secret key for JWT token generation (required).
+- `JWT_SECRET_KEY`: Secret key specifically for JWT (default: uses `SECRET_KEY`).
+- `JWT_ALGORITHM`: Algorithm used for JWT (default: HS256).
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes (default: 30).
 - `BACKEND_CORS_ORIGINS`: Allowed origins for CORS (default: ["*"]).
+
+## Development
+
+### Requirements
+
+- Python 3.13+
+- uv package manager (for dependency management)
+- MySQL 5.7+ (for both Prelude and Prebetter databases)
+
+### Development Tools
+
+- **Ruff**: Used for linting and code formatting.
+- **PyTest**: Used for running tests.
+- **Coverage**: Used for test coverage reporting.
+
+### Development Commands
+
+```bash
+# Run tests with coverage
+uv run pytest --cov=app
+
+# Run linter
+ruff check .
+
+# Format code
+ruff format .
+```
 
 ## Testing
 
@@ -248,10 +301,6 @@ The test suite includes:
 - Filtering and pagination tests.
 - Timeline and statistics tests.
 - Edge case handling tests.
-- Reference data validation.
-- Authentication and authorization tests.
-- User management tests.
-- Edge case and concurrent operation tests.
 
 ## Performance Features
 
