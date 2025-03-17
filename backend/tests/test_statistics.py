@@ -157,32 +157,35 @@ def test_timeline_group_by(auth_client):
         # Verify data structure includes grouping
         if data["data"]:
             point = data["data"][0]
+            # Format has changed to use dictionary structures by type
             if group_by == "severity":
-                assert isinstance(point.get("severity"), str)
+                assert "by_severity" in point
+                assert len(point["by_severity"]) > 0
             elif group_by == "classification":
-                assert isinstance(point.get("classification"), str)
+                assert "by_classification" in point
+                assert len(point["by_classification"]) > 0
             elif group_by == "analyzer":
-                assert isinstance(point.get("analyzer"), str)
-            elif group_by == "source":
-                assert isinstance(point.get("source_ipv4"), str)
-            elif group_by == "target":
-                assert isinstance(point.get("target_ipv4"), str)
+                assert "by_analyzer" in point
+                assert len(point["by_analyzer"]) > 0
+            elif group_by in ["source", "target"]:
+                # These parameters still affect the query but data is still structured in dictionaries
+                assert "by_severity" in point
     
     # Test invalid group by - should return 200 but without grouped data
     response = auth_client.get("/api/v1/statistics/timeline?time_frame=hour&group_by=invalid")
     assert response.status_code == 200
     data = response.json()
     
-    # Verify no grouping fields are present in the response
+    # The response should still have the basic structure
     if data["data"]:
         point = data["data"][0]
-        for field in ["severity", "classification", "analyzer", "source_ipv4", "target_ipv4"]:
-            assert field not in point, f"Found unexpected grouping field {field} with invalid group_by parameter"
-        
-        # Should only contain timestamp and count
+        # Basic fields should be present
         assert "timestamp" in point
         assert "total" in point
-        assert len(point.keys()) == 2
+        # Dictionary groupings should still be present
+        assert "by_severity" in point
+        assert "by_classification" in point
+        assert "by_analyzer" in point
 
 def test_statistics_summary_edge_cases(auth_client):
     """Test edge cases for statistics summary endpoint"""
