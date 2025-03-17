@@ -8,13 +8,13 @@ from .middleware.setup import setup_middleware
 import logging
 from contextlib import asynccontextmanager
 
-# Set up logging
-setup_logging()
-logger = logging.getLogger(__name__)
-
 # Get settings
 settings = get_settings()
 
+# Set up logging with settings from config
+print(f"Initializing logging with level: {settings.LOG_LEVEL}, environment: {settings.ENVIRONMENT}")
+setup_logging(log_level=settings.LOG_LEVEL, environment=settings.ENVIRONMENT)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

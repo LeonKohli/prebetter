@@ -42,6 +42,58 @@ A FastAPI-based REST API for accessing Prelude IDS/SIEM data with user managemen
 - **Top Metrics:** Identify top classifications and source/target IP addresses.
 - **Grouped Data:** Get alerts grouped by various metrics for an aggregated view.
 
+### Health Monitoring System
+
+- **Health Status Endpoint:** Dedicated `/health` endpoint for infrastructure monitoring.
+- **Status Reporting:** Reports system status as "healthy", "degraded", or "unhealthy" based on component availability.
+- **Database Connectivity:** Monitors both Prelude and Prebetter database connections.
+- **Uptime Metrics:** Provides API uptime statistics and server timestamp.
+- **Integration Ready:** Designed for load balancers, monitoring systems, Kubernetes probes, and Docker health checks.
+
+### Request Tracking and Logging
+
+- **Request ID Generation:** Assigns unique IDs to each request for traceability.
+- **Response Headers:** Adds `X-Request-ID` to response headers for client-side tracking.
+- **Performance Metrics:** Logs request duration and completion status.
+- **Structured Logging:** Enhances logs with request context for easier troubleshooting.
+- **Error Traceability:** Includes request IDs in error responses for correlation.
+
+### Logging System
+
+The API implements a flexible logging system that adapts based on your environment:
+
+#### Environment-Based Formatting
+- **Development Mode**: Uses human-readable format for easier debugging:
+  ```
+  2023-10-09 14:30:45,123 - app.middleware.request_tracking - INFO - Request completed: GET /api/v1/alerts - Status: 200 - Duration: 0.470s
+  ```
+
+- **Production Mode**: Uses JSON-structured logging for machine parsing:
+  ```json
+  {
+    "timestamp": "2023-10-09T14:30:45.123456",
+    "level": "INFO",
+    "message": "Request completed: GET /api/v1/alerts",
+    "module": "request_tracking",
+    "function": "request_middleware",
+    "line": 42,
+    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+  ```
+
+#### Log Level Control
+The `LOG_LEVEL` environment variable controls which messages are displayed:
+- Higher levels (like WARNING) show fewer, more important messages
+- Lower levels (like DEBUG) show more detailed information
+- Noisy libraries (SQLAlchemy, Uvicorn) are automatically set to WARNING level
+
+#### Request Tracking
+All HTTP requests are logged with:
+- Unique request ID (also returned in response headers as `X-Request-ID`)
+- HTTP method and path
+- Response status code
+- Request duration in seconds
+
 ## Project Structure
 
 ```bash
@@ -66,6 +118,11 @@ app/
 │   ├── config.py          # Database connection management
 │   ├── init_db.py         # Database initialization and superuser setup
 │   └── query_builders.py  # Query building utilities
+├── middleware/           
+│   ├── cors.py            # CORS configuration
+│   ├── exception_handlers.py # Global exception handlers
+│   ├── request_tracking.py # Request ID and logging middleware
+│   └── setup.py           # Centralized middleware configuration
 ├── models/               
 │   ├── prelude.py         # SQLAlchemy models for SIEM (reflected via automap)
 │   └── users.py           # User models
@@ -73,7 +130,8 @@ app/
 │   ├── prelude.py         # SIEM Pydantic models
 │   └── users.py           # User Pydantic models
 ├── services/             
-│   └── users.py           # Business logic for user operations
+│   ├── users.py           # Business logic for user operations
+│   └── health.py          # Health monitoring service
 └── main.py                # Application entry point and lifespan configuration
 ```
 
@@ -89,6 +147,28 @@ The connection to these databases is handled through SQLAlchemy with:
 - Connection pooling (pool size: 5, max overflow: 10)
 - Connection validation via `pool_pre_ping`
 - Separate session factories for each database
+- Query optimization with index-friendly filters
+- Standardized join conditions for entity relationships
+- Timezone-aware date handling
+
+## Application Lifecycle
+
+The API implements a structured lifecycle management approach:
+
+1. **Startup Phase:**
+   - Database connection verification
+   - Schema validation
+   - Initial superuser creation (if needed)
+   - Health state initialization
+
+2. **Runtime Phase:**
+   - Request processing with middleware pipeline
+   - Database session management
+   - Error handling and recovery
+
+3. **Shutdown Phase:**
+   - Graceful connection termination
+   - Resource cleanup
 
 ## Setup
 
@@ -238,6 +318,15 @@ The connection to these databases is handled through SQLAlchemy with:
 - **Severities:** `GET /api/v1/severities`
 - **Analyzers:** `GET /api/v1/analyzers`
 
+### Health Monitoring
+
+- **Health Check:** `GET /health`
+  - Returns: Health status information including:
+    - Overall status: "healthy", "degraded", or "unhealthy"
+    - Database availability for both Prelude and Prebetter
+    - API uptime in seconds
+    - Current server timestamp
+
 ## Documentation
 
 - **Interactive API Documentation:** [http://localhost:8000/docs](http://localhost:8000/docs)
@@ -256,6 +345,15 @@ The connection to these databases is handled through SQLAlchemy with:
 - `JWT_ALGORITHM`: Algorithm used for JWT (default: HS256).
 - `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes (default: 30).
 - `BACKEND_CORS_ORIGINS`: Allowed origins for CORS (default: ["*"]).
+- `ENVIRONMENT`: Sets the environment mode (`production` or `development`), affecting logging format (default: development).
+  - `development`: Human-readable logs for easier debugging
+  - `production`: JSON-structured logs for machine parsing and log aggregation systems
+- `LOG_LEVEL`: Controls logging verbosity (default: INFO).
+  - `DEBUG`: Most verbose, shows all messages including detailed debugging information
+  - `INFO`: Shows informational messages, warnings, errors, and critical issues
+  - `WARNING`: Shows only warnings, errors, and critical issues
+  - `ERROR`: Shows only errors and critical issues
+  - `CRITICAL`: Shows only critical issues
 
 ## Development
 
@@ -309,15 +407,29 @@ The test suite includes:
 - **Error Handling:** Provides specific error messages and robust exception handling.
 - **Database Connection Pooling:** Managed via SQLAlchemy's connection pooling.
 - **Asynchronous Request Handling:** Endpoints are defined as asynchronous functions for improved performance.
+- **Query Optimization:** Implements progressive filtering from most to least selective for better query planning.
+- **Index-Friendly Queries:** Designed to utilize database indexes effectively.
+- **Timezone-Aware Date Handling:** Ensures consistent timezone handling in date filtering.
 
 ## Security Features
 
 - **JWT Authentication:** Secure token-based authentication system.
-- **Password Hashing:** Secure password storage using hashing.
+- **Password Hashing:** Secure password storage using bcrypt hashing.
 - **Role-Based Access Control:** Superuser and regular user permissions.
 - **Input Validation:** Comprehensive validation for user data.
 - **Unique Constraints:** Enforcement of username and email uniqueness.
 - **Last Superuser Protection:** Prevents deletion of the last superuser.
+- **Secure Key Generation:** Uses Python's secrets module for cryptographically secure key generation.
+- **Request Tracking:** Unique request IDs for security audit trails.
+- **Exception Handling:** Prevents information leakage in error responses.
+
+## Middleware Architecture
+
+The API implements a layered middleware architecture:
+
+1. **CORS Middleware:** Handles Cross-Origin Resource Sharing with configurable origins.
+2. **Request Tracking Middleware:** Generates and tracks request IDs, logs request details.
+3. **Exception Handlers:** Provides consistent error responses with appropriate status codes.
 
 ## Data Models
 
@@ -350,3 +462,11 @@ The test suite includes:
 - **Heartbeat Data:**
   - **Tree View:** Groups agents under hosts with details such as OS information, analyzer data, and current online/offline status.
   - **Timeline:** Aggregates heartbeat events over time with timestamps and agent identifiers.
+
+### Health Models
+
+- **Health Response:**
+  - Overall system status: "healthy", "degraded", or "unhealthy"
+  - Database connection availability for both Prelude and Prebetter
+  - API uptime in seconds
+  - Current server timestamp

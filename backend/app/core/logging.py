@@ -28,13 +28,23 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_record)
 
 
-def setup_logging(log_level: str = "INFO") -> None:
+def setup_logging(log_level: str = "INFO", environment: str = None) -> None:
     """
     Set up logging configuration based on environment.
     
     In production, uses JSON structured logging.
     In development, uses human-readable format.
+    
+    Args:
+        log_level: Log level to use (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        environment: Environment to use (production, development)
     """
+    # Ensure log_level is a valid level
+    valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    if log_level not in valid_levels:
+        print(f"Warning: Invalid log level '{log_level}'. Defaulting to 'INFO'.")
+        log_level = "INFO"
+    
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, log_level))
     
@@ -43,18 +53,23 @@ def setup_logging(log_level: str = "INFO") -> None:
         for handler in root_logger.handlers:
             root_logger.removeHandler(handler)
     
-    # Determine environment
-    environment = os.environ.get("ENVIRONMENT", "development").lower()
+    # Determine environment if not provided
+    if environment is None:
+        environment = os.environ.get("ENVIRONMENT", "development").lower()
+    else:
+        environment = environment.lower()
     
     if environment == "production":
         # JSON structured logging for production
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(JsonFormatter())
+        print(f"Setting up JSON logging with level {log_level} in {environment} mode")
     else:
         # Human-readable logs for development
         log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(logging.Formatter(log_format))
+        print(f"Setting up development logging with level {log_level} in {environment} mode")
     
     root_logger.addHandler(handler)
     

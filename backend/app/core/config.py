@@ -1,9 +1,10 @@
-from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 import secrets
+import os
 
 class Settings(BaseSettings):
+    # Application settings
     PROJECT_NAME: str = "Prebetter Backend"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
@@ -27,6 +28,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = secrets.token_urlsafe(32)  # Generate a secure random key if not provided
     ALGORITHM: str = "HS256"
     
+    # Logging settings
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
+    
     # Computed DATABASE_URLs
     @property
     def PRELUDE_DATABASE_URL(self) -> str:
@@ -39,12 +44,20 @@ class Settings(BaseSettings):
     # CORS settings
     BACKEND_CORS_ORIGINS: list[str] = ["*"]
     
-    model_config = ConfigDict(
-        case_sensitive=True,
+    # Configure Pydantic to read from .env file
+    model_config = SettingsConfigDict(
         env_file=".env",
-        env_file_encoding="utf-8"
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore"
     )
 
 @lru_cache()
 def get_settings() -> Settings:
+    """
+    Returns a cached instance of the Settings object.
+    
+    Using lru_cache means each call to get_settings() will return the same object,
+    avoiding reading the .env file multiple times.
+    """
     return Settings()
