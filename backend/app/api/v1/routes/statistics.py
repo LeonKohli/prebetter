@@ -4,14 +4,14 @@ from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from ....database.config import get_prelude_db, apply_standard_alert_filters
-from ....database.query_builders import (
+from app.database.config import get_prelude_db, apply_standard_alert_filters
+from app.database.query_builders import (
     build_alerts_timeline_query,
     build_alerts_statistics_query
 )
-from ....models.prelude import DetectTime, Impact, Classification, Analyzer
-from ....schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
-from ....core.datetime_utils import get_current_time, ensure_timezone, get_time_range
+from app.models.prelude import DetectTime, Impact, Classification, Analyzer
+from app.schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
+from app.core.datetime_utils import get_current_time, ensure_timezone, get_time_range
 from enum import Enum
 from ..routes.auth import get_current_user
 

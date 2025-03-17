@@ -5,15 +5,15 @@ from sqlalchemy.sql import distinct
 from typing import Optional
 from datetime import datetime
 from enum import Enum
-from ....database.config import get_prelude_db, apply_standard_alert_filters, apply_sorting
-from ....database.query_builders import (
+from app.database.config import get_prelude_db, apply_standard_alert_filters, apply_sorting
+from app.database.query_builders import (
     build_alert_base_query,
     build_alert_count_query,
     build_grouped_alerts_query,
     build_grouped_alerts_detail_query,
     build_alert_detail_query
 )
-from ....database.models import (
+from app.database.models import (
     alert_result_to_list_item,
     grouped_alert_to_response,
     process_grouped_alerts_details,
@@ -22,7 +22,7 @@ from ....database.models import (
     build_process_info,
     process_additional_data
 )
-from ....models.prelude import (
+from app.models.prelude import (
     Alert,
     Impact,
     Classification,
@@ -44,7 +44,7 @@ from ....models.prelude import (
     AnalyzerTime,
     Assessment,
 )
-from ....schemas.prelude import (
+from app.schemas.prelude import (
     AlertListResponse,
     AlertDetail,
     TimeInfo,
@@ -57,8 +57,8 @@ from ....schemas.prelude import (
     AnalyzerTimeInfo,
     GroupedAlertResponse,
 )
-from ....core.datetime_utils import get_current_time, ensure_timezone
-from ..routes.auth import get_current_user
+from app.core.datetime_utils import get_current_time, ensure_timezone
+from app.api.v1.routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 

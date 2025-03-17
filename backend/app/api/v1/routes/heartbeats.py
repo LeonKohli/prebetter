@@ -1,17 +1,15 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from typing import List, Union
 from collections import defaultdict
-from pydantic import BaseModel, Field
 
-from ....database.config import get_prelude_db
-from ....database.query_builders import (
+from app.database.config import get_prelude_db
+from app.database.query_builders import (
     build_heartbeats_timeline_query,
     build_efficient_heartbeats_query
 )
-from ....core.datetime_utils import get_time_range
-from ....models.prelude import AnalyzerTime
-from ....schemas.prelude import (
+from app.core.datetime_utils import get_time_range
+from app.models.prelude import AnalyzerTime
+from app.schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
     HeartbeatTimelineItem,
@@ -21,104 +19,81 @@ from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
-# Define a model for the flat heartbeat status response
-class HeartbeatStatusItem(BaseModel):
-    host_name: str
-    analyzer_name: str
-    model: str
-    version: str
-    class_: str = Field(..., alias="class")
-    last_heartbeat: str
-    seconds_ago: int
-    status: str
-
-@router.get("/status", response_model=Union[List[HeartbeatStatusItem], HeartbeatTreeResponse])
+@router.get("/status", response_model=HeartbeatTreeResponse)
 async def heartbeat_status(
     days: int = Query(1, ge=1, le=30, description="Days of history to look back"),
-    group_by_host: bool = Query(False, description="Group results by host"),
     db: Session = Depends(get_prelude_db),
 ):
     """
-    Returns a list of all analyzers with their current status (online/offline).
+    Returns a tree structure of all analyzers grouped by host with their current status (online/offline).
     
     This endpoint uses an optimized query that:
     1. Gets the latest heartbeats within the specified time period
     2. Joins with analyzer and node information
     3. Calculates the online/offline status based on heartbeat time
+    4. Groups results by host in a hierarchical structure
     
     The response includes:
-    - host_name: The name of the host
-    - analyzer_name: The name of the analyzer
-    - model: The analyzer model
-    - version: The analyzer version
-    - class: Classification of the analyzer
-    - last_heartbeat: Timestamp of the most recent heartbeat
-    - seconds_ago: Seconds since the last heartbeat
-    - status: "online" or "offline" based on a threshold
+    - A list of nodes (hosts), each containing:
+      - name: The name of the host
+      - os: Operating system of the host
+      - agents: List of analyzers running on the host, each containing:
+        - name: The name of the analyzer
+        - model: The analyzer model
+        - version: The analyzer version
+        - class: Classification of the analyzer
+        - latest_heartbeat: Timestamp of the most recent heartbeat
+        - seconds_ago: Seconds since the last heartbeat
+        - status: "online" or "offline" based on a threshold
+    - total_nodes: Total number of hosts
+    - total_agents: Total number of unique analyzers
     """
     # Use the efficient query builder
     query = build_efficient_heartbeats_query(db, days)
     results = query.all()
     
-    if not group_by_host:
-        # Return flat list format matching the SQL query output
-        output = []
-        for row in results:
-            # Ensure field order matches the SQL query output
-            output.append({
-                "host_name": row.host_name,
-                "analyzer_name": row.analyzer_name,
+    # Group by node for tree structure
+    nodes_dict = defaultdict(lambda: {"name": "", "os": None, "agents": {}})
+    total_agents = 0
+
+    for row in results:
+        node_name = row.host_name or "(no node)"
+        
+        # Add agent to the node if it doesn't already exist
+        if not nodes_dict[node_name]["os"] and row.os:
+            nodes_dict[node_name]["os"] = row.os
+            
+        nodes_dict[node_name]["name"] = node_name
+        
+        # Use a dictionary to track unique agents by name
+        if row.analyzer_name not in nodes_dict[node_name]["agents"]:
+            nodes_dict[node_name]["agents"][row.analyzer_name] = {
+                "name": row.analyzer_name,
                 "model": row.model,
                 "version": row.version,
                 "class": row.class_,
-                "last_heartbeat": row.last_heartbeat,
+                "latest_heartbeat": row.last_heartbeat,  # Match field name in AgentInfo schema
                 "seconds_ago": row.seconds_ago,
-                "status": row.status
-            })
-        return output
-    else:
-        # Group by node for tree structure
-        nodes_dict = defaultdict(lambda: {"name": "", "os": None, "agents": {}})
-        total_agents = 0
+                "status": row.status,
+            }
+            total_agents += 1
 
-        for row in results:
-            node_name = row.host_name or "(no node)"
-            
-            # Add agent to the node if it doesn't already exist
-            if not nodes_dict[node_name]["os"] and row.os:
-                nodes_dict[node_name]["os"] = row.os
-                
-            nodes_dict[node_name]["name"] = node_name
-            
-            # Use a dictionary to track unique agents by name
-            if row.analyzer_name not in nodes_dict[node_name]["agents"]:
-                nodes_dict[node_name]["agents"][row.analyzer_name] = {
-                    "name": row.analyzer_name,
-                    "model": row.model,
-                    "version": row.version,
-                    "class": row.class_,
-                    "latest_heartbeat": row.last_heartbeat,  # Match field name in AgentInfo schema
-                    "seconds_ago": row.seconds_ago,
-                    "status": row.status,
-                }
-                total_agents += 1
-
-        # Convert to list and create response
-        formatted_nodes = []
-        for node_name, node_data in nodes_dict.items():
-            # Convert the agents dictionary to a list
-            agents_list = list(node_data["agents"].values())
-            formatted_nodes.append(HeartbeatNodeInfo(
-                name=node_data["name"],
-                os=node_data["os"],
-                agents=agents_list
-            ))
-        
-        return HeartbeatTreeResponse(
-            nodes=formatted_nodes,
-            total_nodes=len(formatted_nodes),
-            total_agents=total_agents
-        )
+    # Convert to list and create tree response
+    formatted_nodes = []
+    for node_name, node_data in nodes_dict.items():
+        # Convert the agents dictionary to a list
+        agents_list = list(node_data["agents"].values())
+        formatted_nodes.append(HeartbeatNodeInfo(
+            name=node_data["name"],
+            os=node_data["os"],
+            agents=agents_list
+        ))
+    
+    return HeartbeatTreeResponse(
+        nodes=formatted_nodes,
+        total_nodes=len(formatted_nodes),
+        total_agents=total_agents
+    )
 
 
 @router.get("/timeline", response_model=PaginatedHeartbeatTimelineResponse)
@@ -150,17 +125,18 @@ async def timeline_heartbeats(
     )
     
     # Convert results to response model
-    timeline_items = [
-        HeartbeatTimelineItem(
-            time=result.time.isoformat(),
-            host_name=result.host_name,
-            analyzer_name=result.analyzer_name,
-            model=result.model,
-            version=result.version,
-            class_=result.class_,
-        )
-        for result in results
-    ]
+    timeline_items = []
+    for result in results:
+        # Create item with proper field mapping
+        item = {
+            "time": result.timestamp.isoformat(),
+            "host_name": result.host_name or "Unknown host",
+            "analyzer_name": result.analyzer_name or "Unknown analyzer",
+            "model": result.model or "",
+            "version": result.version or "",
+            "class_": result.class_ or "",
+        }
+        timeline_items.append(HeartbeatTimelineItem(**item))
     
     # Return with pagination metadata
     return {
