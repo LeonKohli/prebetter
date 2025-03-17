@@ -33,8 +33,6 @@ from .config import (
     get_analyzer_join_conditions,
     get_node_join_conditions,
 )
-# Import datetime utilities for consistent datetime handling
-
 
 def build_alert_base_query(db: Session):
     """
@@ -709,10 +707,12 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
     timeline_query = (
         db.query(
             AnalyzerTime.time.label("timestamp"),
-            Analyzer.name.label("agent"),
-            Node.name.label("node_name"),
+            Analyzer.name.label("analyzer_name"),
+            Node.name.label("host_name"),
             Address.address.label("node_address"),
             Analyzer.model.label("model"),
+            Analyzer.version.label("version"),
+            getattr(Analyzer, "class").label("class_"),
         )
         .join(
             Heartbeat,
