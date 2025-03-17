@@ -1,9 +1,10 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from .core.config import get_settings
 from .core.logging import setup_logging
 from .api.base import api_router
-from .database.init_db import ensure_database
+from .database.init_db import ensure_database, check_database_connections
+from .services.health import update_health_state, get_health_status, HealthResponse
+from .middleware.setup import setup_middleware
 import logging
 from contextlib import asynccontextmanager
 
@@ -14,13 +15,38 @@ logger = logging.getLogger(__name__)
 # Get settings
 settings = get_settings()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for FastAPI application."""
-    logger.info("Initializing database...")
-    await ensure_database()
-    logger.info("Database initialization complete.")
-    yield
+    try:
+        logger.info("Initializing prebetter database...")
+        await ensure_database()
+        update_health_state(prebetter_available=True)
+        logger.info("Prebetter database initialization complete.")
+        
+        # Check Prelude database connection
+        logger.info("Checking Prelude database connection...")
+        prelude_ok = await check_database_connections(check_prelude=True, check_prebetter=False)
+        update_health_state(prelude_available=prelude_ok)
+        
+        if prelude_ok:
+            logger.info("Prelude database connection successful.")
+        else:
+            logger.warning("Prelude database connection failed. Some functionality will be limited.")
+        
+        # Set app as ready
+        update_health_state(ready=True)
+        logger.info("Application startup complete.")
+        
+        yield
+    except Exception as e:
+        logger.error(f"Error during application startup: {str(e)}")
+        # We'll still mark the app as ready, but with limited functionality
+        update_health_state(ready=True)
+        yield
+    finally:
+        logger.info("Application shutdown.")
 
 
 # Create FastAPI app
@@ -36,14 +62,8 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
 )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Set up middleware
+setup_middleware(app)
 
 # Include API router with v1 prefix
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -63,3 +83,22 @@ async def root():
         "docs_url": "/docs",
         "redoc_url": "/redoc",
     }
+
+# Health check endpoint for infrastructure monitoring
+@app.get("/health", tags=["health"], response_model=HealthResponse)
+async def health_check():
+    """
+    Health check endpoint for infrastructure monitoring.
+    
+    This endpoint is designed for:
+    - Load balancers checking service availability
+    - Monitoring systems tracking service health
+    - Kubernetes liveness/readiness probes
+    - Docker health checks
+    
+    It returns minimal but essential information about the service status.
+    
+    Returns:
+        HealthResponse: Basic health status with database availability
+    """
+    return get_health_status()

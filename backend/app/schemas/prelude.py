@@ -11,6 +11,7 @@ class AgentInfo(BaseModel):
     version: str
     class_: str = Field(..., alias="class")
     latest_heartbeat: str
+    seconds_ago: int = Field(-1, description="Seconds since last heartbeat")
     status: str
 
     model_config = ConfigDict(from_attributes=True)
@@ -390,11 +391,12 @@ class HostInfo(BaseModel):
 
 
 class HeartbeatTimelineItem(BaseModel):
-    Date: str
-    Agent: str
-    Node_Address: str
-    Node_Name: str
-    Model: str
+    time: str
+    host_name: str
+    analyzer_name: str
+    model: str
+    version: str
+    class_: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -414,4 +416,20 @@ class TreeHostInfo(BaseModel):
     os: str | None
     agents: list[TreeAgentInfo]
 
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedResponse(BaseModel):
+    total: int
+    page: int
+    size: int
+    pages: int
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedHeartbeatTimelineResponse(BaseModel):
+    items: List[HeartbeatTimelineItem]
+    pagination: PaginatedResponse
+    
     model_config = ConfigDict(from_attributes=True)

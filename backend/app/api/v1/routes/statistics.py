@@ -1,15 +1,19 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
 from datetime import datetime, timedelta, UTC
-from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, text
-from app.database.config import get_prelude_db
-from app.models.prelude import Alert, DetectTime, Impact, Classification, Analyzer, Address
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+
+from app.database.config import get_prelude_db, apply_standard_alert_filters
+from app.database.query_builders import (
+    build_alerts_timeline_query,
+    build_alerts_statistics_query
+)
+from app.models.prelude import DetectTime, Impact, Classification, Analyzer
 from app.schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
+from app.core.datetime_utils import get_current_time, ensure_timezone, get_time_range
 from enum import Enum
-from fastapi import HTTPException
-from app.api.v1.routes.auth import get_current_user
-from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
+from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -41,27 +45,23 @@ async def get_timeline(
     Supports filtering by severity, classification, and analyzer.
     """
     try:
-        # Set default time range if not provided and ensure timezone awareness
+        # Set default time range if not provided
         if not end_date:
             end_date = get_current_time()
-        else:
-            end_date = ensure_timezone(end_date)
-
         if not start_date:
+            # Set default start date based on time frame
             if time_frame == TimeFrame.HOUR:
-                start_date = end_date - timedelta(hours=24)
+                start_date = end_date - timedelta(days=1)  # Last 24 hours
             elif time_frame == TimeFrame.DAY:
-                start_date = end_date - timedelta(days=30)
+                start_date = end_date - timedelta(days=30)  # Last 30 days
             elif time_frame == TimeFrame.WEEK:
-                start_date = end_date - timedelta(weeks=12)
-            else:  # month
-                start_date = end_date - timedelta(days=365)
-        else:
-            start_date = ensure_timezone(start_date)
-
-        # Create aliases for tables
-        aliased(Address)
-        aliased(Address)
+                start_date = end_date - timedelta(days=90)  # Last ~3 months
+            else:  # TimeFrame.MONTH
+                start_date = end_date - timedelta(days=365)  # Last year
+        
+        # Ensure dates have timezone info
+        start_date = ensure_timezone(start_date)
+        end_date = ensure_timezone(end_date)
 
         # Determine the date format based on time frame
         if time_frame == TimeFrame.HOUR:
@@ -73,42 +73,31 @@ async def get_timeline(
         else:  # month
             date_format = "%Y-%m-01 00:00:00"
 
-        # Base query for alerts
-        base_query = (
-            db.query(
-                func.date_format(DetectTime.time, date_format).label("time_bucket"),
-                func.count(Alert._ident.distinct()).label("total"),
-                Impact.severity,
-                Classification.text.label("classification"),
-                Analyzer.name.label("analyzer"),
-            )
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .outerjoin(Impact, Impact._message_ident == Alert._ident)
-            .outerjoin(Classification, Classification._message_ident == Alert._ident)
-            .outerjoin(
-                Analyzer,
-                and_(
-                    Analyzer._message_ident == Alert._ident,
-                    Analyzer._parent_type == "A",
-                    Analyzer._index == -1,
-                ),
-            )
-            .filter(DetectTime.time >= start_date)
-            .filter(DetectTime.time <= end_date)
+        # Use query builder to get the timeline query
+        timeline_query = build_alerts_timeline_query(db, date_format)
+        
+        # Apply filters and date range
+        timeline_query = timeline_query.filter(DetectTime.time >= start_date)
+        timeline_query = timeline_query.filter(DetectTime.time <= end_date)
+        
+        # Apply standard filters
+        timeline_query = apply_standard_alert_filters(
+            query=timeline_query,
+            severity=severity,
+            classification=classification,
+            analyzer_model=None,
+            Impact=Impact,
+            Classification=Classification,
+            DetectTime=DetectTime,
         )
-
-        # Apply filters
-        if severity:
-            base_query = base_query.filter(Impact.severity == severity)
-        if classification:
-            base_query = base_query.filter(Classification.text.like(f"%{classification}%"))
+        
+        # Apply analyzer name filter if provided (not part of standard filters)
         if analyzer_name:
-            base_query = base_query.filter(Analyzer.name == analyzer_name)
+            timeline_query = timeline_query.filter(Analyzer.name == analyzer_name)
 
         # Group by time bucket and get counts
         results = (
-            base_query
+            timeline_query
             .group_by(text("time_bucket"), Impact.severity, Classification.text, Analyzer.name)
             .order_by(text("time_bucket"))
             .all()
@@ -144,30 +133,18 @@ async def get_timeline(
             data_point["total"] += result.total
 
             if result.severity:
-                if result.severity not in data_point["by_severity"]:
-                    data_point["by_severity"][result.severity] = 0
-                data_point["by_severity"][result.severity] += result.total
+                data_point["by_severity"][result.severity] = data_point["by_severity"].get(result.severity, 0) + result.total
             
             if result.classification:
-                if result.classification not in data_point["by_classification"]:
-                    data_point["by_classification"][result.classification] = 0
-                data_point["by_classification"][result.classification] += result.total
+                data_point["by_classification"][result.classification] = data_point["by_classification"].get(result.classification, 0) + result.total
             
             if result.analyzer:
-                if result.analyzer not in data_point["by_analyzer"]:
-                    data_point["by_analyzer"][result.analyzer] = 0
-                data_point["by_analyzer"][result.analyzer] += result.total
+                data_point["by_analyzer"][result.analyzer] = data_point["by_analyzer"].get(result.analyzer, 0) + result.total
 
         # Convert to list and sort by timestamp
         timeline_points = [
-            TimelineDataPoint(
-                timestamp=timestamp,
-                total=data["total"],
-                by_severity=data["by_severity"],
-                by_classification=data["by_classification"],
-                by_analyzer=data["by_analyzer"]
-            )
-            for timestamp, data in timeline_data.items()
+            TimelineDataPoint(**data)
+            for data in timeline_data.values()
         ]
         timeline_points.sort(key=lambda x: x.timestamp)
 
@@ -189,49 +166,27 @@ async def get_statistics_summary(
     db: Session = Depends(get_prelude_db),
 ) -> StatisticsSummary:
     """
-    Get alert statistics summary for the specified time range.
-    Includes total alerts, distribution by severity, classification, analyzer,
-    and top source/target IPs.
+    Get a statistical summary of alerts for the specified time range.
+    Includes counts by severity, classification, analyzer, and top source/target IPs.
     """
+    # Get time range using utility function
+    start_date, end_date = get_time_range(time_range)
+    
+    # Build the query with the time range
+    query = build_alerts_statistics_query(db, start_date, end_date)
+
     try:
-        # Calculate time range using utility function
-        start_time, end_time = get_time_range(time_range)
-
-        # Create aliases for source and target addresses
-        source_addr = aliased(Address)
-        target_addr = aliased(Address)
-
-        # Base query for alerts within time range
-        base_query = (
-            db.query(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .filter(DetectTime.time >= start_time)
-            .filter(DetectTime.time <= end_time)
-        )
-
         # Get total alerts
-        total_alerts = base_query.distinct().count()
+        total_alerts = query["base"].distinct().count()
 
         # Get alerts by severity
-        alerts_by_severity = (
-            base_query
-            .outerjoin(Impact, Impact._message_ident == Alert._ident)
-            .group_by(Impact.severity)
-            .with_entities(Impact.severity, func.count(Alert._ident.distinct()))
-            .all()
-        )
+        alerts_by_severity = query["severity"].all()
         severity_distribution = {
             severity: count for severity, count in alerts_by_severity if severity
         }
 
         # Get alerts by classification
-        alerts_by_classification = (
-            base_query
-            .outerjoin(Classification, Classification._message_ident == Alert._ident)
-            .group_by(Classification.text)
-            .with_entities(Classification.text, func.count(Alert._ident.distinct()))
-            .all()
-        )
+        alerts_by_classification = query["classification"].all()
         classification_distribution = {
             classification: count 
             for classification, count in alerts_by_classification 
@@ -239,62 +194,19 @@ async def get_statistics_summary(
         }
 
         # Get alerts by analyzer
-        alerts_by_analyzer = (
-            base_query
-            .outerjoin(
-                Analyzer,
-                and_(
-                    Analyzer._message_ident == Alert._ident,
-                    Analyzer._parent_type == "A",
-                    Analyzer._index == -1,
-                ),
-            )
-            .group_by(Analyzer.name)
-            .with_entities(Analyzer.name, func.count(Alert._ident.distinct()))
-            .all()
-        )
+        alerts_by_analyzer = query["analyzer"].all()
         analyzer_distribution = {
             analyzer: count for analyzer, count in alerts_by_analyzer if analyzer
         }
 
         # Get top source IPs
-        alerts_by_source_ip = (
-            base_query
-            .outerjoin(
-                source_addr,
-                and_(
-                    source_addr._message_ident == Alert._ident,
-                    source_addr._parent_type == "S",
-                    source_addr.category == "ipv4-addr",
-                ),
-            )
-            .group_by(source_addr.address)
-            .with_entities(source_addr.address, func.count(Alert._ident.distinct()))
-            .order_by(func.count(Alert._ident.distinct()).desc())
-            .limit(10)
-            .all()
-        )
+        alerts_by_source_ip = query["source_ip"].all()
         source_ip_distribution = {
             ip: count for ip, count in alerts_by_source_ip if ip
         }
 
         # Get top target IPs
-        alerts_by_target_ip = (
-            base_query
-            .outerjoin(
-                target_addr,
-                and_(
-                    target_addr._message_ident == Alert._ident,
-                    target_addr._parent_type == "T",
-                    target_addr.category == "ipv4-addr",
-                ),
-            )
-            .group_by(target_addr.address)
-            .with_entities(target_addr.address, func.count(Alert._ident.distinct()))
-            .order_by(func.count(Alert._ident.distinct()).desc())
-            .limit(10)
-            .all()
-        )
+        alerts_by_target_ip = query["target_ip"].all()
         target_ip_distribution = {
             ip: count for ip, count in alerts_by_target_ip if ip
         }
@@ -307,11 +219,11 @@ async def get_statistics_summary(
             alerts_by_source_ip=source_ip_distribution,
             alerts_by_target_ip=target_ip_distribution,
             time_range_hours=time_range,
-            start_time=start_time,
-            end_time=end_time,
+            start_time=start_date,
+            end_time=end_date,
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error generating statistics summary: {str(e)}"
-        ) 
+        )
