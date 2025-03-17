@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 import secrets
-import os
 
 class Settings(BaseSettings):
     # Application settings
