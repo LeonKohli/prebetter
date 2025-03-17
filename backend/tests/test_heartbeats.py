@@ -1,60 +1,12 @@
 from datetime import datetime, timedelta
 from app.core.datetime_utils import get_current_time, ensure_timezone
-import pytest
-from app.schemas.prelude import HeartbeatTreeResponse
-from app.api.v1.routes.heartbeats import HeartbeatStatusItem
-from typing import List, Union, Dict
 
 # Remove the skip directive to enable tests
 # pytestmark = pytest.mark.skip(reason="Skipping all tests in this file")
 
-def test_heartbeats_status_flat(auth_client):
-    """Test getting heartbeats status in flat list format"""
+def test_heartbeats_status_tree(auth_client):
+    """Test getting heartbeats status in tree structure format"""
     response = auth_client.get("/api/v1/heartbeats/status")
-    
-    # Verify response structure
-    assert response.status_code == 200
-    data = response.json()
-    
-    # Verify data is a list
-    assert isinstance(data, list)
-    
-    # Verify item structure if any items exist
-    if data:
-        item = data[0]
-        # Check all required fields
-        assert "host_name" in item
-        assert "analyzer_name" in item
-        assert "model" in item
-        assert "version" in item
-        assert "class" in item
-        assert "last_heartbeat" in item
-        assert "seconds_ago" in item
-        assert "status" in item
-        
-        # Verify data types
-        assert isinstance(item["host_name"], str)
-        assert isinstance(item["analyzer_name"], str)
-        assert isinstance(item["model"], str)
-        assert isinstance(item["version"], str)
-        assert isinstance(item["class"], str)
-        assert isinstance(item["last_heartbeat"], str)
-        assert isinstance(item["seconds_ago"], int)
-        assert isinstance(item["status"], str)
-        
-        # Verify status is valid
-        assert item["status"] in ["online", "offline"]
-        
-        # Print some debug info
-        print(f"\nTotal status items: {len(data)}")
-        print(f"Sample host: {item['host_name']}")
-        print(f"Sample analyzer: {item['analyzer_name']}")
-        print(f"Sample status: {item['status']}")
-
-
-def test_heartbeats_status_grouped(auth_client):
-    """Test getting heartbeats status with group_by_host=True"""
-    response = auth_client.get("/api/v1/heartbeats/status?group_by_host=true")
     
     # Verify response structure
     assert response.status_code == 200
@@ -92,14 +44,26 @@ def test_heartbeats_status_grouped(auth_client):
             # Verify status is valid
             assert agent["status"] in ["online", "offline"]
     
+    # Print some debug info
+    print(f"\nTotal nodes in status view: {data['total_nodes']}")
+    print(f"Total agents in status view: {data['total_agents']}")
+
+
+def test_heartbeats_status_consistency(auth_client):
+    """Test the consistency of heartbeats status counts"""
+    response = auth_client.get("/api/v1/heartbeats/status")
+    
+    # Verify response structure
+    assert response.status_code == 200
+    data = response.json()
+    
     # Verify counts are consistent
     assert data["total_nodes"] == len(data["nodes"])
     total_agents = sum(len(node["agents"]) for node in data["nodes"])
     assert data["total_agents"] == total_agents
     
     # Print some debug info
-    print(f"\nTotal nodes in grouped view: {data['total_nodes']}")
-    print(f"Total agents in grouped view: {data['total_agents']}")
+    print(f"\nVerified count consistency: nodes={data['total_nodes']}, agents={data['total_agents']}")
 
 
 def test_heartbeats_status_days_parameter(auth_client):
