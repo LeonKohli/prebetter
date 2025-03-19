@@ -60,6 +60,8 @@ app = FastAPI(
         "url": "https://www.gnu.org/licenses/gpl-3.0.en.html",
     },
     openapi_url="/api/v1/openapi.json",
+    docs_url="/api/v1/docs",
+    redoc_url="/api/v1/redoc",
 )
 
 # Set up middleware
@@ -80,8 +82,8 @@ async def root():
         "status": "online",
         "message": f"Welcome to {settings.PROJECT_NAME}",
         "version": settings.VERSION,
-        "docs_url": "/docs",
-        "redoc_url": "/redoc",
+        "docs_url": f"http://localhost:8000{settings.API_V1_STR}/docs",
+        "redoc_url": f"http://localhost:8000{settings.API_V1_STR}/redoc",
     }
 
 # Health check endpoint for infrastructure monitoring
