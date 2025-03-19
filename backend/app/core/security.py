@@ -45,7 +45,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({
         "exp": expire,
         "iat": now,
-        "jti": f"{now.timestamp()}-{uuid.uuid4()}"  # Add a unique token ID with timestamp and UUID
+        "jti": f"{now.timestamp()}-{uuid.uuid4()}"  # Token ID with timestamp and UUID
     })
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
