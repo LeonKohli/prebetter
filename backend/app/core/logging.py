@@ -5,7 +5,6 @@ from datetime import datetime
 import os
 from typing import Any
 
-
 class JsonFormatter(logging.Formatter):
     """JSON log formatter for structured logging in production."""
     
@@ -26,7 +25,7 @@ class JsonFormatter(logging.Formatter):
             log_record["exception"] = self.formatException(record.exc_info)
             
         return json.dumps(log_record)
-
+    
 
 def setup_logging(log_level: str = "INFO", environment: str = None) -> None:
     """

@@ -12,7 +12,6 @@ from contextlib import asynccontextmanager
 settings = get_settings()
 
 # Set up logging with settings from config
-print(f"Initializing logging with level: {settings.LOG_LEVEL}, environment: {settings.ENVIRONMENT}")
 setup_logging(log_level=settings.LOG_LEVEL, environment=settings.ENVIRONMENT)
 logger = logging.getLogger(__name__)
 
@@ -48,18 +47,40 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("Application shutdown.")
 
+description = """
+API for accessing and managing Prelude SIEM/IDS data with comprehensive security alert management. 🚀
+
+## Key Features
+
+You can:
+* **View and analyze alerts** with rich metadata
+* **Authenticate users** with JWT and role-based access
+* **Monitor heartbeats** from agents and analyzers
+* **Generate statistics** and event timelines
+* **Export data** in CSV format
+* **Check health status** via monitoring endpoint
+
+## Databases
+
+We connect to:
+* **Prelude DB** - For SIEM/IDS data
+* **Prebetter DB** - For auth and users
+
+See the docs below for detailed API reference.
+"""
 
 # Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="API for accessing Prelude data",
+    description=description,
+    summary="Comprehensive SIEM/IDS data management API",
     version=settings.VERSION,
     lifespan=lifespan,
     license_info={
         "name": "GPLv3",
         "url": "https://www.gnu.org/licenses/gpl-3.0.en.html",
     },
-    openapi_url="/api/v1/openapi.json",
+    openapi_url="/api/v1/openapi.json", 
     docs_url="/api/v1/docs",
     redoc_url="/api/v1/redoc",
 )
