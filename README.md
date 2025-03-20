@@ -6,8 +6,8 @@ A modern, comprehensive Security Information and Event Management (SIEM) dashboa
 
 This project consists of two main components:
 
-1. **Backend API (FastAPI)**: A performant REST API for accessing Prelude IDS/SIEM data with user management and authentication.
-2. **Frontend Dashboard (Nuxt.js)**: A responsive, user-friendly dashboard for visualizing and interacting with security alerts.
+1. **Backend API (FastAPI)**: A performant REST API for accessing Prelude IDS/SIEM data with user management and authentication. See the [Backend README](./backend/README.md) for more details.
+2. **Frontend Dashboard (Nuxt.js)**: A responsive, user-friendly dashboard for visualizing and interacting with security alerts. See the [Frontend README](./frontend/README.md) for more details.
 
 ## Features
 
