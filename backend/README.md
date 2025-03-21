@@ -199,7 +199,7 @@ The API implements a structured lifecycle management approach:
      - `SECRET_KEY`: For JWT token generation.
      - `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time.
 
-5. **Import the Prelude Database (if needed for testing and development):**
+5. **Import a dump of the Prelude Database (if needed for testing and development):**
 
    ```bash
    gunzip < prelude.sql.gz | mysql -u root -p prelude
@@ -373,10 +373,10 @@ The API implements a structured lifecycle management approach:
 
 ```bash
 # Run tests with coverage
-uv run pytest --cov=app
+uv run pytest --cov
 
 # Run linter
-ruff check .
+ruff check . # or using with --fix for 
 
 # Format code
 ruff format .
