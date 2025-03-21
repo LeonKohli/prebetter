@@ -184,7 +184,7 @@ The API implements a structured lifecycle management approach:
 3. **Install Dependencies:**
 
    ```bash
-   uv add -r requirements.txt
+   uv sync
    ```
 
 4. **Configure Environment Variables:**
