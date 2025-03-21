@@ -178,7 +178,7 @@ The API implements a structured lifecycle management approach:
 
    ```bash
    uv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
 3. **Install Dependencies:**
