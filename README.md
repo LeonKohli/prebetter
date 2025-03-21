@@ -54,7 +54,7 @@ This project consists of two main components:
 
 3. Install dependencies:
    ```bash
-   uv add -r requirements.txt # Or use uv sync
+   uv sync
    ```
 
 4. Configure environment variables:
