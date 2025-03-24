@@ -1,21 +1,25 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from collections import defaultdict
+from typing import Annotated
 
 from app.database.config import get_prelude_db
 from app.database.query_builders import (
     build_heartbeats_timeline_query,
     build_efficient_heartbeats_query
 )
+from app.database.cleanup import cleanup_old_heartbeats, cleanup_orphaned_analyzer_times
 from app.core.datetime_utils import get_time_range
 from app.models.prelude import AnalyzerTime
+from app.models.users import User
 from app.schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
     HeartbeatTimelineItem,
     PaginatedHeartbeatTimelineResponse,
 )
-from ..routes.auth import get_current_user
+from app.api.v1.routes.auth import get_current_user
+from app.api.v1.routes.users import get_current_superuser
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -147,4 +151,35 @@ async def timeline_heartbeats(
             "size": page_size,
             "pages": (total_count + page_size - 1) // page_size
         }
+    }
+
+@router.post("/cleanup")
+async def cleanup_heartbeats(
+    current_user: Annotated[User, Depends(get_current_superuser)],  # Use superuser check
+    db: Session = Depends(get_prelude_db),
+    retention_days: int = Query(30, ge=7, le=90, description="Days of heartbeat data to retain"),
+):
+    """
+    Clean up old heartbeat data and orphaned records.
+    This is an administrative endpoint that requires superuser privileges.
+    
+    Args:
+        current_user: Current superuser (injected by dependency)
+        db: Database session
+        retention_days: Number of days of heartbeat data to retain (7-90 days)
+        
+    Returns:
+        Dict with cleanup statistics
+    """
+    # Clean up old heartbeats first
+    deleted_heartbeats, deleted_analyzer_times = cleanup_old_heartbeats(db, retention_days)
+    
+    # Then clean up any orphaned analyzer times
+    deleted_orphans = cleanup_orphaned_analyzer_times(db)
+    
+    return {
+        "deleted_heartbeats": deleted_heartbeats,
+        "deleted_analyzer_times": deleted_analyzer_times,
+        "deleted_orphaned_records": deleted_orphans,
+        "retention_days": retention_days
     }
