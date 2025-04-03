@@ -225,7 +225,9 @@ The API implements a structured lifecycle management approach:
 
 - **Users (Superuser Only):**
   - **List Users:** `GET /api/v1/users/`
-    - Supports pagination with `skip` and `limit` parameters.
+    - Supports pagination with `page` and `size` parameters.
+    - `page`: Page number (default: 1)
+    - `size`: Items per page (default: 10, max: 100)
   - **Create User:** `POST /api/v1/users/`
   - **Get User:** `GET /api/v1/users/{user_id}`
   - **Update User:** `PUT /api/v1/users/{user_id}`
@@ -287,7 +289,7 @@ The API implements a structured lifecycle management approach:
   - **Query Parameters:**
     - `hours`: Number of past hours to include in the timeline (default: 24, min: 1, max: 168).
     - `page`: Page number (default: 1).
-    - `page_size`: Items per page (default: 100, min: 1, max: 1000).
+    - `size`: Items per page (default: 100, min: 1, max: 1000).
   - Returns: Timeline data of heartbeat events with agent name, node details, timestamp, and model.
 
 - **Heartbeats Status:** `GET /api/v1/heartbeats/status`
@@ -390,7 +392,7 @@ Run the test suite using [pytest](https://docs.pytest.org/):
 ```bash
 # Optionally set PYTHONPATH to include the project root
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-pytest tests/
+uv run pytest --cov
 ```
 
 The test suite includes:
