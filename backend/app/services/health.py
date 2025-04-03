@@ -46,7 +46,7 @@ def update_health_state(prelude_available: bool = None, prebetter_available: boo
         _HEALTH_STATE["ready"] = ready
 
 
-def get_health_status() -> Dict[str, Any]:
+def get_health_status() -> HealthResponse:
     """
     Get health status of the API.
     
@@ -55,11 +55,8 @@ def get_health_status() -> Dict[str, Any]:
     - Database availability 
     - API uptime and server timestamp
     
-    Available at:
-    - /health (root endpoint)
-    
     Returns:
-        Dictionary with health status information
+        HealthResponse: Object with health status information
     """
     # Determine overall status
     status = "healthy"
@@ -78,13 +75,14 @@ def get_health_status() -> Dict[str, Any]:
     # Calculate uptime
     uptime = time.time() - _HEALTH_STATE["api_start_time"]
     
-    return {
-        "status": status,
-        "prelude_db": _HEALTH_STATE["prelude_db_available"],
-        "prebetter_db": _HEALTH_STATE["prebetter_db_available"],
-        "uptime_seconds": uptime,
-        "timestamp": datetime.now().isoformat()
-    }
+    # Return as HealthResponse object
+    return HealthResponse(
+        status=status,
+        prelude_db=_HEALTH_STATE["prelude_db_available"],
+        prebetter_db=_HEALTH_STATE["prebetter_db_available"],
+        uptime_seconds=uptime,
+        timestamp=datetime.now().isoformat()
+    )
 
 
 def check_database_health(db: Session, db_type: str) -> Dict[str, Any]:
