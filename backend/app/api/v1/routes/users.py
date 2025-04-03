@@ -51,13 +51,15 @@ async def create_user(
 async def list_users(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, gt=0, le=1000)
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100)
 ) -> List[User]:
     """
     List all users with pagination (superusers only).
+    Uses page and size for pagination.
     """
-    return user_service.list_users(skip=skip, limit=limit)
+    skip = (page - 1) * size
+    return user_service.list_users(skip=skip, limit=size)
 
 
 @router.get("/{user_id}", response_model=UserSchema)

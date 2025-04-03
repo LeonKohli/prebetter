@@ -100,7 +100,7 @@ async def heartbeat_status(
 async def timeline_heartbeats(
     hours: int = Query(24, ge=1, le=168, description="Hours of history to show"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=1000),
+    size: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_prelude_db),
 ):
     """
@@ -119,8 +119,8 @@ async def timeline_heartbeats(
     # Apply pagination and ordering
     results = (
         timeline_query.order_by(AnalyzerTime.time.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        .offset((page - 1) * size)
+        .limit(size)
         .all()
     )
     
@@ -144,7 +144,7 @@ async def timeline_heartbeats(
         "pagination": {
             "total": total_count,
             "page": page,
-            "size": page_size,
-            "pages": (total_count + page_size - 1) // page_size
+            "size": size,
+            "pages": (total_count + size - 1) // size
         }
     }
