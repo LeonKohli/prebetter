@@ -19,6 +19,7 @@ from ..schemas.prelude import (
     ProcessInfo,
     AnalyzerTimeInfo
 )
+from app.core.datetime_utils import ensure_timezone
 
 def alert_result_to_list_item(result: Row) -> AlertListItem:
     """
@@ -247,7 +248,8 @@ def build_process_info(process_data: Union[Row, Any], process_args=None, process
 
 def clean_byte_string(value: str) -> Optional[str]:
     """
-    Process byte strings from AdditionalData by removing b'...' prefix and converting to proper type.
+    Removes b'...' or b"..." representation from a string.
+    Does NOT perform type conversion.
     
     Args:
         value: The string value, potentially with a byte string prefix
@@ -255,89 +257,169 @@ def clean_byte_string(value: str) -> Optional[str]:
     Returns:
         Cleaned string value or None if input is None
     """
-    if not value:
+    if value is None:
         return None
-    # Remove b'...' if present
-    if value.startswith("b'") and value.endswith("'"):
-        value = value[2:-1]
-    # Try to convert to int if it's numeric
-    try:
-        if value.isdigit():
-            return str(int(value))
-        return value
-    except Exception:
-        return value
+
+    cleaned_value = value
+    # Remove b'...' or b"..." if present
+    if isinstance(value, str):
+        if value.startswith("b'") and value.endswith("'"):
+            cleaned_value = value[2:-1]
+        elif value.startswith('b"') and value.endswith('"'):
+            cleaned_value = value[2:-1]
+    
+    return cleaned_value
 
 def process_additional_data(add_data_rows, truncate_payload=False):
     """
-    Process AdditionalData rows into a dictionary.
+    Process AdditionalData rows into a dictionary with type conversion.
     
     Args:
         add_data_rows: SQLAlchemy query results containing AdditionalData rows
-        truncate_payload: Whether to truncate payload data to 500 characters
+        truncate_payload: Whether to truncate payload data to 100 characters
         
     Returns:
-        Dict mapping meaning to cleaned data value
+        Dict mapping meaning to cleaned and typed data value
     """
     additional_data = {}
-    
+    if not add_data_rows:
+        return additional_data
+
     for row in add_data_rows:
+        # Use getattr for safety in case attributes are missing
+        meaning = getattr(row, 'meaning', None)
+        raw_data = getattr(row, 'data', None)
+        data_type = getattr(row, 'type', None)
+
+        if meaning is None:
+            continue # Skip rows without a meaning
+
+        current_value = None
+        
         try:
-            if row.type in ["integer", "real", "character"]:
-                additional_data[row.meaning] = clean_byte_string(str(row.data))
-            elif row.type == "byte-string":
-                if row.meaning == "payload":
-                    decoded = row.data.decode("utf-8", errors="ignore")
-                    if truncate_payload and len(decoded) > 500:
-                        decoded = decoded[:500] + "..."
-                    additional_data[row.meaning] = decoded
+            # 1. Handle byte-string first (as it might be actual bytes)
+            if data_type == "byte-string":
+                if isinstance(raw_data, bytes):
+                    # Decode actual bytes
+                    decoded_str = raw_data.decode("utf-8", errors="ignore")
+                    # Use lower() for case-insensitive check
+                    if meaning.lower() == "payload" and truncate_payload and len(decoded_str) > 100:
+                        current_value = decoded_str[:100] + "... (truncated)"
+                    else:
+                        # Even decoded bytes might represent b'...', clean them
+                        current_value = clean_byte_string(decoded_str)
+                elif isinstance(raw_data, str):
+                    # Handle strings that look like byte strings
+                    current_value = clean_byte_string(raw_data)
                 else:
-                    additional_data[row.meaning] = clean_byte_string(
-                        row.data.decode("utf-8", errors="ignore")
-                    )
+                    current_value = str(raw_data) # Fallback
+            
+            # 2. Handle other types (convert raw_data to string first)
             else:
-                additional_data[row.meaning] = str(row.data)
+                str_value = str(raw_data)
+                cleaned_str = clean_byte_string(str_value) # Clean potential b'...'
+                
+                if data_type == "integer":
+                    try:
+                        current_value = int(cleaned_str)
+                    except (ValueError, TypeError):
+                        current_value = cleaned_str # Keep original on error
+                elif data_type == "float" or data_type == "real":
+                    try:
+                        current_value = float(cleaned_str)
+                    except (ValueError, TypeError):
+                        current_value = cleaned_str # Keep original on error
+                elif data_type == "boolean":
+                    if cleaned_str.lower() == 'true':
+                        current_value = True
+                    elif cleaned_str.lower() == 'false':
+                        current_value = False
+                    else:
+                        current_value = cleaned_str # Keep original on error
+                # Includes type == "string" and any other unknown types
+                else: 
+                    current_value = cleaned_str
+
+            additional_data[meaning] = current_value
+
         except Exception as e:
-            additional_data[row.meaning] = f"Error decoding data: {str(e)}"
-    
+            # Broad exception catch for safety during processing
+            additional_data[meaning] = f"Error processing data: {str(e)}"
+            # Optionally log the error: logger.error(f"Error processing additional data for {meaning}: {e}")
+
     return additional_data
 
 def format_relative_time(last_hb_time, current_time):
     """
     Format a heartbeat timestamp into a relative time string.
-    
-    Args:
-        last_hb_time: The heartbeat timestamp
-        current_time: The current time
-        
-    Returns:
-        String describing the relative time (e.g., "5 minutes ago")
+    Handles None input and future times.
     """
-    if last_hb_time:
-        delta = current_time - last_hb_time
-        seconds = int(delta.total_seconds())
-        if seconds < 60:
-            return f"{seconds} seconds ago"
-        elif seconds < 3600:
-            return f"{seconds // 60} minutes ago"
-        else:
-            return f"{seconds // 3600} hours ago"
-    else:
-        return "No heartbeat"
+    if last_hb_time is None:
+        return "never"
+
+    # Ensure times are timezone-aware (assume UTC if naive)
+    current_time = ensure_timezone(current_time) 
+    last_hb_time = ensure_timezone(last_hb_time)
+
+    if last_hb_time > current_time:
+        return "in the future"
+
+    delta = current_time - last_hb_time
+    seconds = int(delta.total_seconds())
+    days = delta.days
+
+    # Order matters: check years, then months, then weeks, etc.
+    if days >= 365:
+        years = days // 365
+        return f"{years} year{'' if years == 1 else 's'} ago"
+    # Check months *before* years for correct calculation (e.g., 364 days)
+    if days >= 30: 
+        # Use a more accurate average month length or a simpler division
+        # Simple division by 30 is often acceptable for relative time
+        months = days // 30 
+        return f"{months} month{'' if months == 1 else 's'} ago"
+    if days >= 7:
+        weeks = days // 7
+        return f"{weeks} week{'' if weeks == 1 else 's'} ago"
+    if days >= 1:
+        return f"{days} day{'' if days == 1 else 's'} ago"
+    if seconds >= 3600:
+        hours = seconds // 3600
+        return f"{hours} hour{'' if hours == 1 else 's'} ago"
+    if seconds >= 60:
+        minutes = seconds // 60
+        return f"{minutes} minute{'' if minutes == 1 else 's'} ago"
+    return f"{seconds} second{'' if seconds == 1 else 's'} ago"
 
 def determine_heartbeat_status(last_hb_time, current_time, interval=600):
     """
-    Determine if a heartbeat is online based on its last timestamp.
+    Determine if a heartbeat is active, inactive, or offline based on its last timestamp.
     
     Args:
-        last_hb_time: The heartbeat timestamp
-        current_time: The current time
+        last_hb_time: The heartbeat timestamp (datetime or None)
+        current_time: The current time (datetime)
         interval: Heartbeat interval in seconds (default: 600)
         
     Returns:
-        String "Online" or "Offline"
+        String "active", "inactive", "offline", or "unknown"
     """
-    timeout_seconds = interval * 2
-    if last_hb_time and (current_time - last_hb_time) <= timedelta(seconds=timeout_seconds):
-        return "Online"
-    return "Offline"
+    if last_hb_time is None:
+        return "unknown"
+
+    # Ensure times are timezone-aware (assume UTC if naive)
+    current_time = ensure_timezone(current_time)
+    last_hb_time = ensure_timezone(last_hb_time)
+    
+    if last_hb_time > current_time:
+        # Treat future heartbeats as active for status purposes
+        return "active"
+
+    delta_seconds = (current_time - last_hb_time).total_seconds()
+    offline_threshold = interval * 2
+
+    if delta_seconds <= interval:
+        return "active"
+    elif delta_seconds <= offline_threshold:
+        return "inactive"
+    else:
+        return "offline"
