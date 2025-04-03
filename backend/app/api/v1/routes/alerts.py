@@ -56,6 +56,7 @@ from app.schemas.prelude import (
     AlertIdentInfo,
     AnalyzerTimeInfo,
     GroupedAlertResponse,
+    PaginatedResponse
 )
 from app.core.datetime_utils import get_current_time, ensure_timezone
 from app.api.v1.routes.auth import get_current_user
@@ -93,6 +94,7 @@ async def list_alerts(
 ) -> AlertListResponse:
     """
     Retrieve a paginated list of alerts with filtering and sorting options.
+    Returns a standardized paginated response.
     """
     # Validate date ranges and handle future dates
     # Required for tests: return empty result for future dates
@@ -100,10 +102,13 @@ async def list_alerts(
     # Check for future date - if start_date is in the future, return empty result immediately
     if start_date and ensure_timezone(start_date) > get_current_time():
         return AlertListResponse(
-            total=0,
             items=[],
-            page=page,
-            size=size
+            pagination=PaginatedResponse(
+                total=0,
+                page=page,
+                size=size,
+                pages=0
+            )
         )
     
     # Get base query and model aliases
@@ -207,6 +212,9 @@ async def list_alerts(
     # Count the distinct alert IDs
     total = alert_ids_query.count()
     
+    # Calculate total pages
+    total_pages = (total + size - 1) // size
+    
     # Apply pagination
     offset = (page - 1) * size
     
@@ -217,10 +225,13 @@ async def list_alerts(
     alert_items = [alert_result_to_list_item(alert) for alert in alerts]
 
     return AlertListResponse(
-        total=total,
         items=alert_items,
-        page=page,
-        size=size,
+        pagination=PaginatedResponse(
+            total=total,
+            page=page,
+            size=size,
+            pages=total_pages
+        )
     )
 
 
@@ -336,12 +347,18 @@ async def get_grouped_alerts(
         
         # Build the final groups list using the utility function
         groups = [grouped_alert_to_response(pair, alerts_map) for pair in pairs]
+        
+        # Calculate total pages
+        total_pages = (total_pairs + size - 1) // size
 
         return GroupedAlertResponse(
-            total=total_pairs,
             groups=groups,
-            page=page,
-            size=size,
+            pagination=PaginatedResponse(
+                total=total_pairs,
+                page=page,
+                size=size,
+                pages=total_pages
+            )
         )
 
     except Exception as e:

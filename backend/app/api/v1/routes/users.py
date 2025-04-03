@@ -9,9 +9,11 @@ from app.schemas.users import (
     User as UserSchema,
     PasswordChangeRequest,
     PasswordResetRequest,
+    PaginatedUserResponse,
 )
 from app.api.v1.routes.auth import get_current_user
 from app.services.users import UserService
+from app.schemas.prelude import PaginatedResponse
 
 router = APIRouter()
 
@@ -47,19 +49,33 @@ async def create_user(
     return user_service.create_user(user)
 
 
-@router.get("/", response_model=List[UserSchema])
+@router.get("/", response_model=PaginatedUserResponse)
 async def list_users(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service),
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=100)
-) -> List[User]:
+) -> PaginatedUserResponse:
     """
     List all users with pagination (superusers only).
     Uses page and size for pagination.
+    Returns a standardized paginated response.
     """
     skip = (page - 1) * size
-    return user_service.list_users(skip=skip, limit=size)
+    total_users = user_service.count_users()
+    users = user_service.list_users(skip=skip, limit=size)
+    
+    total_pages = (total_users + size - 1) // size
+    
+    return PaginatedUserResponse(
+        items=users,
+        pagination=PaginatedResponse(
+            total=total_users,
+            page=page,
+            size=size,
+            pages=total_pages
+        )
+    )
 
 
 @router.get("/{user_id}", response_model=UserSchema)
