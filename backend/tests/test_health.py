@@ -56,35 +56,35 @@ def test_update_health_state_individual():
 def test_get_health_status_starting():
     """Test status when not ready."""
     status = health.get_health_status()
-    assert status["status"] == "starting"
-    assert status["prelude_db"] is False
-    assert status["prebetter_db"] is False
-    assert status["uptime_seconds"] >= 0
-    assert isinstance(status["timestamp"], str)
+    assert status.status == "starting"
+    assert status.prelude_db is False
+    assert status.prebetter_db is False
+    assert status.uptime_seconds >= 0
+    assert isinstance(status.timestamp, str)
 
 def test_get_health_status_healthy():
     """Test status when all components are healthy and ready."""
     health.update_health_state(prelude_available=True, prebetter_available=True, ready=True)
     status = health.get_health_status()
-    assert status["status"] == "healthy"
-    assert status["prelude_db"] is True
-    assert status["prebetter_db"] is True
+    assert status.status == "healthy"
+    assert status.prelude_db is True
+    assert status.prebetter_db is True
 
 def test_get_health_status_degraded():
     """Test status when prebetter db is unavailable."""
     health.update_health_state(prelude_available=True, prebetter_available=False, ready=True)
     status = health.get_health_status()
-    assert status["status"] == "degraded"
-    assert status["prelude_db"] is True
-    assert status["prebetter_db"] is False
+    assert status.status == "degraded"
+    assert status.prelude_db is True
+    assert status.prebetter_db is False
 
 def test_get_health_status_unhealthy():
     """Test status when prelude db is unavailable."""
     health.update_health_state(prelude_available=False, prebetter_available=True, ready=True)
     status = health.get_health_status()
-    assert status["status"] == "unhealthy"
-    assert status["prelude_db"] is False
-    assert status["prebetter_db"] is True # Prebetter state doesn't matter if prelude is down
+    assert status.status == "unhealthy"
+    assert status.prelude_db is False
+    assert status.prebetter_db is True # Prebetter state doesn't matter if prelude is down
 
 def test_get_health_status_uptime():
     """Test uptime calculation."""
@@ -92,9 +92,9 @@ def test_get_health_status_uptime():
     initial_status = health.get_health_status()
     time.sleep(sleep_time)
     later_status = health.get_health_status()
-    assert later_status["uptime_seconds"] > initial_status["uptime_seconds"]
+    assert later_status.uptime_seconds > initial_status.uptime_seconds
     # Check if uptime increased roughly by sleep_time (allow some tolerance)
-    assert later_status["uptime_seconds"] - initial_status["uptime_seconds"] == pytest.approx(sleep_time, abs=0.05)
+    assert later_status.uptime_seconds - initial_status.uptime_seconds == pytest.approx(sleep_time, abs=0.05)
 
 
 def test_check_database_health_prelude_success():
