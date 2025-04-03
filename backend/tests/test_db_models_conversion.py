@@ -65,20 +65,20 @@ def test_alert_result_to_list_item_full():
     result = alert_result_to_list_item(mock_row)
     
     assert isinstance(result, AlertListItem)
-    assert result.alert_id == "12345"
+    assert result.id == "12345"
     assert result.message_id == "msg-001"
     assert result.classification_text == "Test Classification"
     assert result.severity == "high"
     assert result.source_ipv4 == "192.168.1.100"
     assert result.target_ipv4 == "10.0.0.5"
     
-    assert result.create_time is not None
-    assert result.create_time.time == mock_data["create_time"]
-    assert result.create_time.usec == 500
+    assert result.created_at is not None
+    assert result.created_at.timestamp == mock_data["create_time"]
+    assert result.created_at.usec == 500
     
-    assert result.detect_time is not None
-    assert result.detect_time.time == mock_data["detect_time"]
-    assert result.detect_time.usec == 600
+    assert result.detected_at is not None
+    assert result.detected_at.timestamp == mock_data["detect_time"]
+    assert result.detected_at.usec == 600
     
     assert result.analyzer is not None
     assert result.analyzer.name == "TestAnalyzer (analyzer)" # Checks hostname split
@@ -110,17 +110,17 @@ def test_alert_result_to_list_item_minimal():
     result = alert_result_to_list_item(mock_row)
     
     assert isinstance(result, AlertListItem)
-    assert result.alert_id == "54321"
+    assert result.id == "54321"
     assert result.message_id == "msg-002"
     assert result.classification_text == "Minimal Alert"
     assert result.severity == "low"
     assert result.source_ipv4 is None
     assert result.target_ipv4 is None
-    assert result.create_time is None # Should be None if create_time is missing
+    assert result.created_at is None
     
-    assert result.detect_time is not None
-    assert result.detect_time.time == mock_data["detect_time"]
-    assert result.detect_time.usec is None
+    assert result.detected_at is not None
+    assert result.detected_at.timestamp == mock_data["detect_time"]
+    assert result.detected_at.usec is None
     
     assert result.analyzer is not None
     assert result.analyzer.name == "BasicAnalyzer" # No host to split
@@ -141,8 +141,8 @@ def test_alert_result_to_list_item_no_analyzer_or_node():
     result = alert_result_to_list_item(mock_row)
     
     assert isinstance(result, AlertListItem)
-    assert result.alert_id == "999"
-    assert result.detect_time is not None
+    assert result.id == "999"
+    assert result.detected_at is not None
     assert result.analyzer is None # Should be None if analyzer_name is missing
 
 # --- Tests for grouped_alert_to_response ---
@@ -160,14 +160,14 @@ def test_grouped_alert_to_response():
         count=10, 
         analyzer=["Analyzer1"], 
         analyzer_host=["host1"], 
-        time=datetime(2023, 10, 26, 10, 0, 0, tzinfo=timezone.utc)
+        detected_at=datetime(2023, 10, 26, 10, 0, 0, tzinfo=timezone.utc)
     )
     alert_detail_2 = GroupedAlertDetail(
         classification="Class B", 
         count=5, 
         analyzer=["Analyzer2"], 
         analyzer_host=["host2"], 
-        time=datetime(2023, 10, 26, 11, 0, 0, tzinfo=timezone.utc)
+        detected_at=datetime(2023, 10, 26, 11, 0, 0, tzinfo=timezone.utc)
     )
     alerts_map = {
         ("1.1.1.1", "2.2.2.2"): [alert_detail_1, alert_detail_2]
@@ -242,7 +242,7 @@ def test_process_grouped_alerts_details_basic():
     assert pair1_alerts[0].count == 10
     assert pair1_alerts[0].analyzer == ["Analyzer1", "AnalyzerX"]
     assert pair1_alerts[0].analyzer_host == ["host1", "hostX"] # Check hostname split
-    assert pair1_alerts[0].time == alert_data_1["latest_time"]
+    assert pair1_alerts[0].detected_at == alert_data_1["latest_time"]
     
     assert pair1_alerts[1].classification == "Class B"
     assert pair1_alerts[1].analyzer == ["Analyzer2"]
@@ -323,12 +323,9 @@ def test_build_analyzer_info_full():
     node_info = NodeInfo(name="node1", location="DMZ", category="Edge")
     process_info = ProcessInfo(name="fw_proc", pid=1234, path="/usr/bin/fw")
     analyzer_time_info = AnalyzerTimeInfo(
-        time=datetime(2023, 10, 26, 10, 0, 0, tzinfo=timezone.utc),
+        timestamp=datetime(2023, 10, 26, 10, 0, 0, tzinfo=timezone.utc),
         usec=100,
-        gmtoff=0,
-        counter=1,
-        precision=1.0,
-        skew=0.5
+        gmtoff=0
     )
     
     result = build_analyzer_info(
