@@ -58,7 +58,7 @@ def test_concurrent_user_operations(superuser_client, test_db):
     }
     response = superuser_client.post("/api/v1/users/", json=payload)
     assert response.status_code == 200
-    user_data = response.json()  # noqa
+    user_data = response.json()
 
     # Try to create another user with same username/email while the first one exists
     concurrent_payload = {
