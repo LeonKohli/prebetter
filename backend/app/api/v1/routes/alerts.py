@@ -439,7 +439,7 @@ async def get_alert_detail(
             analyzer_time_info = None
             if analyzer[3]:  # If AnalyzerTime exists
                 analyzer_time_info = AnalyzerTimeInfo(
-                    time=analyzer[3].time,
+                    timestamp=analyzer[3].time,
                     usec=analyzer[3].usec,
                     gmtoff=analyzer[3].gmtoff,
                 )
@@ -544,15 +544,15 @@ async def get_alert_detail(
                 unique_refs.append(ref)
 
         return AlertDetail(
-            alert_id=str(alert[0]._ident),
+            id=str(alert[0]._ident),
             message_id=alert[0].messageid,
-            create_time=TimeInfo(
-                time=alert[1].time, usec=alert[1].usec, gmtoff=alert[1].gmtoff
+            created_at=TimeInfo(
+                timestamp=alert[1].time, usec=alert[1].usec, gmtoff=alert[1].gmtoff
             )
             if alert[1]
             else None,
-            detect_time=TimeInfo(
-                time=alert[2].time, usec=alert[2].usec, gmtoff=alert[2].gmtoff
+            detected_at=TimeInfo(
+                timestamp=alert[2].time, usec=alert[2].usec, gmtoff=alert[2].gmtoff
             ),
             classification_text=alert[3].text if alert[3] else None,
             classification_ident=alert[3].ident if alert[3] else None,

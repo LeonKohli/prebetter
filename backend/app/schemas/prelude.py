@@ -10,7 +10,7 @@ class AgentInfo(BaseModel):
     model: str
     version: str
     class_: str = Field(..., alias="class")
-    latest_heartbeat: str
+    latest_heartbeat_at: datetime
     seconds_ago: int = Field(-1, description="Seconds since last heartbeat")
     status: str
 
@@ -93,11 +93,11 @@ class NetworkInfo(BaseModel):
 
 
 class TimeInfo(BaseModel):
-    time: datetime
+    timestamp: datetime
     usec: Optional[int] = None
     gmtoff: Optional[int] = None
 
-    @field_validator('time')
+    @field_validator('timestamp')
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 
@@ -128,11 +128,11 @@ class ServiceInfo(BaseModel):
 
 
 class AnalyzerTimeInfo(BaseModel):
-    time: datetime
+    timestamp: datetime
     usec: Optional[int] = None
     gmtoff: Optional[int] = None
 
-    @field_validator('time')
+    @field_validator('timestamp')
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 
@@ -201,10 +201,10 @@ class SnortInfo(BaseModel):
 
 
 class AlertListItem(BaseModel):
-    alert_id: str
+    id: str
     message_id: str
-    create_time: Optional[TimeInfo] = None
-    detect_time: TimeInfo
+    created_at: Optional[TimeInfo] = None
+    detected_at: TimeInfo
     classification_text: Optional[str] = None
     severity: Optional[str] = None
     source_ipv4: Optional[str] = None
@@ -231,10 +231,10 @@ class AlertListResponse(BaseModel):
 
 
 class AlertDetail(BaseModel):
-    alert_id: str
+    id: str
     message_id: str
-    create_time: Optional[TimeInfo] = None
-    detect_time: TimeInfo
+    created_at: Optional[TimeInfo] = None
+    detected_at: TimeInfo
     classification_text: Optional[str] = None
     classification_ident: Optional[str] = None
     severity: Optional[str] = None
@@ -312,7 +312,7 @@ class GroupedAlertDetail(BaseModel):
     count: int
     analyzer: List[str]
     analyzer_host: List[str]
-    time: datetime
+    detected_at: datetime
 
 
 class GroupedAlert(BaseModel):
@@ -337,8 +337,8 @@ class StatisticsSummary(BaseModel):
     alerts_by_source_ip: Dict[str, int]
     alerts_by_target_ip: Dict[str, int]
     time_range_hours: int
-    start_time: datetime
-    end_time: datetime
+    start_at: datetime
+    end_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -354,7 +354,7 @@ class HeartbeatListItem(BaseModel):
     heartbeat_interval: Optional[int] = Field(None, description="Heartbeat interval in seconds")
     analyzer: AnalyzerInfo
     node: NodeInfo
-    last_heartbeat: datetime = Field(..., description="Last heartbeat timestamp")
+    latest_heartbeat_at: datetime = Field(..., description="Last heartbeat timestamp")
     status: HeartbeatStatus = Field(..., description="Current status (online/offline)")
 
     model_config = ConfigDict(from_attributes=True)
@@ -380,7 +380,7 @@ class HeartbeatTreeItem(BaseModel):
     model: str
     version: str
     class_: str = Field(..., alias="class")
-    last_heartbeat: str
+    last_heartbeat_at: str
     status: str
     node_location: str
 
@@ -393,7 +393,7 @@ class HostInfo(BaseModel):
 
 
 class HeartbeatTimelineItem(BaseModel):
-    time: str
+    timestamp: datetime
     host_name: str
     analyzer_name: str
     model: str
@@ -408,7 +408,7 @@ class TreeAgentInfo(BaseModel):
     model: str
     version: str
     class_: str = Field(..., alias='class')
-    last_heartbeat: datetime | None
+    last_heartbeat_at: datetime | None
     status: str
 
     model_config = ConfigDict(from_attributes=True)

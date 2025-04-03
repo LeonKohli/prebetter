@@ -243,7 +243,7 @@ The API implements a structured lifecycle management approach:
   - **Query Parameters:**
     - `page`: Page number (default: 1)
     - `size`: Items per page (default: 10, max: 100)
-    - `sort_by`: Sort field (`detect_time`, `create_time`, `severity`, `classification`, `source_ip`, `target_ip`, `analyzer`, `alert_id`)
+    - `sort_by`: Sort field (`detected_at`, `created_at`, `severity`, `classification`, `source_ip`, `target_ip`, `analyzer`, `id`)
     - `sort_order`: Sort order (`asc`, `desc`)
     - `severity`: Filter by severity.
     - `classification`: Filter by classification text (partial match supported).
@@ -260,7 +260,7 @@ The API implements a structured lifecycle management approach:
 - **Alert Detail:** `GET /api/v1/alerts/{alert_id}`
   - **Query Parameter:**
     - `truncate_payload`: Boolean flag to truncate the payload data (default: false).
-  - Returns: Detailed alert information including network, analyzer, and (optionally truncated) payload data.
+  - Returns: Detailed alert information including network, analyzer, and (optionally truncated) payload data. Fields include `id`, `message_id`, `created_at`, `detected_at`, etc.
 
 ### Export Alerts
 
@@ -276,26 +276,29 @@ The API implements a structured lifecycle management approach:
     - `source_ip`: Filter by source IP.
     - `target_ip`: Filter by target IP.
     - `analyzer_model`: Filter by analyzer model.
-  - Returns: A streaming CSV file containing alert data with a header row.
+  - Returns: A streaming CSV file containing alert data with a header row (including fields like `id`, `created_at`, `detected_at`, etc.).
 
 ### Heartbeat Monitoring
 
 - **Heartbeats Tree View:** `GET /api/v1/heartbeats/tree`
   - Returns: A JSON tree view of hosts and their associated agents, including:
     - Host OS information.
-    - List of agents with details such as analyzer name, model, version, class, last heartbeat timestamp, and online/offline status.
+    - List of agents with details such as analyzer name, model, version, class, last heartbeat timestamp (`latest_heartbeat_at`), and online/offline status.
 
 - **Heartbeats Timeline:** `GET /api/v1/heartbeats/timeline`
   - **Query Parameters:**
     - `hours`: Number of past hours to include in the timeline (default: 24, min: 1, max: 168).
     - `page`: Page number (default: 1).
     - `size`: Items per page (default: 100, min: 1, max: 1000).
-  - Returns: Timeline data of heartbeat events with agent name, node details, timestamp, and model.
+  - Returns: Timeline data of heartbeat events with agent name, node details, timestamp (`timestamp`), and model.
 
 - **Heartbeats Status:** `GET /api/v1/heartbeats/status`
   - **Query Parameters:**
     - `days`: Number of days to look back (default: 1, min: 1, max: 30).
     - `group_by_host`: Boolean flag to group results by host (default: false).
+    - `start_date`: Optional start date for analysis.
+    - `end_date`: Optional end date for analysis.
+    - `severity`: Optional filter by severity.
   - Returns: List of analyzers with their current status (online/offline) or a tree structure grouped by host.
 
 ### Statistics and Analysis
@@ -313,7 +316,7 @@ The API implements a structured lifecycle management approach:
 - **Statistics Summary:** `GET /api/v1/statistics/summary`
   - **Query Parameter:**
     - `time_range`: Time range in hours to analyze (default: 24, min: 1, max: 720).
-  - Returns: Overall statistics including total alerts, distribution by severity, classification, analyzer, and top source/target IP addresses.
+  - Returns: Overall statistics including total alerts, distribution by severity, classification, analyzer, top source/target IP addresses, and the analysis time range (`start_at`, `end_at`).
 
 ### Reference Data
 
@@ -446,16 +449,16 @@ The API implements a layered middleware architecture:
 ### Alert Models
 
 - **Alert List Item:**
-  - Identifiers: Alert ID and message ID.
-  - Timestamps: Creation and detection times (with timezone support).
+  - Identifiers: Alert ID (`id`) and message ID (`message_id`).
+  - Timestamps: Creation (`created_at`) and detection (`detected_at`) times (with timezone support).
   - Classification & Severity: Classification text and severity level.
   - Network Information: Source and target IPv4 addresses.
   - Analyzer Details: Information about the analyzer that generated the alert.
-- **Grouped Alert:**
+- **Grouped Alert Detail:**
   - Groups alerts by source and target IPv4 addresses.
-  - Provides aggregated counts and a breakdown of classifications.
+  - Provides aggregated counts, analyzer info, and latest detection time (`detected_at`).
 - **Alert Detail:**
-  - Full metadata including network, protocol, analyzer, process, references, services, and payload data.
+  - Full metadata including network, protocol, analyzer, process, references, services, and payload data. Fields include `id`, `created_at`, `detected_at`.
   - Optional truncation for large payloads.
 
 ### Export & Heartbeat Models
@@ -463,8 +466,8 @@ The API implements a layered middleware architecture:
 - **Export Alerts:**
   - Exports alert data in CSV format including all relevant fields.
 - **Heartbeat Data:**
-  - **Tree View:** Groups agents under hosts with details such as OS information, analyzer data, and current online/offline status.
-  - **Timeline:** Aggregates heartbeat events over time with timestamps and agent identifiers.
+  - **Tree View:** Groups agents under hosts with details such as OS information, analyzer data (including `latest_heartbeat_at`), and current online/offline status.
+  - **Timeline:** Aggregates heartbeat events over time with timestamps (`timestamp`) and agent identifiers.
 
 ### Health Models
 

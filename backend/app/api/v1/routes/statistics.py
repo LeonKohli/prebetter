@@ -219,8 +219,8 @@ async def get_statistics_summary(
             alerts_by_source_ip=source_ip_distribution,
             alerts_by_target_ip=target_ip_distribution,
             time_range_hours=time_range,
-            start_time=start_date,
-            end_time=end_date,
+            start_at=start_date,
+            end_at=end_date,
         )
     except Exception as e:
         raise HTTPException(

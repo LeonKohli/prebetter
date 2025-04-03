@@ -1,4 +1,6 @@
-from datetime import datetime
+import pytest
+from datetime import datetime, timedelta, UTC
+from typing import Dict, List
 from app.core.datetime_utils import ensure_timezone
 
 def test_statistics_summary(auth_client):
@@ -17,8 +19,8 @@ def test_statistics_summary(auth_client):
     assert "alerts_by_source_ip" in data
     assert "alerts_by_target_ip" in data
     assert "time_range_hours" in data
-    assert "start_time" in data
-    assert "end_time" in data
+    assert "start_at" in data
+    assert "end_at" in data
     
     # Verify data types
     assert isinstance(data["total_alerts"], int)
@@ -28,8 +30,8 @@ def test_statistics_summary(auth_client):
     assert isinstance(data["alerts_by_source_ip"], dict)
     assert isinstance(data["alerts_by_target_ip"], dict)
     assert isinstance(data["time_range_hours"], int)
-    assert isinstance(data["start_time"], str)
-    assert isinstance(data["end_time"], str)
+    assert isinstance(data["start_at"], str)
+    assert isinstance(data["end_at"], str)
     
     # Verify time range is correct
     assert data["time_range_hours"] == 24
@@ -54,6 +56,18 @@ def test_statistics_summary(auth_client):
     for ip, count in data["alerts_by_target_ip"].items():
         assert isinstance(ip, str)
         assert isinstance(count, int)
+    
+    # Verify time range consistency (optional but good)
+    try:
+        start_dt = datetime.fromisoformat(data["start_at"])
+        end_dt = datetime.fromisoformat(data["end_at"])
+        # Calculate the actual time difference in hours
+        actual_hours = (end_dt - start_dt).total_seconds() / 3600
+        # Allow for a small tolerance due to how time ranges might be calculated
+        assert abs(actual_hours - data["time_range_hours"]) < 0.1, \
+            f"Reported time range {data['time_range_hours']} hours does not match calculated range {actual_hours:.2f} hours"
+    except ValueError:
+        pytest.fail("Could not parse start_at or end_at timestamps")
     
     # Print some debug info about what we found
     print(f"\nTotal alerts in last 24 hours: {data['total_alerts']}")
