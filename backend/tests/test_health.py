@@ -1,7 +1,6 @@
 import pytest
 import time
 from unittest.mock import patch, MagicMock
-from datetime import datetime
 
 from app.services import health
 
