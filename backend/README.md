@@ -117,6 +117,7 @@ app/
 ├── database/             
 │   ├── config.py          # Database connection management
 │   ├── init_db.py         # Database initialization and superuser setup
+│   ├── models.py          # Model conversion utilities to convert database results to API schema models
 │   └── query_builders.py  # Query building utilities
 ├── middleware/           
 │   ├── cors.py            # CORS configuration
@@ -341,7 +342,7 @@ The API implements a structured lifecycle management approach:
 - `MYSQL_PRELUDE_DB`: Name of the Prelude database (default: prelude).
 - `MYSQL_PREBETTER_DB`: Name of the Prebetter database (default: prebetter).
 - `SECRET_KEY`: Secret key for JWT token generation (required).
-- `JWT_SECRET_KEY`: Secret key specifically for JWT (default: uses `SECRET_KEY`).
+- `JWT_SECRET_KEY`: Secret key specifically for JWT. Must be set in your environment or `.env` file.
 - `JWT_ALGORITHM`: Algorithm used for JWT (default: HS256).
 - `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes (default: 30).
 - `BACKEND_CORS_ORIGINS`: Allowed origins for CORS (default: ["*"]).
