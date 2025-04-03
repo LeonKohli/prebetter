@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List, Annotated
+from typing import Annotated
 from app.database.config import get_prebetter_db
 from app.models.users import User
 from app.schemas.users import (

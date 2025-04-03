@@ -1,6 +1,5 @@
 import pytest
-from datetime import datetime, timedelta, UTC
-from typing import Dict, List
+from datetime import datetime
 from app.core.datetime_utils import ensure_timezone
 
 def test_statistics_summary(auth_client):
