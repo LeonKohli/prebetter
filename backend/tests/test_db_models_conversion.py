@@ -1,6 +1,4 @@
-import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock
 
 from app.database.models import (
     alert_result_to_list_item,
@@ -16,7 +14,6 @@ from app.database.models import (
 )
 from app.schemas.prelude import (
     AlertListItem, 
-    TimeInfo, 
     AnalyzerInfo, 
     NodeInfo, 
     GroupedAlert, 
