@@ -14,17 +14,20 @@ def test_list_alerts(auth_client):
     assert response.status_code == 200
     data = response.json()
     
-    # Verify all required fields are present
-    assert "total" in data
+    # Verify all required fields are present in the pagination object
     assert "items" in data
-    assert "page" in data
-    assert "size" in data
+    assert "pagination" in data
+    pagination = data["pagination"]
+    assert "total" in pagination
+    assert "page" in pagination
+    assert "size" in pagination
+    assert "pages" in pagination
     
     # Verify data types and pagination
-    assert isinstance(data["total"], int)
+    assert isinstance(pagination["total"], int)
     assert isinstance(data["items"], list)
-    assert data["page"] == 1
-    assert data["size"] == 10
+    assert pagination["page"] == 1
+    assert pagination["size"] == 10
     assert len(data["items"]) <= 10  # Should not exceed page size
     
     # Verify alert item structure
@@ -78,7 +81,7 @@ def test_list_alerts(auth_client):
     assert invalid_response.status_code in [400, 422]  # FastAPI validation error
     
     # Print some debug info
-    print(f"\nTotal alerts in database: {data['total']}")
+    print(f"\nTotal alerts in database: {pagination['total']}")
     print(f"Alerts in first page: {len(data['items'])}")
     if data['items']:
         print(f"Sample alert classifications: {[item['classification_text'] for item in data['items'][:3] if item['classification_text']]}")
@@ -155,17 +158,20 @@ def test_grouped_alerts(auth_client):
     assert response.status_code == 200
     data = response.json()
     
-    # Verify all required fields are present
-    assert "total" in data
+    # Verify all required fields are present in the pagination object
     assert "groups" in data
-    assert "page" in data
-    assert "size" in data
+    assert "pagination" in data
+    pagination = data["pagination"]
+    assert "total" in pagination
+    assert "page" in pagination
+    assert "size" in pagination
+    assert "pages" in pagination
     
     # Verify data types and pagination
-    assert isinstance(data["total"], int)
+    assert isinstance(pagination["total"], int)
     assert isinstance(data["groups"], list)
-    assert data["page"] == 1
-    assert data["size"] == 5
+    assert pagination["page"] == 1
+    assert pagination["size"] == 5
     assert len(data["groups"]) <= 5  # Should not exceed page size
     
     # Verify group structure
@@ -220,7 +226,9 @@ def test_list_alerts_edge_cases(auth_client):
     response = auth_client.get("/api/v1/alerts/", params=future_params)
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 0  # Should return empty result for future dates
+    assert "pagination" in data
+    assert data["pagination"]["total"] == 0  # Should return empty result for future dates
+    assert len(data["items"]) == 0
 
 def test_alert_detail_edge_cases(auth_client):
     """Test edge cases for the alert detail endpoint"""
