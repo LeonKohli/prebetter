@@ -127,10 +127,12 @@ def test_list_users(superuser_client):
     response = superuser_client.get("/api/v1/users/")
     assert response.status_code == 200, f"List users failed: {response.text}"
     data = response.json()
-    # Assuming the response is a list of user objects.
-    assert isinstance(data, list)
+    # Check the new response structure
+    assert "items" in data
+    assert "pagination" in data
+    assert isinstance(data["items"], list)
     # Check that the superuser is present in the returned list.
-    usernames = [user["username"] for user in data]
+    usernames = [user["username"] for user in data["items"]]
     assert TEST_SUPERUSER["username"] in usernames
 
 
