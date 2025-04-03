@@ -214,11 +214,20 @@ class AlertListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class AlertListResponse(BaseModel):
+class PaginatedResponse(BaseModel):
     total: int
-    items: List[AlertListItem]
     page: int
     size: int
+    pages: int
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AlertListResponse(BaseModel):
+    items: List[AlertListItem]
+    pagination: PaginatedResponse
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AlertDetail(BaseModel):
@@ -314,15 +323,8 @@ class GroupedAlert(BaseModel):
 
 
 class GroupedAlertResponse(BaseModel):
-    total: int
-    groups: List[GroupedAlert]
-    page: int
-    size: int
-
-    total: int = Field(..., description="Total number of groups")
     groups: List[GroupedAlert] = Field(..., description="List of grouped alerts")
-    page: int = Field(..., description="Current page number")
-    size: int = Field(..., description="Number of groups per page")
+    pagination: PaginatedResponse
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -416,15 +418,6 @@ class TreeHostInfo(BaseModel):
     os: str | None
     agents: list[TreeAgentInfo]
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PaginatedResponse(BaseModel):
-    total: int
-    page: int
-    size: int
-    pages: int
-    
     model_config = ConfigDict(from_attributes=True)
 
 
