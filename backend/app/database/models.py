@@ -52,17 +52,17 @@ def alert_result_to_list_item(result: Row) -> AlertListItem:
         )
 
     alert_item = AlertListItem(
-        alert_id=str(result._ident),
+        id=str(result._ident),
         message_id=result.messageid,
-        create_time=TimeInfo(
-            time=result.create_time,
+        created_at=TimeInfo(
+            timestamp=result.create_time,
             usec=getattr(result, 'create_time_usec', None),
             gmtoff=getattr(result, 'create_time_gmtoff', None),
         )
         if result.create_time
         else None,
-        detect_time=TimeInfo(
-            time=result.detect_time,
+        detected_at=TimeInfo(
+            timestamp=result.detect_time,
             usec=getattr(result, 'detect_time_usec', None),
             gmtoff=getattr(result, 'detect_time_gmtoff', None),
         ),
@@ -140,7 +140,7 @@ def process_grouped_alerts_details(alerts):
                     count=a.count,
                     analyzer=analyzers,
                     analyzer_host=analyzer_hosts,
-                    time=a.latest_time,
+                    detected_at=a.latest_time,
                 )
             )
     
