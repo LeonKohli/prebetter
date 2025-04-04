@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from collections import defaultdict
 from typing import Annotated
+from datetime import datetime
 
 from app.database.config import get_prelude_db
 from app.database.query_builders import (
@@ -15,6 +16,7 @@ from app.models.users import User
 from app.schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
+    AgentInfo,
     HeartbeatTimelineItem,
     PaginatedHeartbeatTimelineResponse,
 )
@@ -71,22 +73,36 @@ async def heartbeat_status(
         
         # Use a dictionary to track unique agents by name
         if row.analyzer_name not in nodes_dict[node_name]["agents"]:
-            nodes_dict[node_name]["agents"][row.analyzer_name] = {
+            # Handle potential non-datetime last_heartbeat
+            last_hb = row.last_heartbeat
+            if not isinstance(last_hb, datetime):
+                last_hb = None # Or parse if possible, or log warning
+                
+            # Create AgentInfo object matching the schema
+            agent_info_data = {
                 "name": row.analyzer_name,
                 "model": row.model,
                 "version": row.version,
-                "class": row.class_,
-                "latest_heartbeat": row.last_heartbeat,  # Match field name in AgentInfo schema
+                "class_": row.class_, # Use field name with underscore
+                "latest_heartbeat_at": last_hb,  # Use potentially corrected value
                 "seconds_ago": row.seconds_ago,
                 "status": row.status,
             }
+            try:
+                nodes_dict[node_name]["agents"][row.analyzer_name] = AgentInfo(**agent_info_data)
+            except Exception as e:
+                # Log the error and skip this agent, or handle more gracefully
+                print(f"Error creating AgentInfo for {row.analyzer_name}: {e}") 
+                # Optionally: nodes_dict[node_name]["agents"][row.analyzer_name] = None # Or a placeholder
+                continue # Skip adding this agent if validation fails
+
             total_agents += 1
 
     # Convert to list and create tree response
     formatted_nodes = []
     for node_name, node_data in nodes_dict.items():
-        # Convert the agents dictionary to a list
-        agents_list = list(node_data["agents"].values())
+        # Filter out potential None values if validation failed
+        agents_list = [agent for agent in node_data["agents"].values() if agent is not None]
         formatted_nodes.append(HeartbeatNodeInfo(
             name=node_data["name"],
             os=node_data["os"],
@@ -104,7 +120,7 @@ async def heartbeat_status(
 async def timeline_heartbeats(
     hours: int = Query(24, ge=1, le=168, description="Hours of history to show"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=1000),
+    size: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_prelude_db),
 ):
     """
@@ -123,8 +139,8 @@ async def timeline_heartbeats(
     # Apply pagination and ordering
     results = (
         timeline_query.order_by(AnalyzerTime.time.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        .offset((page - 1) * size)
+        .limit(size)
         .all()
     )
     
@@ -133,12 +149,12 @@ async def timeline_heartbeats(
     for result in results:
         # Create item with proper field mapping
         item = {
-            "time": result.timestamp.isoformat(),
+            "timestamp": result.timestamp, # Updated field name, assuming result.timestamp is datetime
             "host_name": result.host_name or "Unknown host",
             "analyzer_name": result.analyzer_name or "Unknown analyzer",
             "model": result.model or "",
             "version": result.version or "",
-            "class_": result.class_ or "",
+            "class_": result.class_ or "", # Use alias for class_
         }
         timeline_items.append(HeartbeatTimelineItem(**item))
     
@@ -148,8 +164,8 @@ async def timeline_heartbeats(
         "pagination": {
             "total": total_count,
             "page": page,
-            "size": page_size,
-            "pages": (total_count + page_size - 1) // page_size
+            "size": size,
+            "pages": (total_count + size - 1) // size
         }
     }
 

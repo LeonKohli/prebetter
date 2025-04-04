@@ -76,6 +76,8 @@ def test_db() -> Generator[Session, None, None]:
 
     # Clean up after tests: Remove all non-admin users
     db.query(User).filter(User.username != "admin").delete(synchronize_session=False)
+    db.commit()
+    
     # Reset admin to original state
     admin = db.query(User).filter(User.username == "admin").first()
     if admin:

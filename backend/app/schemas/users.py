@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import ConfigDict
+from app.schemas.prelude import PaginatedResponse
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -63,3 +64,10 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     user_id: str
+
+
+class PaginatedUserResponse(BaseModel):
+    items: List[User]
+    pagination: PaginatedResponse
+
+    model_config = ConfigDict(from_attributes=True)

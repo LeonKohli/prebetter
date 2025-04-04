@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from .core.config import get_settings
 from .core.logging import setup_logging
 from .api.base import api_router
@@ -92,19 +92,23 @@ setup_middleware(app)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/", tags=["status"])
-async def root():
+async def root(request: Request):
     """
     Root endpoint providing API status and documentation links.
     
     Returns:
         dict: API status information and documentation URLs
     """
+    # Generate URLs dynamically
+    docs_url = request.url_for("swagger_ui_html")
+    redoc_url = request.url_for("redoc_html")
+    
     return {
         "status": "online",
         "message": f"Welcome to {settings.PROJECT_NAME}",
         "version": settings.VERSION,
-        "docs_url": f"http://localhost:8000{settings.API_V1_STR}/docs",
-        "redoc_url": f"http://localhost:8000{settings.API_V1_STR}/redoc",
+        "docs_url": str(docs_url), # Use dynamic URL
+        "redoc_url": str(redoc_url), # Use dynamic URL
     }
 
 # Health check endpoint for infrastructure monitoring
