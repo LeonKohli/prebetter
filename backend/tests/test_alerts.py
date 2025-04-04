@@ -14,33 +14,36 @@ def test_list_alerts(auth_client):
     assert response.status_code == 200
     data = response.json()
     
-    # Verify all required fields are present
-    assert "total" in data
+    # Verify all required fields are present in the pagination object
     assert "items" in data
-    assert "page" in data
-    assert "size" in data
+    assert "pagination" in data
+    pagination = data["pagination"]
+    assert "total" in pagination
+    assert "page" in pagination
+    assert "size" in pagination
+    assert "pages" in pagination
     
     # Verify data types and pagination
-    assert isinstance(data["total"], int)
+    assert isinstance(pagination["total"], int)
     assert isinstance(data["items"], list)
-    assert data["page"] == 1
-    assert data["size"] == 10
+    assert pagination["page"] == 1
+    assert pagination["size"] == 10
     assert len(data["items"]) <= 10  # Should not exceed page size
     
     # Verify alert item structure
     if data["items"]:
         alert = data["items"][0]
-        assert "alert_id" in alert
+        assert "id" in alert
         assert "message_id" in alert
-        assert "detect_time" in alert
+        assert "detected_at" in alert
         assert "severity" in alert
-        assert isinstance(alert["alert_id"], str)
+        assert isinstance(alert["id"], str)
         
         # Verify time info structure if present
-        if alert["detect_time"]:
-            assert "time" in alert["detect_time"]
-            assert "usec" in alert["detect_time"]
-            assert "gmtoff" in alert["detect_time"]
+        if alert["detected_at"]:
+            assert "timestamp" in alert["detected_at"]
+            assert "usec" in alert["detected_at"]
+            assert "gmtoff" in alert["detected_at"]
     
     # Test sorting
     sort_response = auth_client.get("/api/v1/alerts/?sort_by=severity&sort_order=desc")
@@ -78,7 +81,7 @@ def test_list_alerts(auth_client):
     assert invalid_response.status_code in [400, 422]  # FastAPI validation error
     
     # Print some debug info
-    print(f"\nTotal alerts in database: {data['total']}")
+    print(f"\nTotal alerts in database: {pagination['total']}")
     print(f"Alerts in first page: {len(data['items'])}")
     if data['items']:
         print(f"Sample alert classifications: {[item['classification_text'] for item in data['items'][:3] if item['classification_text']]}")
@@ -93,17 +96,17 @@ def test_alert_detail(auth_client):
     if not alerts["items"]:
         pytest.skip("No alerts in database to test detail view")
     
-    alert_id = alerts["items"][0]["alert_id"]
+    alert_id_value = alerts["items"][0]["id"]
     
     # Test getting alert detail
-    response = auth_client.get(f"/api/v1/alerts/{alert_id}")
+    response = auth_client.get(f"/api/v1/alerts/{alert_id_value}")
     assert response.status_code == 200
     data = response.json()
     
     # Verify all required fields are present
-    assert "alert_id" in data
+    assert "id" in data
     assert "message_id" in data
-    assert "detect_time" in data
+    assert "detected_at" in data
     
     # Verify optional fields have correct types when present
     if "create_time" in data and data["create_time"]:
@@ -132,7 +135,7 @@ def test_alert_detail(auth_client):
         assert isinstance(data["analyzer"]["name"], str)
     
     # Test with payload truncation
-    truncated_response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=true")
+    truncated_response = auth_client.get(f"/api/v1/alerts/{alert_id_value}?truncate_payload=true")
     assert truncated_response.status_code == 200
     
     # Test invalid alert ID
@@ -140,7 +143,7 @@ def test_alert_detail(auth_client):
     assert invalid_response.status_code == 404
     
     # Print some debug info
-    print(f"\nTested alert detail for ID: {alert_id}")
+    print(f"\nTested alert detail for ID: {alert_id_value}")
     if "classification_text" in data:
         print(f"Classification: {data['classification_text']}")
     if "severity" in data:
@@ -155,17 +158,20 @@ def test_grouped_alerts(auth_client):
     assert response.status_code == 200
     data = response.json()
     
-    # Verify all required fields are present
-    assert "total" in data
+    # Verify all required fields are present in the pagination object
     assert "groups" in data
-    assert "page" in data
-    assert "size" in data
+    assert "pagination" in data
+    pagination = data["pagination"]
+    assert "total" in pagination
+    assert "page" in pagination
+    assert "size" in pagination
+    assert "pages" in pagination
     
     # Verify data types and pagination
-    assert isinstance(data["total"], int)
+    assert isinstance(pagination["total"], int)
     assert isinstance(data["groups"], list)
-    assert data["page"] == 1
-    assert data["size"] == 5
+    assert pagination["page"] == 1
+    assert pagination["size"] == 5
     assert len(data["groups"]) <= 5  # Should not exceed page size
     
     # Verify group structure
@@ -184,7 +190,7 @@ def test_grouped_alerts(auth_client):
             assert "count" in alert
             assert "analyzer" in alert
             assert "analyzer_host" in alert
-            assert "time" in alert
+            assert "detected_at" in alert
     
     # We'll skip additional tests to make the test run faster
     # The basic validation above is sufficient to check if the endpoint works
@@ -220,7 +226,9 @@ def test_list_alerts_edge_cases(auth_client):
     response = auth_client.get("/api/v1/alerts/", params=future_params)
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 0  # Should return empty result for future dates
+    assert "pagination" in data
+    assert data["pagination"]["total"] == 0  # Should return empty result for future dates
+    assert len(data["items"]) == 0
 
 def test_alert_detail_edge_cases(auth_client):
     """Test edge cases for the alert detail endpoint"""
@@ -243,17 +251,16 @@ def test_alert_detail_edge_cases(auth_client):
     # Test truncate_payload parameter variations
     list_response = auth_client.get("/api/v1/alerts/?page=1&size=1")
     if list_response.json()["items"]:
-        alert_id = list_response.json()["items"][0]["alert_id"]
+        alert_id_value = list_response.json()["items"][0]["id"]
         
         # Test explicit true/false values
-        response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=true")
+        response = auth_client.get(f"/api/v1/alerts/{alert_id_value}?truncate_payload=true")
+        assert response.status_code == 200
+        response = auth_client.get(f"/api/v1/alerts/{alert_id_value}?truncate_payload=false")
         assert response.status_code == 200
         
-        response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=false")
-        assert response.status_code == 200
-        
-        # Test invalid truncate_payload value
-        response = auth_client.get(f"/api/v1/alerts/{alert_id}?truncate_payload=invalid")
+        # Test invalid boolean value
+        response = auth_client.get(f"/api/v1/alerts/{alert_id_value}?truncate_payload=maybe")
         assert response.status_code in [400, 422]
 
 def test_delete_alert(auth_client):
@@ -264,17 +271,17 @@ def test_delete_alert(auth_client):
     data = response.json()
     assert data["items"]
     
-    alert_id = data["items"][0]["alert_id"]
+    alert_id_value = data["items"][0]["id"]
     
     # Delete the alert
-    delete_response = auth_client.delete(f"/api/v1/alerts/{alert_id}")
+    delete_response = auth_client.delete(f"/api/v1/alerts/{alert_id_value}")
     assert delete_response.status_code == 200
     delete_data = delete_response.json()
     assert "message" in delete_data
-    assert delete_data["message"] == f"Alert {alert_id} and all related data successfully deleted"
+    assert delete_data["message"] == f"Alert {alert_id_value} and all related data successfully deleted"
     
     # Verify the alert is deleted by trying to fetch it
-    get_response = auth_client.get(f"/api/v1/alerts/{alert_id}")
+    get_response = auth_client.get(f"/api/v1/alerts/{alert_id_value}")
     assert get_response.status_code == 404
     assert get_response.json()["detail"] == "Alert not found"
     
@@ -282,8 +289,8 @@ def test_delete_alert(auth_client):
     list_response = auth_client.get("/api/v1/alerts/?page=1&size=10")
     assert list_response.status_code == 200
     list_data = list_response.json()
-    alert_ids = [alert["alert_id"] for alert in list_data["items"]]
-    assert alert_id not in alert_ids
+    alert_ids = [alert["id"] for alert in list_data["items"]]
+    assert alert_id_value not in alert_ids
 
 def test_delete_alert_edge_cases(auth_client):
     """Test edge cases for alert deletion"""
@@ -300,10 +307,12 @@ def test_delete_alert_edge_cases(auth_client):
     # First get and delete an alert
     list_response = auth_client.get("/api/v1/alerts/?page=1&size=1")
     if list_response.json()["items"]:
-        alert_id = list_response.json()["items"][0]["alert_id"]
-        auth_client.delete(f"/api/v1/alerts/{alert_id}")
-        
-        # Try to delete it again
-        second_delete = auth_client.delete(f"/api/v1/alerts/{alert_id}")
-        assert second_delete.status_code == 404
-        assert second_delete.json()["detail"] == "Alert not found" 
+        alert_id_value = list_response.json()["items"][0]["id"]
+        delete_response = auth_client.delete(f"/api/v1/alerts/{alert_id_value}")
+        assert delete_response.status_code == 200
+        assert "message" in delete_response.json()
+        # Try deleting again
+        second_delete_response = auth_client.delete(f"/api/v1/alerts/{alert_id_value}")
+        assert second_delete_response.status_code == 404
+    else:
+        pytest.skip("No alerts available to test deleting already deleted alert") 

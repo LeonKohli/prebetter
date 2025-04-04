@@ -194,16 +194,25 @@ def test_export_specific_alerts(auth_client):
     alerts_data = alerts_response.json()
     
     if alerts_data["items"]:
-        alert_ids = [item["alert_id"] for item in alerts_data["items"]]
-        # Test export with specific alert IDs - FastAPI may not handle list params correctly in tests
-        # Each ID is passed separately, which means they may not be correctly filtered
-        # Instead of strict count validation, just verify that the alert IDs we requested are included
-        response = auth_client.get("/api/v1/export/alerts/csv", params={"alert_ids": alert_ids})
+        alert_ids_to_export = [item["id"] for item in alerts_data["items"]]
+        # Test export with specific alert IDs
+        # FastAPI TestClient handles list query parameters correctly
+        params = [("alert_ids", alert_id) for alert_id in alert_ids_to_export]
+        response = auth_client.get("/api/v1/export/alerts/csv", params=params)
         assert response.status_code == 200
+        
         rows = get_csv_rows(response.content.decode("utf-8"))
-        # No need to validate exact rows, just check that the alert IDs are present in the result
-        if rows and len(rows) > 1:  # Make sure we have header + data
-            exported_ids = [row[0] for row in rows[1:]]
-            # Just check that at least one of our alert IDs is included in the exports
-            # Due to how FastAPI handles list parameters in test client, we might get more results than expected
-            assert any(str(aid) in exported_ids for aid in alert_ids)
+        # Check if the header exists
+        assert len(rows) > 0, "CSV should have at least a header row"
+        exported_ids = {row[0] for row in rows[1:]} # Alert ID is the first column
+        
+        # Verify that all requested alert IDs are present in the export
+        assert all(str(req_id) in exported_ids for req_id in alert_ids_to_export), (
+            f"Not all requested alert IDs ({alert_ids_to_export}) were found in the export ({exported_ids})"
+        )
+            
+        # Optionally, verify that ONLY requested alerts are present (if filters work exclusively)
+        # assert len(rows[1:]) == len(alert_ids_to_export), \
+        #     "Export should contain only the specified alert IDs"
+    else:
+        pytest.skip("No alerts found to test specific export by ID")

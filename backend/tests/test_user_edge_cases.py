@@ -58,7 +58,6 @@ def test_concurrent_user_operations(superuser_client, test_db):
     }
     response = superuser_client.post("/api/v1/users/", json=payload)
     assert response.status_code == 200
-    user_data = response.json()  # noqa
 
     # Try to create another user with same username/email while the first one exists
     concurrent_payload = {
@@ -110,42 +109,53 @@ def test_user_listing_pagination(superuser_client, test_db):
         response = superuser_client.post("/api/v1/users/", json=payload)
         assert response.status_code == 200
 
-    # Test first page
-    response = superuser_client.get("/api/v1/users/?skip=0&limit=10")
+    # Test first page using page and size
+    response = superuser_client.get("/api/v1/users/?page=1&size=10")
     assert response.status_code == 200
-    first_page = response.json()
-    assert len(first_page) <= 10, "First page should have at most 10 users"
+    first_page_data = response.json()
+    assert "items" in first_page_data
+    assert len(first_page_data["items"]) <= 10, "First page should have at most 10 users"
 
-    # Test second page
-    response = superuser_client.get("/api/v1/users/?skip=10&limit=10")
+    # Test second page using page and size
+    response = superuser_client.get("/api/v1/users/?page=2&size=10")
     assert response.status_code == 200
-    second_page = response.json()
-    assert len(second_page) > 0, "Second page should have some users"
+    second_page_data = response.json()
+    assert "items" in second_page_data
+    # Total users = 1 superuser + 15 created = 16. Page 2 size 10 should have 6 users.
+    assert len(second_page_data["items"]) > 0, "Second page should have some users"
+    assert len(second_page_data["items"]) <= 10, "Second page should have at most 10 users"
+    
+    # Verify pagination metadata
+    assert "pagination" in first_page_data
+    assert first_page_data["pagination"]["page"] == 1
+    assert first_page_data["pagination"]["size"] == 10
+    assert first_page_data["pagination"]["total"] >= 15
+    
+    assert "pagination" in second_page_data
+    assert second_page_data["pagination"]["page"] == 2
+    assert second_page_data["pagination"]["size"] == 10
+    assert second_page_data["pagination"]["total"] == first_page_data["pagination"]["total"]
 
     # Verify no duplicate users between pages
-    first_page_ids = {user["id"] for user in first_page}
-    second_page_ids = {user["id"] for user in second_page}
+    first_page_ids = {user["id"] for user in first_page_data["items"]}
+    second_page_ids = {user["id"] for user in second_page_data["items"]}
     assert not first_page_ids.intersection(second_page_ids), "Pages should not have duplicate users"
 
 def test_invalid_pagination_parameters(superuser_client):
     """
     Test user listing with invalid pagination parameters.
     """
-    # Test negative skip
-    response = superuser_client.get("/api/v1/users/?skip=-1&limit=10")
-    assert response.status_code == 422, "Negative skip value should be rejected"
+    # Test invalid page (must be >= 1)
+    response = superuser_client.get("/api/v1/users/?page=0&size=10")
+    assert response.status_code == 422, "Page < 1 should be rejected"
 
-    # Test negative limit
-    response = superuser_client.get("/api/v1/users/?skip=0&limit=-1")
-    assert response.status_code == 422, "Negative limit value should be rejected"
+    # Test invalid size (must be >= 1)
+    response = superuser_client.get("/api/v1/users/?page=1&size=0")
+    assert response.status_code == 422, "Size < 1 should be rejected"
 
-    # Test zero limit
-    response = superuser_client.get("/api/v1/users/?skip=0&limit=0")
-    assert response.status_code == 422, "Zero limit value should be rejected"
-
-    # Test excessively large limit
-    response = superuser_client.get("/api/v1/users/?skip=0&limit=1001")
-    assert response.status_code == 422, "Excessive limit value should be rejected"
+    # Test excessively large size (assuming max is 100 based on endpoint definition)
+    response = superuser_client.get("/api/v1/users/?page=1&size=101") 
+    assert response.status_code == 422, "Excessive size value should be rejected"
 
 def test_user_update_validation(superuser_client, test_db):
     """
