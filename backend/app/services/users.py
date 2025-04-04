@@ -34,6 +34,12 @@ class UserService:
         """
         return self.db.query(User).offset(skip).limit(limit).all()
 
+    def count_users(self) -> int:
+        """
+        Count the total number of users.
+        """
+        return self.db.query(User).count()
+
     def create_user(self, user_data: UserCreate) -> User:
         """
         Create a new user.
