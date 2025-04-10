@@ -335,8 +335,7 @@ The API implements a structured lifecycle management approach:
 
 ## Documentation
 
-- **Interactive API Documentation:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Alternative API Documentation (ReDoc):** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- **Interactive API Documentation:** [http://localhost:8000](http://localhost:8000)
 
 ## Environment Variables
 
