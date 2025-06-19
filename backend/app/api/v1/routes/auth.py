@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Annotated, Union
+from typing import Annotated, Union, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -28,22 +28,24 @@ def get_user_service(db: Session = Depends(get_prebetter_db)) -> UserService:
     return UserService(db)
 
 
-def authenticate_user(user_service: UserService, username: str, password: str) -> Union[User, bool]:
+def authenticate_user(
+    user_service: UserService, username: str, password: str
+) -> Optional[User]:
     """
     Authenticate a user given a username and password.
-    Returns the user if authentication is successful; otherwise, returns False.
+    Returns the user if authentication is successful; otherwise, returns None.
     """
     user = user_service.get_by_username(username)
     if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
+        return None
+    if not verify_password(password, str(user.hashed_password)):
+        return None
     return user
 
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> User:
     """
     Retrieve the current user based on the provided JWT token.
@@ -71,7 +73,7 @@ async def get_current_user(
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> Token:
     """
     Authenticate the user and return an access token.
@@ -85,14 +87,14 @@ async def login_for_access_token(
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id}, expires_delta=access_token_expires
+        data={"sub": str(user.id)}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return Token(access_token=access_token, token_type="bearer")
 
 
 @router.get("/users/me", response_model=UserSchema)
 async def read_users_me(
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
     """
     Retrieve the profile of the authenticated user.
