@@ -8,19 +8,20 @@ import sqlalchemy.exc
 
 logger = logging.getLogger(__name__)
 
+
 async def check_database_connections(check_prelude=True, check_prebetter=True) -> bool:
     """
     Check database connections.
-    
+
     Args:
         check_prelude: Whether to check the Prelude database connection
         check_prebetter: Whether to check the Prebetter database connection
-        
+
     Returns:
         bool: True if all requested connections are successful, False otherwise
     """
     all_successful = True
-    
+
     if check_prelude:
         try:
             with prelude_engine.connect() as conn:
@@ -33,7 +34,7 @@ async def check_database_connections(check_prelude=True, check_prebetter=True) -
         except Exception as e:
             logger.error(f"Unexpected error connecting to Prelude database: {str(e)}")
             all_successful = False
-    
+
     if check_prebetter:
         try:
             with prebetter_engine.connect() as conn:
@@ -46,8 +47,9 @@ async def check_database_connections(check_prelude=True, check_prebetter=True) -
         except Exception as e:
             logger.error(f"Unexpected error connecting to Prebetter database: {str(e)}")
             all_successful = False
-    
+
     return all_successful
+
 
 async def ensure_database() -> None:
     """Ensure prebetter database and tables exist, create superuser if needed."""
@@ -73,7 +75,7 @@ async def ensure_database() -> None:
 
         # Create superuser if it doesn't exist
         from sqlalchemy.orm import Session
-        
+
         db = Session(prebetter_engine)
         try:
             # Check if superuser exists
@@ -85,7 +87,7 @@ async def ensure_database() -> None:
                     email="admin@example.com",
                     username="admin",
                     hashed_password=get_password_hash("admin"),
-                    is_superuser=True
+                    is_superuser=True,
                 )
                 db.add(superuser)
                 db.commit()
@@ -98,14 +100,14 @@ async def ensure_database() -> None:
             raise
         finally:
             db.close()
-            
+
         logger.info("Database initialization completed successfully!")
-        return True
     except Exception as e:
         logger.error(f"Error during database initialization: {str(e)}")
         raise
 
+
 if __name__ == "__main__":
     print("Initializing prebetter database...")
     asyncio.run(ensure_database())
-    print("Database initialization completed!") 
+    print("Database initialization completed!")
