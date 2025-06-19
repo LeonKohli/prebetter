@@ -5,13 +5,17 @@ from sqlalchemy.sql import distinct
 from typing import Optional
 from datetime import datetime
 from enum import Enum
-from app.database.config import get_prelude_db, apply_standard_alert_filters, apply_sorting
+from app.database.config import (
+    get_prelude_db,
+    apply_standard_alert_filters,
+    apply_sorting,
+)
 from app.database.query_builders import (
     build_alert_base_query,
     build_alert_count_query,
     build_grouped_alerts_query,
     build_grouped_alerts_detail_query,
-    build_alert_detail_query
+    build_alert_detail_query,
 )
 from app.database.models import (
     alert_result_to_list_item,
@@ -20,7 +24,7 @@ from app.database.models import (
     build_analyzer_info,
     build_node_info,
     build_process_info,
-    process_additional_data
+    process_additional_data,
 )
 from app.models.prelude import (
     Alert,
@@ -56,12 +60,13 @@ from app.schemas.prelude import (
     AlertIdentInfo,
     AnalyzerTimeInfo,
     GroupedAlertResponse,
-    PaginatedResponse
+    PaginatedResponse,
 )
 from app.core.datetime_utils import get_current_time, ensure_timezone
 from app.api.v1.routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
 
 class SortField(str, Enum):
     DETECT_TIME = "detect_time"
@@ -73,9 +78,11 @@ class SortField(str, Enum):
     ANALYZER = "analyzer"
     ALERT_ID = "alert_id"
 
+
 class SortOrder(str, Enum):
     ASC = "asc"
     DESC = "desc"
+
 
 @router.get("/", response_model=AlertListResponse)
 async def list_alerts(
@@ -98,22 +105,19 @@ async def list_alerts(
     """
     # Validate date ranges and handle future dates
     # Required for tests: return empty result for future dates
-    
+
     # Check for future date - if start_date is in the future, return empty result immediately
-    if start_date and ensure_timezone(start_date) > get_current_time():
-        return AlertListResponse(
-            items=[],
-            pagination=PaginatedResponse(
-                total=0,
-                page=page,
-                size=size,
-                pages=0
+    if start_date:
+        start_date_tz = ensure_timezone(start_date)
+        if start_date_tz is not None and start_date_tz > get_current_time():
+            return AlertListResponse(
+                items=[],
+                pagination=PaginatedResponse(total=0, page=page, size=size, pages=0),
             )
-        )
-    
+
     # Get base query and model aliases
     query, models = build_alert_base_query(db)
-    
+
     # Apply filters
     query = apply_standard_alert_filters(
         query=query,
@@ -128,9 +132,9 @@ async def list_alerts(
         Impact=Impact,
         Classification=Classification,
         DetectTime=DetectTime,
-        Analyzer=Analyzer
+        Analyzer=Analyzer,
     )
-    
+
     # Get count query and apply the same filters
     count_query, count_models = build_alert_count_query(db)
     count_query = apply_standard_alert_filters(
@@ -146,9 +150,9 @@ async def list_alerts(
         Impact=Impact,
         Classification=Classification,
         DetectTime=DetectTime,
-        Analyzer=Analyzer
+        Analyzer=Analyzer,
     )
-    
+
     # Apply sorting with support for multiple fields
     sort_options = {
         SortField.DETECT_TIME: DetectTime.time,
@@ -160,39 +164,45 @@ async def list_alerts(
         SortField.ANALYZER: Analyzer.name,
         SortField.ALERT_ID: Alert._ident,
     }
-    
+
     # Apply sorting to the main query
     query = apply_sorting(query, sort_by, sort_order, sort_options, DetectTime.time)
-    
+
     # Calculate total distinct records with optimized query
     # Use a more optimized approach to avoid cartesian product warning
-    
+
     # Create a new query just for counting alert IDs
-    
+
     # We need to handle the count in a way that avoids cartesian products
     # Use a direct count of distinct Alert._ident that doesn't rely on joined tables
     alert_ids_query = db.query(distinct(Alert._ident))
-    
+
     # Only add the joins that are needed for filtering
     if start_date or end_date:
-        alert_ids_query = alert_ids_query.join(DetectTime, Alert._ident == DetectTime._message_ident)
-    
+        alert_ids_query = alert_ids_query.join(
+            DetectTime, Alert._ident == DetectTime._message_ident
+        )
+
     if severity:
-        alert_ids_query = alert_ids_query.join(Impact, Impact._message_ident == Alert._ident)
-    
+        alert_ids_query = alert_ids_query.join(
+            Impact, Impact._message_ident == Alert._ident
+        )
+
     if classification:
-        alert_ids_query = alert_ids_query.join(Classification, Classification._message_ident == Alert._ident)
-    
+        alert_ids_query = alert_ids_query.join(
+            Classification, Classification._message_ident == Alert._ident
+        )
+
     if analyzer_model:
         alert_ids_query = alert_ids_query.join(
-            Analyzer, 
+            Analyzer,
             and_(
                 Analyzer._message_ident == Alert._ident,
                 Analyzer._parent_type == "A",
-                Analyzer._index == -1
-            )
+                Analyzer._index == -1,
+            ),
         )
-    
+
     # Apply the same filters to this query
     alert_ids_query = apply_standard_alert_filters(
         query=alert_ids_query,
@@ -206,32 +216,29 @@ async def list_alerts(
         Impact=Impact,
         Classification=Classification,
         DetectTime=DetectTime,
-        Analyzer=Analyzer
+        Analyzer=Analyzer,
     )
-    
+
     # Count the distinct alert IDs
     total = alert_ids_query.count()
-    
+
     # Calculate total pages
     total_pages = (total + size - 1) // size
-    
+
     # Apply pagination
     offset = (page - 1) * size
-    
+
     # Get paginated alerts with all necessary information
     alerts = query.distinct().order_by(Alert._ident).offset(offset).limit(size).all()
-    
+
     # Convert to response schema
     alert_items = [alert_result_to_list_item(alert) for alert in alerts]
 
     return AlertListResponse(
         items=alert_items,
         pagination=PaginatedResponse(
-            total=total,
-            page=page,
-            size=size,
-            pages=total_pages
-        )
+            total=total, page=page, size=size, pages=total_pages
+        ),
     )
 
 
@@ -258,7 +265,7 @@ async def get_grouped_alerts(
     try:
         # Get query for grouped alerts pairs
         pairs_query, models = build_grouped_alerts_query(db)
-        
+
         # Apply filters
         pairs_query = apply_standard_alert_filters(
             query=pairs_query,
@@ -273,13 +280,13 @@ async def get_grouped_alerts(
             Impact=Impact,
             Classification=Classification,
             DetectTime=DetectTime,
-            Analyzer=Analyzer
+            Analyzer=Analyzer,
         )
 
         # Prepare sort options for grouped alerts
         source_addr = models["source_addr"]
         target_addr = models["target_addr"]
-        
+
         # Define sort options for grouped alerts
         sort_option = {
             "detect_time": func.max(DetectTime.time),
@@ -288,9 +295,9 @@ async def get_grouped_alerts(
             "source_ip": source_addr.address,
             "target_ip": target_addr.address,
             "analyzer": func.max(Analyzer.name),
-            "alert_id": func.count(Alert._ident)  # Actually count in this context
+            "alert_id": func.count(Alert._ident),  # Actually count in this context
         }
-        
+
         # Apply the selected sort option
         order_by_clause = sort_option.get(sort_by.value)
         if order_by_clause is not None:
@@ -307,7 +314,7 @@ async def get_grouped_alerts(
 
         # Get detailed alert information for the paginated pairs
         alerts_query, alert_models = build_grouped_alerts_detail_query(db, pairs)
-        
+
         # Apply the same filters
         alerts_query = apply_standard_alert_filters(
             query=alerts_query,
@@ -322,43 +329,40 @@ async def get_grouped_alerts(
             Impact=Impact,
             Classification=Classification,
             DetectTime=DetectTime,
-            Analyzer=Analyzer
+            Analyzer=Analyzer,
         )
 
         # Group by source, target, and classification
         source_addr = alert_models["source_addr"]
         target_addr = alert_models["target_addr"]
-        
+
         # Group by first, then apply limit
         alerts_query = alerts_query.group_by(
             source_addr.address,
             target_addr.address,
             Classification.text,
         )
-        
+
         # Add a limit after group_by
         alerts_query = alerts_query.limit(1000)
-        
+
         # Execute query
         alerts = alerts_query.all()
 
         # Process the alerts using the utility function
         alerts_map = process_grouped_alerts_details(alerts)
-        
+
         # Build the final groups list using the utility function
         groups = [grouped_alert_to_response(pair, alerts_map) for pair in pairs]
-        
+
         # Calculate total pages
         total_pages = (total_pairs + size - 1) // size
 
         return GroupedAlertResponse(
             groups=groups,
             pagination=PaginatedResponse(
-                total=total_pairs,
-                page=page,
-                size=size,
-                pages=total_pages
-            )
+                total=total_pairs, page=page, size=size, pages=total_pages
+            ),
         )
 
     except Exception as e:
@@ -371,7 +375,9 @@ async def get_grouped_alerts(
 @router.get("/{alert_id}", response_model=AlertDetail)
 async def get_alert_detail(
     alert_id: int,
-    truncate_payload: bool = Query(False, description="Whether to truncate the payload data"),
+    truncate_payload: bool = Query(
+        False, description="Whether to truncate the payload data"
+    ),
     db: Session = Depends(get_prelude_db),
 ) -> AlertDetail:
     """
@@ -385,7 +391,7 @@ async def get_alert_detail(
 
         # Use the query builder to get all the queries we need
         queries = build_alert_detail_query(db, alert_id)
-        
+
         # Execute the queries
         alert = queries["base"].first()
         source_info = queries["source_info"].first()
@@ -433,7 +439,11 @@ async def get_alert_detail(
             node_info = build_node_info(analyzer[1]) if analyzer[1] else None
 
             # Build process info using the utility function
-            process_info = build_process_info(analyzer[2], process_args, process_env) if analyzer[2] else None
+            process_info = (
+                build_process_info(analyzer[2], process_args, process_env)
+                if analyzer[2]
+                else None
+            )
 
             # Build analyzer time info
             analyzer_time_info = None
@@ -449,7 +459,7 @@ async def get_alert_detail(
                 analyzer_data=analyzer[0],
                 node_info=node_info,
                 process_info=process_info,
-                analyzer_time_info=analyzer_time_info
+                analyzer_time_info=analyzer_time_info,
             )
             analyzers_info.append(analyzer_info)
 
@@ -467,7 +477,7 @@ async def get_alert_detail(
                     pid=source_info[4].pid,
                     path=source_info[4].path,
                     args=[],  # Process args not relevant for heartbeat
-                    env=[],   # Process env not relevant for heartbeat
+                    env=[],  # Process env not relevant for heartbeat
                 )
 
             source = NetworkInfo(
@@ -485,7 +495,9 @@ async def get_alert_detail(
                     (int(d.data) for d in add_data_rows if d.meaning == "ip_hlen"), None
                 ),
                 protocol=source_info[2].iana_protocol_name if source_info[2] else None,
-                protocol_number=source_info[2].iana_protocol_number if source_info[2] else None,
+                protocol_number=source_info[2].iana_protocol_number
+                if source_info[2]
+                else None,
                 node=source_node,
                 heartbeat_process=source_process,
                 addresses=[addr[0] for addr in source_addresses],
@@ -498,11 +510,15 @@ async def get_alert_detail(
             target_node = build_node_info(target_info[3]) if target_info[3] else None
 
             # Build heartbeat process info using the utility function
-            target_process = build_process_info(
-                target_info[4], 
-                [], # No args for heartbeat
-                []  # No env for heartbeat
-            ) if target_info[4] else None
+            target_process = (
+                build_process_info(
+                    target_info[4],
+                    [],  # No args for heartbeat
+                    [],  # No env for heartbeat
+                )
+                if target_info[4]
+                else None
+            )
 
             target = NetworkInfo(
                 interface=target_info[0].interface,
@@ -519,7 +535,9 @@ async def get_alert_detail(
                     (int(d.data) for d in add_data_rows if d.meaning == "ip_hlen"), None
                 ),
                 protocol=target_info[2].iana_protocol_name if target_info[2] else None,
-                protocol_number=target_info[2].iana_protocol_number if target_info[2] else None,
+                protocol_number=target_info[2].iana_protocol_number
+                if target_info[2]
+                else None,
                 node=target_node,
                 heartbeat_process=target_process,
                 addresses=[addr[0] for addr in target_addresses],
@@ -544,22 +562,24 @@ async def get_alert_detail(
                 unique_refs.append(ref)
 
         return AlertDetail(
-            id=str(alert[0]._ident),
-            message_id=alert[0].messageid,
+            id=str(alert[0]._ident) if alert and alert[0] else "",
+            message_id=alert[0].messageid if alert and alert[0] else "",
             created_at=TimeInfo(
                 timestamp=alert[1].time, usec=alert[1].usec, gmtoff=alert[1].gmtoff
             )
-            if alert[1]
+            if alert and alert[1]
             else None,
             detected_at=TimeInfo(
-                timestamp=alert[2].time, usec=alert[2].usec, gmtoff=alert[2].gmtoff
+                timestamp=alert[2].time if alert and alert[2] else get_current_time(),
+                usec=alert[2].usec if alert and alert[2] else 0,
+                gmtoff=alert[2].gmtoff if alert and alert[2] else 0,
             ),
-            classification_text=alert[3].text if alert[3] else None,
-            classification_ident=alert[3].ident if alert[3] else None,
-            severity=alert[4].severity if alert[4] else None,
-            description=alert[4].description if alert[4] else None,
-            completion=alert[4].completion if alert[4] else None,
-            impact_type=alert[4].type if alert[4] else None,
+            classification_text=alert[3].text if alert and alert[3] else None,
+            classification_ident=alert[3].ident if alert and alert[3] else None,
+            severity=alert[4].severity if alert and alert[4] else None,
+            description=alert[4].description if alert and alert[4] else None,
+            completion=alert[4].completion if alert and alert[4] else None,
+            impact_type=alert[4].type if alert and alert[4] else None,
             source=source,
             target=target,
             analyzers=analyzers_info,
@@ -605,6 +625,7 @@ async def get_alert_detail(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}")
 
+
 @router.delete("/{alert_id}")
 async def delete_alert(
     alert_id: int,
@@ -622,38 +643,44 @@ async def delete_alert(
         # Delete related data in the correct order to maintain referential integrity
         # The order matters due to foreign key constraints
         related_tables = [
-            ProcessArg,      # Process arguments
-            ProcessEnv,      # Process environment variables
-            Process,         # Process information
-            Service,         # Service information
-            WebService,      # Web service information
-            Address,         # IP addresses
-            Reference,       # References
+            ProcessArg,  # Process arguments
+            ProcessEnv,  # Process environment variables
+            Process,  # Process information
+            Service,  # Service information
+            WebService,  # Web service information
+            Address,  # IP addresses
+            Reference,  # References
             AdditionalData,  # Additional data
-            Alertident,      # Alert identifiers
-            AnalyzerTime,    # Analyzer timestamps
-            Node,           # Node information
-            Analyzer,        # Analyzer information
-            Source,         # Source information
-            Target,         # Target information
-            Impact,         # Impact information
-            Classification, # Classification information
-            DetectTime,     # Detection time
-            CreateTime,     # Creation time
-            Assessment,     # Alert assessment
+            Alertident,  # Alert identifiers
+            AnalyzerTime,  # Analyzer timestamps
+            Node,  # Node information
+            Analyzer,  # Analyzer information
+            Source,  # Source information
+            Target,  # Target information
+            Impact,  # Impact information
+            Classification,  # Classification information
+            DetectTime,  # Detection time
+            CreateTime,  # Creation time
+            Assessment,  # Alert assessment
         ]
 
         # Delete all related records (these use _message_ident)
         for table in related_tables:
-            db.query(table).filter(table._message_ident == alert_id).delete(synchronize_session=False)
+            db.query(table).filter(table._message_ident == alert_id).delete(
+                synchronize_session=False
+            )
 
         # Delete the alert itself (uses _ident)
-        db.query(Alert).filter(Alert._ident == alert_id).delete(synchronize_session=False)
+        db.query(Alert).filter(Alert._ident == alert_id).delete(
+            synchronize_session=False
+        )
 
         # Commit the transaction
         db.commit()
 
-        return {"message": f"Alert {alert_id} and all related data successfully deleted"}
+        return {
+            "message": f"Alert {alert_id} and all related data successfully deleted"
+        }
 
     except HTTPException:
         db.rollback()
