@@ -42,11 +42,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = now + expires_delta
     else:
         expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({
-        "exp": expire,
-        "iat": now,
-        "jti": f"{now.timestamp()}-{uuid.uuid4()}"  # Token ID with timestamp and UUID
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "iat": now,
+            "jti": f"{now.timestamp()}-{uuid.uuid4()}",  # Token ID with timestamp and UUID
+        }
+    )
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
