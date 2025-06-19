@@ -7,7 +7,7 @@ from sqlalchemy import text
 from app.database.config import get_prelude_db, apply_standard_alert_filters
 from app.database.query_builders import (
     build_alerts_timeline_query,
-    build_alerts_statistics_query
+    build_alerts_statistics_query,
 )
 from app.models.prelude import DetectTime, Impact, Classification, Analyzer
 from app.schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
@@ -17,6 +17,7 @@ from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+
 class GroupBy(str, Enum):
     SEVERITY = "severity"
     CLASSIFICATION = "classification"
@@ -24,11 +25,13 @@ class GroupBy(str, Enum):
     SOURCE = "source"
     TARGET = "target"
 
+
 class TimeFrame(str, Enum):
     HOUR = "hour"
     DAY = "day"
     WEEK = "week"
     MONTH = "month"
+
 
 @router.get("/timeline", response_model=TimelineResponse)
 async def get_timeline(
@@ -58,7 +61,7 @@ async def get_timeline(
                 start_date = end_date - timedelta(days=90)  # Last ~3 months
             else:  # TimeFrame.MONTH
                 start_date = end_date - timedelta(days=365)  # Last year
-        
+
         # Ensure dates have timezone info
         start_date = ensure_timezone(start_date)
         end_date = ensure_timezone(end_date)
@@ -75,11 +78,11 @@ async def get_timeline(
 
         # Use query builder to get the timeline query
         timeline_query = build_alerts_timeline_query(db, date_format)
-        
+
         # Apply filters and date range
         timeline_query = timeline_query.filter(DetectTime.time >= start_date)
         timeline_query = timeline_query.filter(DetectTime.time <= end_date)
-        
+
         # Apply standard filters
         timeline_query = apply_standard_alert_filters(
             query=timeline_query,
@@ -90,15 +93,16 @@ async def get_timeline(
             Classification=Classification,
             DetectTime=DetectTime,
         )
-        
+
         # Apply analyzer name filter if provided (not part of standard filters)
         if analyzer_name:
             timeline_query = timeline_query.filter(Analyzer.name == analyzer_name)
 
         # Group by time bucket and get counts
         results = (
-            timeline_query
-            .group_by(text("time_bucket"), Impact.severity, Classification.text, Analyzer.name)
+            timeline_query.group_by(
+                text("time_bucket"), Impact.severity, Classification.text, Analyzer.name
+            )
             .order_by(text("time_bucket"))
             .all()
         )
@@ -112,7 +116,7 @@ async def get_timeline(
 
             # Parse the timestamp
             timestamp = datetime.strptime(time_str, date_format).replace(tzinfo=UTC)
-            
+
             # For weekly grouping, adjust timestamp to start of week
             if time_frame == TimeFrame.WEEK:
                 # Adjust to Monday of the week
@@ -133,36 +137,42 @@ async def get_timeline(
             data_point["total"] += result.total
 
             if result.severity:
-                data_point["by_severity"][result.severity] = data_point["by_severity"].get(result.severity, 0) + result.total
-            
+                data_point["by_severity"][result.severity] = (
+                    data_point["by_severity"].get(result.severity, 0) + result.total
+                )
+
             if result.classification:
-                data_point["by_classification"][result.classification] = data_point["by_classification"].get(result.classification, 0) + result.total
-            
+                data_point["by_classification"][result.classification] = (
+                    data_point["by_classification"].get(result.classification, 0)
+                    + result.total
+                )
+
             if result.analyzer:
-                data_point["by_analyzer"][result.analyzer] = data_point["by_analyzer"].get(result.analyzer, 0) + result.total
+                data_point["by_analyzer"][result.analyzer] = (
+                    data_point["by_analyzer"].get(result.analyzer, 0) + result.total
+                )
 
         # Convert to list and sort by timestamp
-        timeline_points = [
-            TimelineDataPoint(**data)
-            for data in timeline_data.values()
-        ]
+        timeline_points = [TimelineDataPoint(**data) for data in timeline_data.values()]
         timeline_points.sort(key=lambda x: x.timestamp)
 
         return TimelineResponse(
             time_frame=time_frame,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_date or get_current_time(),
+            end_date=end_date or get_current_time(),
             data=timeline_points,
         )
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error generating timeline data: {str(e)}"
+            status_code=500, detail=f"Error generating timeline data: {str(e)}"
         )
+
 
 @router.get("/summary", response_model=StatisticsSummary)
 async def get_statistics_summary(
-    time_range: int = Query(24, ge=1, le=720, description="Time range in hours to analyze"),
+    time_range: int = Query(
+        24, ge=1, le=720, description="Time range in hours to analyze"
+    ),
     db: Session = Depends(get_prelude_db),
 ) -> StatisticsSummary:
     """
@@ -171,7 +181,7 @@ async def get_statistics_summary(
     """
     # Get time range using utility function
     start_date, end_date = get_time_range(time_range)
-    
+
     # Build the query with the time range
     query = build_alerts_statistics_query(db, start_date, end_date)
 
@@ -188,8 +198,8 @@ async def get_statistics_summary(
         # Get alerts by classification
         alerts_by_classification = query["classification"].all()
         classification_distribution = {
-            classification: count 
-            for classification, count in alerts_by_classification 
+            classification: count
+            for classification, count in alerts_by_classification
             if classification
         }
 
@@ -201,15 +211,11 @@ async def get_statistics_summary(
 
         # Get top source IPs
         alerts_by_source_ip = query["source_ip"].all()
-        source_ip_distribution = {
-            ip: count for ip, count in alerts_by_source_ip if ip
-        }
+        source_ip_distribution = {ip: count for ip, count in alerts_by_source_ip if ip}
 
         # Get top target IPs
         alerts_by_target_ip = query["target_ip"].all()
-        target_ip_distribution = {
-            ip: count for ip, count in alerts_by_target_ip if ip
-        }
+        target_ip_distribution = {ip: count for ip, count in alerts_by_target_ip if ip}
 
         return StatisticsSummary(
             total_alerts=total_alerts,
@@ -224,6 +230,5 @@ async def get_statistics_summary(
         )
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error generating statistics summary: {str(e)}"
+            status_code=500, detail=f"Error generating statistics summary: {str(e)}"
         )
