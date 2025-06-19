@@ -1,31 +1,52 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Prebetter Backend Development Guide
 
-This document contains important information about the codebase structure, coding patterns, and useful commands.
+This is a FastAPI-based REST API for accessing Prelude IDS/SIEM data with user management and authentication. The API provides comprehensive access to security alerts and related information from your Prelude SIEM system.
 
-## Project Structure
+## Architecture Overview
 
-The backend is organized into the following components:
+### Dual Database System
+- **Prelude DB**: Read-only SIEM/IDS data (alerts, analyzers, heartbeats) - contains the security event data
+- **Prebetter DB**: User management and authentication data - managed by the API
+- Both use MySQL with SQLAlchemy ORM and connection pooling (pool_size=5, max_overflow=10)
 
-- **app/api/**: Contains all API route definitions
-  - **api/v1/routes/**: Individual route files for different domain areas
-- **app/core/**: Core configuration and utilities
-- **app/database/**: Database configuration and query utilities
-  - **database/config.py**: DB connection, common query patterns
-  - **database/query_builders.py**: Reusable query construction functions
-  - **database/models.py**: Utility functions for model transformations
-- **app/models/**: SQLAlchemy database models
-- **app/schemas/**: Pydantic schemas for API input/output
-- **app/services/**: Business logic layer
+### Layered Architecture
+```
+app/
+├── api/          # Route definitions and request handling
+├── core/         # Core utilities, config, security, logging
+├── database/     # Database utilities, query builders, model converters
+├── middleware/   # CORS, exception handling, request tracking
+├── models/       # SQLAlchemy ORM models
+├── schemas/      # Pydantic schemas for API validation
+└── services/     # Business logic layer
+```
+
+### Security & Authentication
+- JWT-based authentication with role-based access control (superuser/regular user)
+- Password hashing using bcrypt
+- Request tracking with unique IDs for audit trails
 
 ## Common Commands
 
 ### Development
-
 ```bash
 # Start dev server
 uvicorn app.main:app --reload
 
-# Run tests
+# Or using FastAPI CLI
+fastapi dev
+
+# Run with specific host/port
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Testing
+```bash
+# Run all tests
 pytest -v
 
 # Run specific test file
@@ -33,16 +54,75 @@ pytest tests/test_alerts.py -v
 
 # Run with coverage
 pytest --cov=app
+
+# Run with coverage report
+uv run pytest --cov
+
+# Run tests with maximum 1 failure
+pytest --maxfail=1
+```
+
+### Linting & Formatting
+```bash
+# Check code with ruff
+ruff check .
+
+# Fix auto-fixable issues
+ruff check . --fix
+
+# Format code with ruff
+ruff format .
 ```
 
 ### Database
-
 ```bash
-# Load database
+# Load Prelude database dump
 gunzip < prelude.sql.gz | mysql -u root -p prelude
 
-# Connect to DB
+# Connect to databases
 mysql -u <username> -p prelude
+mysql -u <username> -p prebetter
+```
+
+### Package Management (using uv)
+```bash
+# Create virtual environment
+uv venv
+
+# Activate virtual environment
+source .venv/bin/activate  # Linux/Mac
+
+# Install dependencies
+uv sync
+
+# Add new dependency
+uv add <package-name>
+```
+
+## Environment Configuration
+
+Required in `.env` file:
+```env
+# MySQL Connection
+MYSQL_USER=your_user
+MYSQL_PASSWORD=your_password
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_PRELUDE_DB=prelude
+MYSQL_PREBETTER_DB=prebetter
+
+# Security
+JWT_SECRET_KEY=your-secret-key
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+SECRET_KEY=your-secret-key
+
+# Environment & Logging
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+
+# CORS
+BACKEND_CORS_ORIGINS=["*"]
 ```
 
 ## Code Patterns
@@ -247,3 +327,30 @@ sort_key = sort_by
 if hasattr(sort_by, "value"):
     sort_key = sort_by.value
 ```
+
+## API Documentation
+
+- Interactive Swagger UI: `http://localhost:8000/api/v1/docs`
+- ReDoc: `http://localhost:8000/api/v1/redoc`
+- OpenAPI JSON: `http://localhost:8000/api/v1/openapi.json`
+
+## Key Dependencies
+
+- **FastAPI**: Web framework with automatic OpenAPI docs
+- **SQLAlchemy 2.0**: ORM for database operations
+- **Pydantic 2.0**: Data validation and serialization
+- **PyJWT**: JWT token handling
+- **Passlib[bcrypt]**: Password hashing
+- **pytest**: Testing framework
+- **pytest-asyncio**: Async test support
+- **pytest-cov**: Coverage reporting
+- **ruff**: Linting and formatting
+
+## Project Specifics
+
+- **Python Version**: 3.13+ (specified in pyproject.toml)
+- **Package Manager**: uv (NOT pip or poetry)
+- **Timezone Handling**: All datetime operations are timezone-aware using `datetime_utils.ensure_timezone()`
+- **Request Tracking**: Every request gets a unique ID via middleware, returned in `X-Request-ID` header
+- **Health Monitoring**: Comprehensive health endpoint at `/health` for infrastructure monitoring
+- **Logging**: Environment-based formatting (human-readable for dev, JSON for production)
