@@ -4,14 +4,12 @@ Tests for authentication endpoints.
 
 from .conftest import TEST_USER
 
+
 def test_login_success(client, test_db):
     """Test successful login flow."""
     response = client.post(
         "/api/v1/auth/token",
-        data={
-            "username": TEST_USER["username"],
-            "password": TEST_USER["password"]
-        }
+        data={"username": TEST_USER["username"], "password": TEST_USER["password"]},
     )
     assert response.status_code == 200
     data = response.json()
@@ -27,24 +25,19 @@ def test_login_success(client, test_db):
     assert user_data["username"] == TEST_USER["username"]
     assert user_data["email"] == TEST_USER["email"]
 
+
 def test_login_failures(client, test_db):
     """Test various login failure scenarios."""
     # Wrong password
     response = client.post(
         "/api/v1/auth/token",
-        data={
-            "username": TEST_USER["username"],
-            "password": "wrongpassword"
-        }
+        data={"username": TEST_USER["username"], "password": "wrongpassword"},
     )
     assert response.status_code == 401
     # Non-existent user
     response = client.post(
         "/api/v1/auth/token",
-        data={
-            "username": "nonexistentuser",
-            "password": TEST_USER["password"]
-        }
+        data={"username": "nonexistentuser", "password": TEST_USER["password"]},
     )
     assert response.status_code == 401
     # Missing credentials
@@ -53,9 +46,10 @@ def test_login_failures(client, test_db):
     # Malformed request (JSON instead of form data)
     response = client.post(
         "/api/v1/auth/token",
-        json={"username": TEST_USER["username"], "password": TEST_USER["password"]}
+        json={"username": TEST_USER["username"], "password": TEST_USER["password"]},
     )
     assert response.status_code == 422
+
 
 def test_protected_endpoints_without_auth(client, test_db):
     """Test accessing protected endpoints without authentication"""
@@ -63,18 +57,19 @@ def test_protected_endpoints_without_auth(client, test_db):
     response = client.get("/api/v1/auth/users/me")
     assert response.status_code == 401
     assert "Not authenticated" in response.json()["detail"]
-    
+
     # Test other protected endpoints
     endpoints = [
         "/api/v1/alerts/",
         "/api/v1/statistics/summary",
-        "/api/v1/reference/classifications"
+        "/api/v1/reference/classifications",
     ]
-    
+
     for endpoint in endpoints:
         response = client.get(endpoint)
         assert response.status_code == 401
         assert "Not authenticated" in response.json()["detail"]
+
 
 def test_invalid_tokens(client, test_db):
     """Test various invalid token scenarios"""
@@ -82,18 +77,18 @@ def test_invalid_tokens(client, test_db):
     headers = {"Authorization": "Bearer malformedtoken"}
     response = client.get("/api/v1/auth/users/me", headers=headers)
     assert response.status_code == 401
-    
+
     # Test with wrong token format
     headers = {"Authorization": "malformedtoken"}
     response = client.get("/api/v1/auth/users/me", headers=headers)
     assert response.status_code == 401
-    
+
     # Test with empty token
     headers = {"Authorization": "Bearer "}
     response = client.get("/api/v1/auth/users/me", headers=headers)
     assert response.status_code == 401
-    
+
     # Test with invalid bearer prefix
     headers = {"Authorization": "Basic sometoken"}
     response = client.get("/api/v1/auth/users/me", headers=headers)
-    assert response.status_code == 401 
+    assert response.status_code == 401
