@@ -11,20 +11,22 @@ from app.core.security import get_password_hash
 TEST_USER = {
     "username": "testuser",
     "password": "testpassword",
-    "email": "test@example.com"
+    "email": "test@example.com",
 }
 
 TEST_SUPERUSER = {
     "username": "admin",
     "password": "admin",  # Must match what you have in your initialization (init_db.py)
     "email": "admin@example.com",
-    "full_name": "Admin User"
+    "full_name": "Admin User",
 }
+
 
 @pytest.fixture
 def client() -> TestClient:
     """Return a TestClient instance for the FastAPI app."""
     return TestClient(app)
+
 
 @pytest.fixture
 def test_db() -> Generator[Session, None, None]:
@@ -43,8 +45,8 @@ def test_db() -> Generator[Session, None, None]:
     # Ensure admin exists with correct password and superuser status
     admin = db.query(User).filter(User.username == "admin").first()
     if admin:
-        admin.hashed_password = get_password_hash("admin")
-        admin.is_superuser = True
+        admin.hashed_password = get_password_hash("admin")  # type: ignore[assignment]
+        admin.is_superuser = True  # type: ignore[assignment]
         db.commit()
         db.refresh(admin)
     else:
@@ -66,7 +68,7 @@ def test_db() -> Generator[Session, None, None]:
         id=str(uuid.uuid4()),
         email=TEST_USER["email"],
         username=TEST_USER["username"],
-        hashed_password=get_password_hash(TEST_USER["password"])
+        hashed_password=get_password_hash(TEST_USER["password"]),
     )
     db.add(test_user)
     db.commit()
@@ -77,32 +79,32 @@ def test_db() -> Generator[Session, None, None]:
     # Clean up after tests: Remove all non-admin users
     db.query(User).filter(User.username != "admin").delete(synchronize_session=False)
     db.commit()
-    
+
     # Reset admin to original state
     admin = db.query(User).filter(User.username == "admin").first()
     if admin:
-        admin.hashed_password = get_password_hash("admin")
-        admin.is_superuser = True
+        admin.hashed_password = get_password_hash("admin")  # type: ignore[assignment]
+        admin.is_superuser = True  # type: ignore[assignment]
         db.commit()
+
 
 @pytest.fixture
 def auth_token(client: TestClient, test_db: Session) -> str:
     """Log in as the test user and return the JWT access token."""
     response = client.post(
         "/api/v1/auth/token",
-        data={
-            "username": TEST_USER["username"],
-            "password": TEST_USER["password"]
-        }
+        data={"username": TEST_USER["username"], "password": TEST_USER["password"]},
     )
     assert response.status_code == 200
     return response.json()["access_token"]
+
 
 @pytest.fixture
 def auth_client(client: TestClient, auth_token: str) -> TestClient:
     """Return a TestClient instance with the Authorization header set for a regular user."""
     client.headers["Authorization"] = f"Bearer {auth_token}"
     return client
+
 
 @pytest.fixture
 def superuser(test_db: Session) -> User:
@@ -111,9 +113,11 @@ def superuser(test_db: Session) -> User:
     If the superuser already exists, update its password hash.
     """
     db = test_db
-    existing = db.query(User).filter(User.username == TEST_SUPERUSER["username"]).first()
+    existing = (
+        db.query(User).filter(User.username == TEST_SUPERUSER["username"]).first()
+    )
     if existing:
-        existing.hashed_password = get_password_hash(TEST_SUPERUSER["password"])
+        existing.hashed_password = get_password_hash(TEST_SUPERUSER["password"])  # type: ignore[assignment]
         db.commit()
         db.refresh(existing)
         return existing
@@ -125,12 +129,13 @@ def superuser(test_db: Session) -> User:
         email=TEST_SUPERUSER["email"],
         full_name=TEST_SUPERUSER["full_name"],
         hashed_password=get_password_hash(TEST_SUPERUSER["password"]),
-        is_superuser=True
+        is_superuser=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
 
 @pytest.fixture
 def superuser_token(client: TestClient, superuser: User) -> str:
@@ -145,8 +150,9 @@ def superuser_token(client: TestClient, superuser: User) -> str:
     assert response.status_code == 200, f"Token creation failed: {response.text}"
     return response.json()["access_token"]
 
+
 @pytest.fixture
 def superuser_client(client: TestClient, superuser_token: str) -> TestClient:
     """Return a TestClient instance with the Authorization header set for a superuser."""
     client.headers["Authorization"] = f"Bearer {superuser_token}"
-    return client 
+    return client
