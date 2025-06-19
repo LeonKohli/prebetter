@@ -3,6 +3,7 @@ import io
 import pytest
 from datetime import datetime, timedelta, UTC
 
+
 def get_csv_rows(response_text: str):
     """Helper function to read CSV content into a list of rows."""
     f = io.StringIO(response_text)
@@ -82,7 +83,9 @@ def test_export_csv_with_filters(auth_client):
     assert response.status_code == 200
     rows = get_csv_rows(response.content.decode("utf-8"))
     if len(rows) > 1:  # If there are data rows
-        assert all(row[5] == "high" for row in rows[1:]), "All rows should have high severity"
+        assert all(row[5] == "high" for row in rows[1:]), (
+            "All rows should have high severity"
+        )
 
     # Test with multiple filters
     end_date = datetime.now(UTC)
@@ -94,7 +97,7 @@ def test_export_csv_with_filters(auth_client):
         "end_date": end_date.isoformat(),
         "source_ip": "192.168.1.1",
         "target_ip": "10.0.0.1",
-        "analyzer_model": "test-model"
+        "analyzer_model": "test-model",
     }
     response = auth_client.get("/api/v1/export/alerts/csv", params=params)
     assert response.status_code == 200
@@ -154,13 +157,14 @@ def test_export_unsupported_format(auth_client):
     assert response.status_code == 422, "Unsupported export format should return 422"
     data = response.json()
     # FastAPI validation errors return a detail list in the response
-    assert "detail" in data, "Expected validation error response to contain 'detail' key"
+    assert "detail" in data, (
+        "Expected validation error response to contain 'detail' key"
+    )
     errors = data["detail"]
     assert isinstance(errors, list), "Expected validation error details to be a list"
-    assert any(
-        error.get("msg") == "Input should be 'csv'"
-        for error in errors
-    ), "Error message should indicate only CSV format is supported"
+    assert any(error.get("msg") == "Input should be 'csv'" for error in errors), (
+        "Error message should indicate only CSV format is supported"
+    )
 
 
 def test_export_invalid_date(auth_client):
@@ -192,7 +196,7 @@ def test_export_specific_alerts(auth_client):
     alerts_response = auth_client.get("/api/v1/alerts/?page=1&size=2")
     assert alerts_response.status_code == 200
     alerts_data = alerts_response.json()
-    
+
     if alerts_data["items"]:
         alert_ids_to_export = [item["id"] for item in alerts_data["items"]]
         # Test export with specific alert IDs
@@ -200,17 +204,17 @@ def test_export_specific_alerts(auth_client):
         params = [("alert_ids", alert_id) for alert_id in alert_ids_to_export]
         response = auth_client.get("/api/v1/export/alerts/csv", params=params)
         assert response.status_code == 200
-        
+
         rows = get_csv_rows(response.content.decode("utf-8"))
         # Check if the header exists
         assert len(rows) > 0, "CSV should have at least a header row"
-        exported_ids = {row[0] for row in rows[1:]} # Alert ID is the first column
-        
+        exported_ids = {row[0] for row in rows[1:]}  # Alert ID is the first column
+
         # Verify that all requested alert IDs are present in the export
         assert all(str(req_id) in exported_ids for req_id in alert_ids_to_export), (
             f"Not all requested alert IDs ({alert_ids_to_export}) were found in the export ({exported_ids})"
         )
-            
+
         # Optionally, verify that ONLY requested alerts are present (if filters work exclusively)
         # assert len(rows[1:]) == len(alert_ids_to_export), \
         #     "Export should contain only the specified alert IDs"
