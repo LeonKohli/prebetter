@@ -24,15 +24,14 @@ def get_user_service(db: Session = Depends(get_prebetter_db)) -> UserService:
 
 
 async def get_current_superuser(
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
     """
     Ensure the current user is a superuser.
     """
-    if not current_user.is_superuser:
+    if current_user.is_superuser is not True:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough privileges"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges"
         )
     return current_user
 
@@ -41,7 +40,7 @@ async def get_current_superuser(
 async def create_user(
     user: UserCreate,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> User:
     """
     Create a new user (accessible by superusers only).
@@ -54,7 +53,7 @@ async def list_users(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service),
     page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100)
+    size: int = Query(10, ge=1, le=100),
 ) -> PaginatedUserResponse:
     """
     List all users with pagination (superusers only).
@@ -64,17 +63,14 @@ async def list_users(
     skip = (page - 1) * size
     total_users = user_service.count_users()
     users = user_service.list_users(skip=skip, limit=size)
-    
+
     total_pages = (total_users + size - 1) // size
-    
+
     return PaginatedUserResponse(
-        items=users,
+        items=[UserSchema.model_validate(user) for user in users],
         pagination=PaginatedResponse(
-            total=total_users,
-            page=page,
-            size=size,
-            pages=total_pages
-        )
+            total=total_users, page=page, size=size, pages=total_pages
+        ),
     )
 
 
@@ -82,7 +78,7 @@ async def list_users(
 async def get_user(
     user_id: str,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> User:
     """
     Retrieve details for a specific user by user_id (superusers only).
@@ -90,8 +86,7 @@ async def get_user(
     user = user_service.get_by_id(user_id)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
     return user
 
@@ -101,7 +96,7 @@ async def update_user(
     user_id: str,
     user_update: UserUpdate,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> User:
     """
     Update a user's details (superusers only).
@@ -113,7 +108,7 @@ async def update_user(
 async def delete_user(
     user_id: str,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> None:
     """
     Delete a user by user_id (superusers only).
@@ -125,7 +120,7 @@ async def delete_user(
 async def change_password(
     payload: PasswordChangeRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> None:
     """
     Allow any authenticated user to change their own password.
@@ -138,7 +133,7 @@ async def reset_user_password(
     user_id: str,
     payload: PasswordResetRequest,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
 ) -> User:
     """
     Reset a user's password (accessible by superusers only).
