@@ -1,1 +1,1 @@
-"""Middleware package for the application.""" 
+"""Middleware package for the application."""
