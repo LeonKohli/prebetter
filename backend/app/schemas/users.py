@@ -4,6 +4,7 @@ from typing import Optional, List
 from pydantic import ConfigDict
 from app.schemas.prelude import PaginatedResponse
 
+
 class UserBase(BaseModel):
     email: EmailStr
     username: str
@@ -20,7 +21,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     password: Optional[str] = None
 
-    @field_validator('username', 'full_name')
+    @field_validator("username", "full_name")
     @classmethod
     def validate_non_empty_string(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and not v.strip():
@@ -50,6 +51,7 @@ class User(UserInDBBase):
     """
     Schema for returning user data.
     """
+
     pass
 
 

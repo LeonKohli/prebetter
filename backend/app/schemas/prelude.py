@@ -86,7 +86,9 @@ class NetworkInfo(BaseModel):
     protocol: Optional[str] = None
     protocol_number: Optional[int] = None
     node: Optional[NodeInfo] = None  # Node information for source/target
-    heartbeat_process: Optional[ProcessInfo] = None  # Process information from heartbeat
+    heartbeat_process: Optional[ProcessInfo] = (
+        None  # Process information from heartbeat
+    )
     addresses: List[str] = []  # All addresses associated with this source/target
 
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
@@ -97,7 +99,7 @@ class TimeInfo(BaseModel):
     usec: Optional[int] = None
     gmtoff: Optional[int] = None
 
-    @field_validator('timestamp')
+    @field_validator("timestamp")
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 
@@ -132,7 +134,7 @@ class AnalyzerTimeInfo(BaseModel):
     usec: Optional[int] = None
     gmtoff: Optional[int] = None
 
-    @field_validator('timestamp')
+    @field_validator("timestamp")
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 
@@ -152,7 +154,9 @@ class AnalyzerInfo(BaseModel):
     process: Optional[ProcessInfo] = None
     analyzer_time: Optional[AnalyzerTimeInfo] = None
     chain_index: Optional[int] = None  # Position in analyzer chain
-    role: Optional[str] = None  # Role in analyzer chain (e.g., "Primary", "Concentrator")
+    role: Optional[str] = (
+        None  # Role in analyzer chain (e.g., "Primary", "Concentrator")
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -219,7 +223,7 @@ class PaginatedResponse(BaseModel):
     page: int
     size: int
     pages: int
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -287,7 +291,7 @@ class TimelineDataPoint(BaseModel):
     by_classification: Dict[str, int]
     by_analyzer: Dict[str, int]
 
-    @field_validator('timestamp')
+    @field_validator("timestamp")
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 
@@ -300,7 +304,7 @@ class TimelineResponse(BaseModel):
     end_date: datetime
     data: List[TimelineDataPoint]
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 
@@ -351,7 +355,9 @@ class HeartbeatStatus(str, Enum):
 class HeartbeatListItem(BaseModel):
     id: int = Field(..., description="Heartbeat ID")
     message_id: Optional[str] = Field(None, description="Message ID")
-    heartbeat_interval: Optional[int] = Field(None, description="Heartbeat interval in seconds")
+    heartbeat_interval: Optional[int] = Field(
+        None, description="Heartbeat interval in seconds"
+    )
     analyzer: AnalyzerInfo
     node: NodeInfo
     latest_heartbeat_at: datetime = Field(..., description="Last heartbeat timestamp")
@@ -407,7 +413,7 @@ class TreeAgentInfo(BaseModel):
     name: str
     model: str
     version: str
-    class_: str = Field(..., alias='class')
+    class_: str = Field(..., alias="class")
     last_heartbeat_at: datetime | None
     status: str
 
@@ -424,5 +430,5 @@ class TreeHostInfo(BaseModel):
 class PaginatedHeartbeatTimelineResponse(BaseModel):
     items: List[HeartbeatTimelineItem]
     pagination: PaginatedResponse
-    
+
     model_config = ConfigDict(from_attributes=True)
