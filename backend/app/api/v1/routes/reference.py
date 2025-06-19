@@ -8,6 +8,7 @@ from sqlalchemy.sql import func
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+
 @router.get("/classifications", response_model=List[str])
 async def get_unique_classifications(
     db: Session = Depends(get_prelude_db),
@@ -24,9 +25,9 @@ async def get_unique_classifications(
         return [result[0] for result in results]
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching classifications: {str(e)}"
+            status_code=500, detail=f"Error fetching classifications: {str(e)}"
         )
+
 
 @router.get("/severities", response_model=List[str])
 async def get_unique_severities(
@@ -44,9 +45,9 @@ async def get_unique_severities(
         return [result[0] for result in results]
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching severities: {str(e)}"
+            status_code=500, detail=f"Error fetching severities: {str(e)}"
         )
+
 
 @router.get("/analyzers", response_model=List[str])
 async def get_unique_analyzers(
@@ -68,6 +69,5 @@ async def get_unique_analyzers(
         return [result[0] for result in results]
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching analyzers: {str(e)}"
-        ) 
+            status_code=500, detail=f"Error fetching analyzers: {str(e)}"
+        )
