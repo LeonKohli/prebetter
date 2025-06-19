@@ -9,7 +9,7 @@ TEST_SUPERUSER = {
     "username": "admin",
     "password": "admin",  # Match the password from init_db.py
     "email": "admin@example.com",
-    "full_name": "Admin User"
+    "full_name": "Admin User",
 }
 
 # Define test data for a new (normal) user.
@@ -17,7 +17,7 @@ TEST_USER_PAYLOAD = {
     "username": "newuser",
     "password": "newpassword",
     "email": "newuser@example.com",
-    "full_name": "New User"
+    "full_name": "New User",
 }
 
 
@@ -27,21 +27,23 @@ def superuser(test_db):
     Create (or retrieve if already exists) a superuser in the test database.
     """
     db = test_db
-    existing = db.query(User).filter(User.username == TEST_SUPERUSER["username"]).first()
+    existing = (
+        db.query(User).filter(User.username == TEST_SUPERUSER["username"]).first()
+    )
     if existing:
         # Update password hash to ensure it matches test password
         existing.hashed_password = get_password_hash(TEST_SUPERUSER["password"])
         db.commit()
         db.refresh(existing)
         return existing
-    
+
     user = User(
         id=str(uuid.uuid4()),
         username=TEST_SUPERUSER["username"],
         email=TEST_SUPERUSER["email"],
         full_name=TEST_SUPERUSER["full_name"],
         hashed_password=get_password_hash(TEST_SUPERUSER["password"]),
-        is_superuser=True
+        is_superuser=True,
     )
     db.add(user)
     db.commit()
@@ -82,7 +84,7 @@ def test_create_user(superuser_client, test_db):
         "username": "testuser2",
         "password": "testpassword2",
         "email": "testuser2@example.com",
-        "full_name": "Test User 2"
+        "full_name": "Test User 2",
     }
     response = superuser_client.post("/api/v1/users/", json=payload)
     assert response.status_code == 200, f"Create user failed: {response.text}"
@@ -101,7 +103,7 @@ def test_create_user_duplicate(superuser_client, test_db):
         "username": "dupuser",
         "password": "duppassword",
         "email": "dupuser@example.com",
-        "full_name": "Dup User"
+        "full_name": "Dup User",
     }
     # First creation should succeed.
     response = superuser_client.post("/api/v1/users/", json=payload)
@@ -110,13 +112,17 @@ def test_create_user_duplicate(superuser_client, test_db):
     # Attempt to create a user with the same username but a different email.
     payload_duplicate_username = payload.copy()
     payload_duplicate_username["email"] = "other@example.com"
-    response_dup = superuser_client.post("/api/v1/users/", json=payload_duplicate_username)
+    response_dup = superuser_client.post(
+        "/api/v1/users/", json=payload_duplicate_username
+    )
     assert response_dup.status_code == 400, "Duplicate username allowed"
 
     # Attempt to create a user with the same email but a different username.
     payload_duplicate_email = payload.copy()
     payload_duplicate_email["username"] = "anotheruser"
-    response_dup_email = superuser_client.post("/api/v1/users/", json=payload_duplicate_email)
+    response_dup_email = superuser_client.post(
+        "/api/v1/users/", json=payload_duplicate_email
+    )
     assert response_dup_email.status_code == 400, "Duplicate email allowed"
 
 
@@ -145,7 +151,7 @@ def test_get_user(superuser_client):
         "username": "detailuser",
         "password": "detailpass",
         "email": "detailuser@example.com",
-        "full_name": "Detail User"
+        "full_name": "Detail User",
     }
     create_resp = superuser_client.post("/api/v1/users/", json=payload)
     assert create_resp.status_code == 200, f"User creation failed: {create_resp.text}"
@@ -169,7 +175,7 @@ def test_update_user(superuser_client):
         "username": "updateuser",
         "password": "updatepass",
         "email": "updateuser@example.com",
-        "full_name": "Update User"
+        "full_name": "Update User",
     }
     create_resp = superuser_client.post("/api/v1/users/", json=payload)
     assert create_resp.status_code == 200, f"User creation failed: {create_resp.text}"
@@ -180,7 +186,7 @@ def test_update_user(superuser_client):
     update_payload = {
         "email": "updated@example.com",
         "full_name": "Updated Name",
-        "password": "newpassword"
+        "password": "newpassword",
     }
     update_resp = superuser_client.put(f"/api/v1/users/{user_id}", json=update_payload)
     assert update_resp.status_code == 200, f"Update user failed: {update_resp.text}"
@@ -205,7 +211,7 @@ def test_delete_user(superuser_client):
         "username": "deleteuser",
         "password": "deletepass",
         "email": "deleteuser@example.com",
-        "full_name": "Delete User"
+        "full_name": "Delete User",
     }
     create_resp = superuser_client.post("/api/v1/users/", json=payload)
     assert create_resp.status_code == 200, f"User creation failed: {create_resp.text}"
@@ -240,23 +246,21 @@ def test_change_password(auth_client):
     # First, attempt with an incorrect current password.
     wrong_resp = auth_client.post(
         "/api/v1/users/change-password",
-        json={
-            "current_password": "wrongpassword",
-            "new_password": "newtestpassword"
-        }
+        json={"current_password": "wrongpassword", "new_password": "newtestpassword"},
     )
-    assert wrong_resp.status_code == 400, "Allowed password change with incorrect current password"
+    assert wrong_resp.status_code == 400, (
+        "Allowed password change with incorrect current password"
+    )
 
     # Now, change with the correct current password.
     # Note: The TEST_USER from conftest (created via test_db fixture) has password "testpassword".
     correct_resp = auth_client.post(
         "/api/v1/users/change-password",
-        json={
-            "current_password": "testpassword",
-            "new_password": "newtestpassword"
-        }
+        json={"current_password": "testpassword", "new_password": "newtestpassword"},
     )
-    assert correct_resp.status_code == 204, f"Change password failed: {correct_resp.text}"
+    assert correct_resp.status_code == 204, (
+        f"Change password failed: {correct_resp.text}"
+    )
 
     # Verify that login works with the new password.
     login_resp = auth_client.post(
@@ -275,7 +279,7 @@ def test_reset_user_password(superuser_client):
         "username": "resetuser",
         "password": "oldpassword",
         "email": "resetuser@example.com",
-        "full_name": "Reset User"
+        "full_name": "Reset User",
     }
     create_resp = superuser_client.post("/api/v1/users/", json=payload)
     assert create_resp.status_code == 200, f"User creation failed: {create_resp.text}"
@@ -284,8 +288,7 @@ def test_reset_user_password(superuser_client):
 
     # Reset the user's password
     reset_resp = superuser_client.post(
-        f"/api/v1/users/{user_id}/reset-password",
-        json={"new_password": "newpassword"}
+        f"/api/v1/users/{user_id}/reset-password", json={"new_password": "newpassword"}
     )
     assert reset_resp.status_code == 200, f"Reset password failed: {reset_resp.text}"
 

@@ -2,20 +2,21 @@ import jwt
 from datetime import datetime, timedelta, UTC
 from app.core.security import create_access_token, ALGORITHM
 
+
 def test_token_expiration(auth_client, client):
     """
     Test token expiration handling.
     """
     # Create a token that's already expired
     expired_token = create_access_token(
-        data={"sub": "testuser"},
-        expires_delta=timedelta(minutes=-1)
+        data={"sub": "testuser"}, expires_delta=timedelta(minutes=-1)
     )
 
     # Try to access protected endpoint with expired token
     headers = {"Authorization": f"Bearer {expired_token}"}
     response = client.get("/api/v1/auth/users/me", headers=headers)
     assert response.status_code == 401, "Expired token was accepted"
+
 
 def test_invalid_token_formats(client):
     """
@@ -27,10 +28,7 @@ def test_invalid_token_formats(client):
     assert response.status_code == 401, "Malformed token was accepted"
 
     # Test with invalid signature
-    payload = {
-        "sub": "testuser",
-        "exp": datetime.now(UTC) + timedelta(minutes=30)
-    }
+    payload = {"sub": "testuser", "exp": datetime.now(UTC) + timedelta(minutes=30)}
     invalid_token = jwt.encode(payload, "wrong_secret", algorithm=ALGORITHM)
     headers = {"Authorization": f"Bearer {invalid_token}"}
     response = client.get("/api/v1/auth/users/me", headers=headers)
@@ -46,6 +44,7 @@ def test_invalid_token_formats(client):
     response = client.get("/api/v1/auth/users/me", headers=headers)
     assert response.status_code == 401, "Empty token was accepted"
 
+
 def test_login_rate_limiting(client, test_db):
     """
     Test rate limiting for login attempts.
@@ -54,12 +53,10 @@ def test_login_rate_limiting(client, test_db):
     for _ in range(10):
         response = client.post(
             "/api/v1/auth/token",
-            data={
-                "username": "nonexistent",
-                "password": "wrongpassword"
-            }
+            data={"username": "nonexistent", "password": "wrongpassword"},
         )
         assert response.status_code in [401, 429], "Rate limiting not enforced"
+
 
 def test_token_refresh(auth_client, client):
     """
@@ -67,11 +64,7 @@ def test_token_refresh(auth_client, client):
     """
     # Get initial token
     response = client.post(
-        "/api/v1/auth/token",
-        data={
-            "username": "testuser",
-            "password": "testpassword"
-        }
+        "/api/v1/auth/token", data={"username": "testuser", "password": "testpassword"}
     )
     assert response.status_code == 200
     initial_token = response.json()["access_token"]
@@ -80,6 +73,7 @@ def test_token_refresh(auth_client, client):
     headers = {"Authorization": f"Bearer {initial_token}"}
     response = client.get("/api/v1/auth/users/me", headers=headers)
     assert response.status_code == 200
+
 
 def test_concurrent_login(client, test_db):
     """
@@ -90,10 +84,7 @@ def test_concurrent_login(client, test_db):
     for _ in range(5):
         response = client.post(
             "/api/v1/auth/token",
-            data={
-                "username": "testuser",
-                "password": "testpassword"
-            }
+            data={"username": "testuser", "password": "testpassword"},
         )
         responses.append(response)
 
@@ -113,13 +104,16 @@ def test_concurrent_login(client, test_db):
         response = client.get("/api/v1/auth/users/me", headers=headers)
         assert response.status_code == 200, "Token validation failed"
 
+
 def test_auth_headers_validation(client):
     """
     Test validation of authentication headers.
     """
     # Test with missing Authorization header
     response = client.get("/api/v1/auth/users/me")
-    assert response.status_code == 401, "Request without Authorization header was accepted"
+    assert response.status_code == 401, (
+        "Request without Authorization header was accepted"
+    )
 
     # Test with malformed Authorization header
     headers = {"Authorization": "Basic abc123"}
@@ -129,4 +123,4 @@ def test_auth_headers_validation(client):
     # Test with multiple Authorization headers (using a comma-separated string)
     headers = {"Authorization": "Bearer token1, Bearer token2"}
     response = client.get("/api/v1/auth/users/me", headers=headers)
-    assert response.status_code == 401, "Multiple Authorization headers were accepted" 
+    assert response.status_code == 401, "Multiple Authorization headers were accepted"
