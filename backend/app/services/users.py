@@ -2,9 +2,15 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models.users import User
-from app.schemas.users import UserCreate, UserUpdate, PasswordChangeRequest, PasswordResetRequest
+from app.schemas.users import (
+    UserCreate,
+    UserUpdate,
+    PasswordChangeRequest,
+    PasswordResetRequest,
+)
 from app.core.security import get_password_hash, verify_password, create_user_id
 from sqlalchemy.exc import IntegrityError
+
 
 class UserService:
     def __init__(self, db: Session):
@@ -48,12 +54,12 @@ class UserService:
         if self.get_by_username(user_data.username):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already registered"
+                detail="Username already registered",
             )
         if self.get_by_email(user_data.email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
             )
 
         # Create new user instance
@@ -63,7 +69,7 @@ class UserService:
             username=user_data.username,
             full_name=user_data.full_name,
             hashed_password=get_password_hash(user_data.password),
-            is_superuser=False  # By default, user is not a superuser
+            is_superuser=False,  # By default, user is not a superuser
         )
         self.db.add(db_user)
         try:
@@ -73,7 +79,7 @@ class UserService:
             self.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to create user due to integrity error."
+                detail="Failed to create user due to integrity error.",
             )
         return db_user
 
@@ -84,14 +90,15 @@ class UserService:
         db_user = self.get_by_id(user_id)
         if not db_user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
         # Convert update data to dictionary and handle password separately
         update_data = user_update.model_dump(exclude_unset=True)
         if "password" in update_data:
-            update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+            update_data["hashed_password"] = get_password_hash(
+                update_data.pop("password")
+            )
 
         for field, value in update_data.items():
             setattr(db_user, field, value)
@@ -103,7 +110,7 @@ class UserService:
             self.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username or email already exists"
+                detail="Username or email already exists",
             )
 
         return db_user
@@ -115,47 +122,51 @@ class UserService:
         db_user = self.get_by_id(user_id)
         if not db_user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
         # Prevent deleting the last superuser
-        if db_user.is_superuser:
-            superuser_count = self.db.query(User).filter(User.is_superuser is True).count()
+        if db_user.is_superuser is True:
+            superuser_count = (
+                self.db.query(User).filter(User.is_superuser == True).count()  # noqa: E712
+            )
             if superuser_count <= 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot delete the last superuser"
+                    detail="Cannot delete the last superuser",
                 )
 
         self.db.delete(db_user)
         self.db.commit()
 
-    def change_password(self, user: User, password_change: PasswordChangeRequest) -> None:
+    def change_password(
+        self, user: User, password_change: PasswordChangeRequest
+    ) -> None:
         """
         Change the password for the current user.
         """
-        if not verify_password(password_change.current_password, user.hashed_password):
+        if not verify_password(password_change.current_password, str(user.hashed_password)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Incorrect current password"
+                detail="Incorrect current password",
             )
 
-        user.hashed_password = get_password_hash(password_change.new_password)
+        user.hashed_password = get_password_hash(password_change.new_password)  # type: ignore[assignment]
         self.db.commit()
 
-    def reset_password(self, user_id: str, password_reset: PasswordResetRequest) -> User:
+    def reset_password(
+        self, user_id: str, password_reset: PasswordResetRequest
+    ) -> User:
         """
         Reset a user's password (admin only).
         """
         db_user = self.get_by_id(user_id)
         if not db_user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
-        db_user.hashed_password = get_password_hash(password_reset.new_password)
+        db_user.hashed_password = get_password_hash(password_reset.new_password)  # type: ignore[assignment]
         self.db.commit()
         self.db.refresh(db_user)
         return db_user
