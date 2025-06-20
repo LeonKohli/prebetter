@@ -38,7 +38,7 @@ def test_heartbeats_status_tree(auth_client):
             assert "model" in agent
             assert "version" in agent
             assert "class" in agent
-            assert "latest_heartbeat" in agent
+            assert "latest_heartbeat_at" in agent
             assert "seconds_ago" in agent
             assert "status" in agent
 

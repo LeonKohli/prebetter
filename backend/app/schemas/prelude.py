@@ -10,7 +10,7 @@ class AgentInfo(BaseModel):
     model: str
     version: str
     class_: str = Field(..., alias="class")
-    latest_heartbeat_at: datetime
+    latest_heartbeat_at: Optional[datetime] = None
     seconds_ago: int = Field(-1, description="Seconds since last heartbeat")
     status: str
 

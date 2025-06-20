@@ -76,18 +76,33 @@ async def heartbeat_status(
         if row.analyzer_name not in nodes_dict[node_name]["agents"]:
             # Handle potential non-datetime last_heartbeat
             last_hb = row.last_heartbeat
-            if not isinstance(last_hb, datetime):
-                last_hb = None  # Or parse if possible, or log warning
+            
+            if isinstance(last_hb, str):
+                if last_hb == "Never":
+                    last_hb = None
+                else:
+                    # Try to parse string datetime (SQLAlchemy might return strings due to COALESCE)
+                    try:
+                        from datetime import datetime as dt
+                        last_hb = dt.strptime(last_hb, "%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        last_hb = None
+            elif isinstance(last_hb, datetime):
+                last_hb = last_hb  # Keep the datetime as is
+            elif last_hb is None:
+                last_hb = None  # Explicitly handle None
+            else:
+                last_hb = None  # Handle unexpected types
 
             # Create AgentInfo object matching the schema
             agent_info_data = {
                 "name": row.analyzer_name,
-                "model": row.model,
-                "version": row.version,
-                "class_": row.class_,  # Use field name with underscore
+                "model": row.model or "",
+                "version": row.version or "",
+                "class": row.class_ or "",  # Use 'class' as the alias will handle the conversion
                 "latest_heartbeat_at": last_hb,  # Use potentially corrected value
-                "seconds_ago": row.seconds_ago,
-                "status": row.status,
+                "seconds_ago": row.seconds_ago if row.seconds_ago is not None else -1,
+                "status": row.status or "unknown",
             }
             try:
                 nodes_dict[node_name]["agents"][row.analyzer_name] = AgentInfo(
