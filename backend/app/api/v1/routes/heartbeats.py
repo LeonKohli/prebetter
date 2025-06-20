@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from collections import defaultdict
 from typing import Annotated, Dict, Any
 from datetime import datetime
+from pydantic import ValidationError
+import logging
 
 from app.database.config import get_prelude_db
 from app.database.query_builders import (
@@ -24,6 +26,7 @@ from app.api.v1.routes.auth import get_current_user
 from app.api.v1.routes.users import get_current_superuser
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/status", response_model=HeartbeatTreeResponse)
@@ -74,45 +77,22 @@ async def heartbeat_status(
 
         # Use a dictionary to track unique agents by name
         if row.analyzer_name not in nodes_dict[node_name]["agents"]:
-            # Handle potential non-datetime last_heartbeat
-            last_hb = row.last_heartbeat
-            
-            if isinstance(last_hb, str):
-                if last_hb == "Never":
-                    last_hb = None
-                else:
-                    # Try to parse string datetime (SQLAlchemy might return strings due to COALESCE)
-                    try:
-                        from datetime import datetime as dt
-                        last_hb = dt.strptime(last_hb, "%Y-%m-%d %H:%M:%S")
-                    except Exception:
-                        last_hb = None
-            elif isinstance(last_hb, datetime):
-                last_hb = last_hb  # Keep the datetime as is
-            elif last_hb is None:
-                last_hb = None  # Explicitly handle None
-            else:
-                last_hb = None  # Handle unexpected types
-
-            # Create AgentInfo object matching the schema
-            agent_info_data = {
-                "name": row.analyzer_name,
-                "model": row.model or "",
-                "version": row.version or "",
-                "class": row.class_ or "",  # Use 'class' as the alias will handle the conversion
-                "latest_heartbeat_at": last_hb,  # Use potentially corrected value
-                "seconds_ago": row.seconds_ago if row.seconds_ago is not None else -1,
-                "status": row.status or "unknown",
-            }
+            # Leverage Pydantic's validation to handle type conversion
             try:
-                nodes_dict[node_name]["agents"][row.analyzer_name] = AgentInfo(
-                    **agent_info_data
+                agent_info = AgentInfo(
+                    name=row.analyzer_name,
+                    model=row.model,  # Pydantic validator handles None -> ""
+                    version=row.version,  # Pydantic validator handles None -> ""
+                    **{"class": row.class_},  # Pydantic validator handles None -> ""
+                    latest_heartbeat_at=row.last_heartbeat,  # Pydantic validator handles conversion
+                    seconds_ago=row.seconds_ago if row.seconds_ago is not None else -1,
+                    status=row.status,  # Pydantic validator ensures valid status
                 )
-            except Exception as e:
-                # Log the error and skip this agent, or handle more gracefully
-                print(f"Error creating AgentInfo for {row.analyzer_name}: {e}")
-                # Optionally: nodes_dict[node_name]["agents"][row.analyzer_name] = None # Or a placeholder
-                continue  # Skip adding this agent if validation fails
+                nodes_dict[node_name]["agents"][row.analyzer_name] = agent_info
+            except ValidationError as e:
+                # Log validation errors for debugging
+                logger.warning(f"Validation error for agent {row.analyzer_name}: {e}")
+                continue  # Skip this agent if validation fails
 
             total_agents += 1
 
@@ -148,7 +128,7 @@ async def timeline_heartbeats(
     Useful for monitoring the health of analyzers over time.
     """
     # Calculate time range using utility function
-    start_time, end_time = get_time_range(hours)
+    start_time, _ = get_time_range(hours)
 
     # Use query builder to get the timeline query
     timeline_query = build_heartbeats_timeline_query(db, start_time)
@@ -192,9 +172,9 @@ async def timeline_heartbeats(
 
 @router.post("/cleanup")
 async def cleanup_heartbeats(
-    current_user: Annotated[
+    _: Annotated[
         User, Depends(get_current_superuser)
-    ],  # Use superuser check
+    ],  # Superuser check (user not used in function)
     db: Session = Depends(get_prelude_db),
     retention_days: int = Query(
         30, ge=7, le=90, description="Days of heartbeat data to retain"
@@ -205,7 +185,6 @@ async def cleanup_heartbeats(
     This is an administrative endpoint that requires superuser privileges.
 
     Args:
-        current_user: Current superuser (injected by dependency)
         db: Database session
         retention_days: Number of days of heartbeat data to retain (7-90 days)
 

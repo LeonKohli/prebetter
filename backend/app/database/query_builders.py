@@ -635,7 +635,7 @@ def build_heartbeats_tree_query(db: Session):
                     func.concat(
                         Analyzer.ostype,
                         literal(" "),
-                        func.coalesce(Analyzer.osversion, ""),
+                        func.ifnull(Analyzer.osversion, literal("")),
                     ),
                 ),
                 else_=None,
@@ -818,7 +818,7 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
                         func.concat(
                             Analyzer.ostype,
                             literal(" "),
-                            func.coalesce(Analyzer.osversion, ""),
+                            func.ifnull(Analyzer.osversion, literal("")),
                         ),
                     ),
                     else_=None,
@@ -843,10 +843,8 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
             analyzers.c.version,
             analyzers.c.class_,
             analyzers.c.os,
-            # Use literal 'Never' for null heartbeats to match SQL query
-            func.coalesce(heartbeats.c.last_heartbeat, literal("Never")).label(
-                "last_heartbeat"
-            ),
+            # Return the actual heartbeat time as datetime or NULL
+            heartbeats.c.last_heartbeat.label("last_heartbeat"),
             # Use -1 for null seconds_ago to match SQL query
             func.coalesce(
                 func.timestampdiff(
