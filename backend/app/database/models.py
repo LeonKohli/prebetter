@@ -58,21 +58,27 @@ def alert_result_to_list_item(result: Row) -> AlertListItem:
             osversion=getattr(result, "analyzer_osversion", None),
         )
 
+    # Handle create_time with optional usec and gmtoff
+    create_time_info = None
+    if result.create_time:
+        create_time_info = TimeInfo(
+            timestamp=result.create_time,
+            usec=result.create_time_usec if hasattr(result, "create_time_usec") else None,
+            gmtoff=result.create_time_gmtoff if hasattr(result, "create_time_gmtoff") else None,
+        )
+
+    # Handle detect_time with optional usec and gmtoff
+    detect_time_info = TimeInfo(
+        timestamp=result.detect_time,
+        usec=result.detect_time_usec if hasattr(result, "detect_time_usec") else None,
+        gmtoff=result.detect_time_gmtoff if hasattr(result, "detect_time_gmtoff") else None,
+    )
+
     alert_item = AlertListItem(
         id=str(result._ident),
         message_id=result.messageid,
-        created_at=TimeInfo(
-            timestamp=result.create_time,
-            usec=getattr(result, "create_time_usec", None),
-            gmtoff=getattr(result, "create_time_gmtoff", None),
-        )
-        if result.create_time
-        else None,
-        detected_at=TimeInfo(
-            timestamp=result.detect_time,
-            usec=getattr(result, "detect_time_usec", None),
-            gmtoff=getattr(result, "detect_time_gmtoff", None),
-        ),
+        created_at=create_time_info,
+        detected_at=detect_time_info,
         classification_text=result.classification_text,
         severity=result.severity,
         source_ipv4=result.source_ipv4,

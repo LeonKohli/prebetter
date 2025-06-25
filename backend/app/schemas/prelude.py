@@ -126,8 +126,8 @@ class NetworkInfo(BaseModel):
 
 class TimeInfo(BaseModel):
     timestamp: datetime
-    usec: int = 0
-    gmtoff: int = 0
+    usec: Optional[int] = None
+    gmtoff: Optional[int] = None
 
     @field_validator("timestamp", mode='before')
     @classmethod
@@ -142,14 +142,6 @@ class TimeInfo(BaseModel):
             return ensure_timezone(v)
             
         # Let Pydantic handle other types
-        return v
-    
-    @field_validator('usec', 'gmtoff', mode='before')
-    @classmethod
-    def default_numeric_fields(cls, v):
-        """Provide defaults for numeric fields."""
-        if v is None:
-            return 0
         return v
 
     model_config = ConfigDict(from_attributes=True)
