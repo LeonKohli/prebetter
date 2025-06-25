@@ -800,18 +800,17 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
         .cte("heartbeats")
     )
 
-    # CTE 3: Get distinct analyzer information
-    # Use GROUP BY to ensure we get only one entry per host+analyzer combination
+    # CTE 3: Get distinct analyzer information from Heartbeat data
+    # This ensures we only get analyzers that actually send heartbeats,
+    # and we get their correct host, preventing the cartesian product issue.
     analyzers = (
         db.query(
             Node.name.label("host_name"),
             Analyzer.name.label("analyzer_name"),
-            # Use first() to get a single value for each group
-            func.min(Analyzer.model).label("model"),
-            func.min(Analyzer.version).label("version"),
-            func.min(getattr(Analyzer, "class")).label("class_"),
-            # Add OS information - use min() to get a single value
-            func.min(
+            func.max(Analyzer.model).label("model"),
+            func.max(Analyzer.version).label("version"),
+            func.max(getattr(Analyzer, "class")).label("class_"),
+            func.max(
                 case(
                     (
                         Analyzer.ostype.isnot(None),
@@ -825,10 +824,16 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
                 )
             ).label("os"),
         )
-        .select_from(Node)
-        .join(Analyzer, Analyzer._message_ident == Node._message_ident)
-        .filter(Node._parent_type == "A", Node._parent0_index == -1)
-        # Group by host_name and analyzer_name to ensure uniqueness
+        .select_from(Analyzer)
+        .join(
+            Node,
+            and_(
+                Node._message_ident == Analyzer._message_ident,
+                Node._parent_type == Analyzer._parent_type,
+                Node._parent0_index == Analyzer._index,
+            ),
+        )
+        .filter(Analyzer._parent_type == "H")
         .group_by(Node.name, Analyzer.name)
         .cte("analyzers")
     )
