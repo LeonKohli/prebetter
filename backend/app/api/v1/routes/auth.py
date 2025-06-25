@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Annotated, Union, Optional
+from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
