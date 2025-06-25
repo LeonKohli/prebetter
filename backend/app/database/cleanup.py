@@ -6,7 +6,7 @@ from app.models.prelude import Heartbeat, AnalyzerTime
 from app.core.datetime_utils import get_current_time
 
 
-def cleanup_old_heartbeats(db: Session, retention_days: int = 30) -> tuple[int, int]:
+def cleanup_old_heartbeats(db: Session, retention_days: int = 30, dry_run: bool = False) -> tuple[int, int]:
     """
     Clean up old heartbeats and related data that are older than the retention period.
 
@@ -19,6 +19,7 @@ def cleanup_old_heartbeats(db: Session, retention_days: int = 30) -> tuple[int, 
     Args:
         db: SQLAlchemy database session
         retention_days: Number of days to keep heartbeats (default: 30)
+        dry_run: If True, only count records to be deleted without actually deleting them
 
     Returns:
         Tuple of (deleted_heartbeats_count, deleted_analyzer_times_count)
@@ -67,6 +68,23 @@ def cleanup_old_heartbeats(db: Session, retention_days: int = 30) -> tuple[int, 
     if not all_heartbeat_ids:
         return 0, 0
 
+    if dry_run:
+        # For dry run, just count the records that would be deleted
+        analyzer_times_count = (
+            db.query(AnalyzerTime)
+            .filter(
+                and_(
+                    AnalyzerTime._message_ident.in_(all_heartbeat_ids),
+                    AnalyzerTime._parent_type == "H",
+                )
+            )
+            .count()
+        )
+        
+        heartbeats_count = len(all_heartbeat_ids)
+        
+        return heartbeats_count, analyzer_times_count
+    
     # Delete analyzer times for old heartbeats
     deleted_analyzer_times = (
         db.query(AnalyzerTime)
@@ -92,18 +110,33 @@ def cleanup_old_heartbeats(db: Session, retention_days: int = 30) -> tuple[int, 
     return deleted_heartbeats, deleted_analyzer_times
 
 
-def cleanup_orphaned_analyzer_times(db: Session) -> int:
+def cleanup_orphaned_analyzer_times(db: Session, dry_run: bool = False) -> int:
     """
     Clean up orphaned analyzer time entries that don't have corresponding heartbeats.
 
     Args:
         db: SQLAlchemy database session
+        dry_run: If True, only count records to be deleted without actually deleting them
 
     Returns:
         Number of deleted orphaned records
     """
     # Find heartbeat IDs that exist
     existing_heartbeats = select(Heartbeat._ident)
+
+    if dry_run:
+        # For dry run, just count the records that would be deleted
+        orphaned_count = (
+            db.query(AnalyzerTime)
+            .filter(
+                and_(
+                    AnalyzerTime._parent_type == "H",
+                    ~AnalyzerTime._message_ident.in_(existing_heartbeats),
+                )
+            )
+            .count()
+        )
+        return orphaned_count
 
     # Delete analyzer times that don't have corresponding heartbeats
     deleted_count = (

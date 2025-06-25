@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from collections import defaultdict
 from typing import Annotated, Dict, Any
-from datetime import datetime
 from pydantic import ValidationError
 import logging
 
@@ -179,6 +178,9 @@ async def cleanup_heartbeats(
     retention_days: int = Query(
         30, ge=7, le=90, description="Days of heartbeat data to retain"
     ),
+    dry_run: bool = Query(
+        False, description="If true, only preview what would be deleted without actually deleting"
+    ),
 ):
     """
     Clean up old heartbeat data and orphaned records.
@@ -187,21 +189,33 @@ async def cleanup_heartbeats(
     Args:
         db: Database session
         retention_days: Number of days of heartbeat data to retain (7-90 days)
+        dry_run: If true, only preview what would be deleted without actually deleting
 
     Returns:
         Dict with cleanup statistics
     """
+    from app.models.prelude import Heartbeat
+    
+    # Get current heartbeat count before cleanup
+    total_heartbeats_before = db.query(Heartbeat).count()
+    
     # Clean up old heartbeats first
     deleted_heartbeats, deleted_analyzer_times = cleanup_old_heartbeats(
-        db, retention_days
+        db, retention_days, dry_run=dry_run
     )
 
     # Then clean up any orphaned analyzer times
-    deleted_orphans = cleanup_orphaned_analyzer_times(db)
+    deleted_orphans = cleanup_orphaned_analyzer_times(db, dry_run=dry_run)
+
+    # Get heartbeat count after cleanup (will be same as before if dry_run)
+    total_heartbeats_after = db.query(Heartbeat).count()
 
     return {
         "deleted_heartbeats": deleted_heartbeats,
         "deleted_analyzer_times": deleted_analyzer_times,
         "deleted_orphaned_records": deleted_orphans,
         "retention_days": retention_days,
+        "dry_run": dry_run,
+        "total_heartbeats_before": total_heartbeats_before,
+        "total_heartbeats_after": total_heartbeats_after,
     }
