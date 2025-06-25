@@ -176,7 +176,7 @@ async def cleanup_heartbeats(
     ],  # Superuser check (user not used in function)
     db: Session = Depends(get_prelude_db),
     retention_days: int = Query(
-        30, ge=7, le=90, description="Days of heartbeat data to retain"
+        30, ge=1, le=90, description="Days of heartbeat data to retain"
     ),
     dry_run: bool = Query(
         False, description="If true, only preview what would be deleted without actually deleting"
@@ -188,7 +188,7 @@ async def cleanup_heartbeats(
 
     Args:
         db: Database session
-        retention_days: Number of days of heartbeat data to retain (7-90 days)
+        retention_days: Number of days of heartbeat data to retain (1-90 days)
         dry_run: If true, only preview what would be deleted without actually deleting
 
     Returns:
