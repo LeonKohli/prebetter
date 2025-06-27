@@ -145,7 +145,9 @@ class UserService:
         """
         Change the password for the current user.
         """
-        if not verify_password(password_change.current_password, str(user.hashed_password)):
+        if not verify_password(
+            password_change.current_password, str(user.hashed_password)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Incorrect current password",

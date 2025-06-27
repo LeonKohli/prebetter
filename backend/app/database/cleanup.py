@@ -6,7 +6,9 @@ from app.models.prelude import Heartbeat, AnalyzerTime
 from app.core.datetime_utils import get_current_time
 
 
-def cleanup_old_heartbeats(db: Session, retention_days: int = 30, dry_run: bool = False) -> tuple[int, int]:
+def cleanup_old_heartbeats(
+    db: Session, retention_days: int = 30, dry_run: bool = False
+) -> tuple[int, int]:
     """
     Clean up old heartbeats and related data that are older than the retention period.
 
@@ -80,11 +82,11 @@ def cleanup_old_heartbeats(db: Session, retention_days: int = 30, dry_run: bool 
             )
             .count()
         )
-        
+
         heartbeats_count = len(all_heartbeat_ids)
-        
+
         return heartbeats_count, analyzer_times_count
-    
+
     # Delete analyzer times for old heartbeats
     deleted_analyzer_times = (
         db.query(AnalyzerTime)
