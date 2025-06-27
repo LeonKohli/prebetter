@@ -63,15 +63,21 @@ def alert_result_to_list_item(result: Row) -> AlertListItem:
     if result.create_time:
         create_time_info = TimeInfo(
             timestamp=result.create_time,
-            usec=result.create_time_usec if hasattr(result, "create_time_usec") else None,
-            gmtoff=result.create_time_gmtoff if hasattr(result, "create_time_gmtoff") else None,
+            usec=result.create_time_usec
+            if hasattr(result, "create_time_usec")
+            else None,
+            gmtoff=result.create_time_gmtoff
+            if hasattr(result, "create_time_gmtoff")
+            else None,
         )
 
     # Handle detect_time with optional usec and gmtoff
     detect_time_info = TimeInfo(
         timestamp=result.detect_time,
         usec=result.detect_time_usec if hasattr(result, "detect_time_usec") else None,
-        gmtoff=result.detect_time_gmtoff if hasattr(result, "detect_time_gmtoff") else None,
+        gmtoff=result.detect_time_gmtoff
+        if hasattr(result, "detect_time_gmtoff")
+        else None,
     )
 
     alert_item = AlertListItem(
@@ -352,12 +358,16 @@ def process_additional_data(add_data_rows, truncate_payload=False):
 
                 if data_type == "integer":
                     try:
-                        current_value = int(cleaned_str) if cleaned_str is not None else None
+                        current_value = (
+                            int(cleaned_str) if cleaned_str is not None else None
+                        )
                     except (ValueError, TypeError):
                         current_value = cleaned_str  # Keep original on error
                 elif data_type == "float" or data_type == "real":
                     try:
-                        current_value = float(cleaned_str) if cleaned_str is not None else None
+                        current_value = (
+                            float(cleaned_str) if cleaned_str is not None else None
+                        )
                     except (ValueError, TypeError):
                         current_value = cleaned_str  # Keep original on error
                 elif data_type == "boolean":
@@ -395,7 +405,7 @@ def format_relative_time(last_hb_time, current_time):
     # Ensure times are timezone-aware (assume UTC if naive)
     current_time = ensure_timezone(current_time)
     last_hb_time = ensure_timezone(last_hb_time)
-    
+
     if current_time is None or last_hb_time is None:
         return "unknown"
 
@@ -448,7 +458,7 @@ def determine_heartbeat_status(last_hb_time, current_time, interval=600):
     # Ensure times are timezone-aware (assume UTC if naive)
     current_time = ensure_timezone(current_time)
     last_hb_time = ensure_timezone(last_hb_time)
-    
+
     if current_time is None or last_hb_time is None:
         return "unknown"
 

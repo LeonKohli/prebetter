@@ -62,15 +62,17 @@ async def heartbeat_status(
     results = query.all()
 
     # Group by node for tree structure
-    nodes_dict: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"name": "", "os": None, "agents": {}})
+    nodes_dict: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {"name": "", "os": None, "agents": {}}
+    )
     total_agents = 0
 
     for row in results:
         node_name = row.host_name or "(no node)"
 
-        # Add agent to the node if it doesn't already exist
-        if not nodes_dict[node_name]["os"] and row.os:
-            nodes_dict[node_name]["os"] = row.os
+        # Set the OS info from the query result
+        if not nodes_dict[node_name]["os"] and hasattr(row, "os"):
+            nodes_dict[node_name]["os"] = row.os.strip() if row.os else None
 
         nodes_dict[node_name]["name"] = node_name
 
@@ -78,12 +80,19 @@ async def heartbeat_status(
         if row.analyzer_name not in nodes_dict[node_name]["agents"]:
             # Leverage Pydantic's validation to handle type conversion
             try:
+                # Handle the special case where last_heartbeat might be 'Never'
+                last_heartbeat = (
+                    None if row.last_heartbeat == "Never" else row.last_heartbeat
+                )
+
                 agent_info = AgentInfo(
                     name=row.analyzer_name,
                     model=row.model,  # Pydantic validator handles None -> ""
                     version=row.version,  # Pydantic validator handles None -> ""
-                    **{"class": row.class_},  # Pydantic validator handles None -> ""
-                    latest_heartbeat_at=row.last_heartbeat,  # Pydantic validator handles conversion
+                    **{
+                        "class": getattr(row, "class")
+                    },  # Use getattr to access reserved keyword
+                    latest_heartbeat_at=last_heartbeat,  # Pydantic validator handles conversion
                     seconds_ago=row.seconds_ago if row.seconds_ago is not None else -1,
                     status=row.status,  # Pydantic validator ensures valid status
                 )
@@ -179,7 +188,8 @@ async def cleanup_heartbeats(
         30, ge=1, le=90, description="Days of heartbeat data to retain"
     ),
     dry_run: bool = Query(
-        False, description="If true, only preview what would be deleted without actually deleting"
+        False,
+        description="If true, only preview what would be deleted without actually deleting",
     ),
 ):
     """
@@ -195,10 +205,10 @@ async def cleanup_heartbeats(
         Dict with cleanup statistics
     """
     from app.models.prelude import Heartbeat
-    
+
     # Get current heartbeat count before cleanup
     total_heartbeats_before = db.query(Heartbeat).count()
-    
+
     # Clean up old heartbeats first
     deleted_heartbeats, deleted_analyzer_times = cleanup_old_heartbeats(
         db, retention_days, dry_run=dry_run

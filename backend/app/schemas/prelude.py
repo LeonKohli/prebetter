@@ -15,8 +15,8 @@ class AgentInfo(BaseModel):
     status: str
 
     model_config = ConfigDict(from_attributes=True)
-    
-    @field_validator('latest_heartbeat_at', mode='before')
+
+    @field_validator("latest_heartbeat_at", mode="before")
     @classmethod
     def parse_heartbeat_time(cls, v):
         """Handle various heartbeat time formats from SQLAlchemy."""
@@ -26,25 +26,26 @@ class AgentInfo(BaseModel):
             # Parse string datetime if COALESCE forces string return
             try:
                 from datetime import datetime as dt
+
                 return dt.strptime(v, "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 return None
         return v
-    
-    @field_validator('model', 'version', 'class_', mode='before')
+
+    @field_validator("model", "version", "class_", mode="before")
     @classmethod
     def empty_string_for_none(cls, v):
         """Convert None to empty string for string fields."""
         return v or ""
-    
-    @field_validator('status', mode='before')
+
+    @field_validator("status", mode="before")
     @classmethod
     def validate_status(cls, v):
         """Ensure status is valid."""
-        valid_statuses = ['online', 'offline', 'unknown']
+        valid_statuses = ["online", "offline", "unknown"]
         if v and v in valid_statuses:
             return v
-        return 'unknown'
+        return "unknown"
 
 
 class HeartbeatNodeInfo(BaseModel):
@@ -129,18 +130,19 @@ class TimeInfo(BaseModel):
     usec: Optional[int] = None
     gmtoff: Optional[int] = None
 
-    @field_validator("timestamp", mode='before')
+    @field_validator("timestamp", mode="before")
     @classmethod
     def validate_timestamp(cls, v):
         """Handle various timestamp inputs and ensure timezone-aware."""
         if v is None or v == 0:
             # Use current time for invalid timestamps
             from app.core.datetime_utils import get_current_time
+
             return get_current_time()
-            
+
         if isinstance(v, datetime):
             return ensure_timezone(v)
-            
+
         # Let Pydantic handle other types
         return v
 
