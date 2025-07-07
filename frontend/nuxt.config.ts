@@ -16,11 +16,7 @@ export default defineNuxtConfig({
     compatibilityVersion: 4,
   },
   runtimeConfig: {
-    // Private key, only available on the server
-    apiBase: process.env.API_BASE_URL || 'http://localhost:8000',
-    public: {
-      // Public keys, available on client
-    },
+    apiBase: 'http://localhost:8000',
   },
   // Basic SEO site configuration
   site: {
