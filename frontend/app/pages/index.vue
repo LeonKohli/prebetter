@@ -1,134 +1,137 @@
 <template>
-  <!-- 
-    The main layout (default.vue) already provides the global header/navbar and footer.
-    We only provide the main content here to avoid duplication and ensure a single source of truth.
-  -->
-  <div class="container mx-auto px-4 py-12">
-    <!-- Hero Section -->
-    <section class="text-center mb-16">
-      <h1 class="text-4xl md:text-5xl font-bold mb-6 leading-tight">
-        Modern Nuxt 3 Boilerplate
-      </h1>
-      <p class="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-        A production-ready starter template with shadcn-vue, Tailwind CSS, VueUse, color mode, and SEO optimization.
+  <div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold mb-2">Security Dashboard</h1>
+      <p class="text-muted-foreground">
+        Monitor and analyze security alerts from your Prelude IDS system
       </p>
-      <div class="flex flex-wrap justify-center gap-4">
-        <!-- Use Button, not UiButton, for consistency with the design system -->
-        <Button size="lg">
-          <Icon name="lucide:rocket" class="mr-2 h-4 w-4" />
-          Get Started
-        </Button>
-        <Button variant="outline" size="lg" as="a" href="https://github.com/leonkohli/nuxt-boilerplate" target="_blank" rel="noopener" aria-label="GitHub Repository">
-          <Icon name="lucide:github" class="mr-2 h-4 w-4" />
-          View on GitHub
-        </Button>
+    </div>
+
+    <AuthState v-slot="{ loggedIn, user }">
+      <div v-if="loggedIn">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle class="text-sm font-medium">Total Alerts</CardTitle>
+              <Icon name="lucide:alert-circle" class="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-bold">0</div>
+              <p class="text-xs text-muted-foreground">
+                Last 24 hours
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle class="text-sm font-medium">High Severity</CardTitle>
+              <Icon name="lucide:alert-triangle" class="size-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-bold">0</div>
+              <p class="text-xs text-muted-foreground">
+                Requires immediate attention
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle class="text-sm font-medium">Medium Severity</CardTitle>
+              <Icon name="lucide:info" class="size-4 text-yellow-600" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-bold">0</div>
+              <p class="text-xs text-muted-foreground">
+                Monitor closely
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle class="text-sm font-medium">Active Analyzers</CardTitle>
+              <Icon name="lucide:activity" class="size-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div class="text-2xl font-bold">0</div>
+              <p class="text-xs text-muted-foreground">
+                Currently online
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <!-- Welcome Card -->
+        <Card>
+          <CardHeader>
+            <CardTitle>Welcome, {{ user?.username || 'User' }}!</CardTitle>
+            <CardDescription>
+              You are successfully logged in to the Prebetter SIEM Dashboard.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p class="text-muted-foreground">
+              This is a static demo page. In a real implementation, this dashboard would show:
+            </p>
+            <ul class="mt-4 space-y-2 text-sm text-muted-foreground">
+              <li class="flex items-start gap-2">
+                <Icon name="lucide:check" class="size-4 text-green-600 mt-0.5" />
+                <span>Real-time security alerts from your Prelude IDS system</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <Icon name="lucide:check" class="size-4 text-green-600 mt-0.5" />
+                <span>Alert statistics and trends</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <Icon name="lucide:check" class="size-4 text-green-600 mt-0.5" />
+                <span>System health and analyzer status</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <Icon name="lucide:check" class="size-4 text-green-600 mt-0.5" />
+                <span>Alert filtering and export capabilities</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
       </div>
-    </section>
 
-    <!-- Features Grid -->
-    <section class="mb-16">
-      <h2 class="text-3xl font-bold text-center mb-12">Key Features</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card class="p-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
-          <div class="flex items-center mb-4">
-            <Icon name="lucide:palette" class="h-8 w-8 text-primary mr-3" />
-            <h3 class="text-lg font-semibold">shadcn-vue</h3>
-          </div>
-          <p class="text-muted-foreground leading-relaxed">
-            Beautiful, accessible components built with Reka UI and styled with Tailwind CSS.
-          </p>
-        </Card>
-
-        <Card class="p-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
-          <div class="flex items-center mb-4">
-            <Icon name="lucide:wind" class="h-8 w-8 text-primary mr-3" />
-            <h3 class="text-lg font-semibold">Tailwind CSS</h3>
-          </div>
-          <p class="text-muted-foreground leading-relaxed">
-            Utility-first CSS framework for rapid UI development with modern design patterns.
-          </p>
-        </Card>
-
-        <Card class="p-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
-          <div class="flex items-center mb-4">
-            <Icon name="lucide:zap" class="h-8 w-8 text-primary mr-3" />
-            <h3 class="text-lg font-semibold">VueUse</h3>
-          </div>
-          <p class="text-muted-foreground leading-relaxed">
-            Collection of essential Vue composition utilities for enhanced development experience.
-          </p>
-        </Card>
-
-        <Card class="p-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
-          <div class="flex items-center mb-4">
-            <Icon name="lucide:moon" class="h-8 w-8 text-primary mr-3" />
-            <h3 class="text-lg font-semibold">Color Mode</h3>
-          </div>
-          <p class="text-muted-foreground leading-relaxed">
-            Built-in dark/light mode support with smooth transitions and system preference detection.
-          </p>
-        </Card>
-
-        <Card class="p-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
-          <div class="flex items-center mb-4">
-            <Icon name="lucide:search" class="h-8 w-8 text-primary mr-3" />
-            <h3 class="text-lg font-semibold">SEO Optimized</h3>
-          </div>
-          <p class="text-muted-foreground leading-relaxed">
-            Pre-configured SEO settings with meta tags, Open Graph, and structured data support.
-          </p>
-        </Card>
-
-        <Card class="p-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
-          <div class="flex items-center mb-4">
-            <Icon name="lucide:shield-check" class="h-8 w-8 text-primary mr-3" />
-            <h3 class="text-lg font-semibold">Type Safe</h3>
-          </div>
-          <p class="text-muted-foreground leading-relaxed">
-            Full TypeScript support with auto-generated types and excellent developer experience.
-          </p>
+      <div v-else>
+        <!-- Welcome message for non-authenticated users -->
+        <Card>
+          <CardHeader>
+            <CardTitle>Welcome to Prebetter SIEM</CardTitle>
+            <CardDescription>
+              Security Information and Event Management Dashboard
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p class="mb-4">
+              Please log in to access the security dashboard and view alerts from your monitored systems.
+            </p>
+            <Button as-child>
+              <NuxtLink to="/login">
+                <Icon name="lucide:log-in" class="mr-2 size-4" />
+                Log In
+              </NuxtLink>
+            </Button>
+          </CardContent>
         </Card>
       </div>
-    </section>
-
-    <!-- Tech Stack -->
-    <section class="text-center">
-      <h2 class="text-3xl font-bold mb-8">Built With</h2>
-      <div class="flex flex-wrap justify-center items-center gap-8 text-muted-foreground">
-        <div class="flex items-center space-x-2 transition-colors hover:text-foreground">
-          <Icon name="logos:nuxt-icon" class="h-6 w-6" />
-          <span>Nuxt 3</span>
-        </div>
-        <div class="flex items-center space-x-2 transition-colors hover:text-foreground">
-          <Icon name="logos:vue" class="h-6 w-6" />
-          <span>Vue 3</span>
-        </div>
-        <div class="flex items-center space-x-2 transition-colors hover:text-foreground">
-          <Icon name="logos:tailwindcss-icon" class="h-6 w-6" />
-          <span>Tailwind CSS</span>
-        </div>
-        <div class="flex items-center space-x-2 transition-colors hover:text-foreground">
-          <Icon name="logos:typescript-icon" class="h-6 w-6" />
-          <span>TypeScript</span>
-        </div>
-        <div class="flex items-center space-x-2 transition-colors hover:text-foreground">
-          <Icon name="logos:vitejs" class="h-6 w-6" />
-          <span>Vite</span>
-        </div>
-      </div>
-    </section>
+    </AuthState>
   </div>
 </template>
 
 <script setup lang="ts">
-// Basic SEO for the home page
-useSeoMeta({
-  title: 'Nuxt Shadcn Boilerplate',
-  description: 'A modern Nuxt 4 boilerplate with shadcn-vue, Tailwind CSS, VueUse, color mode, and SEO.',
-  ogTitle: 'Nuxt Shadcn Boilerplate',
-  ogDescription: 'A modern Nuxt 4 boilerplate with shadcn-vue, Tailwind CSS, VueUse, color mode, and SEO.',
-  ogType: 'website',
-})
+// This page is public - shows different content based on auth status
+const { loggedIn } = useUserSession()
 
-defineOgImageComponent('NuxtSeo')
+// SEO
+useSeoMeta({
+  title: 'Dashboard - Prebetter SIEM',
+  description: 'Security Information and Event Management Dashboard',
+})
 </script>
