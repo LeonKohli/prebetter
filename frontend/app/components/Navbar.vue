@@ -31,10 +31,10 @@
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem v-if="user.isSuperuser" as-child>
-                  <NuxtLink to="/admin">
-                    <Icon name="lucide:settings" class="mr-2 size-4" />
-                    Admin Settings
+                <DropdownMenuItem as-child>
+                  <NuxtLink to="/profile">
+                    <Icon name="lucide:user" class="mr-2 size-4" />
+                    View Profile
                   </NuxtLink>
                 </DropdownMenuItem>
                 <DropdownMenuItem @click="handleLogout">
