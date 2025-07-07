@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Note**: For overall project guidance and frontend integration details, see the [root CLAUDE.md](../CLAUDE.md).
+
 # Prebetter Backend Development Guide
 
 This is a FastAPI-based REST API for accessing Prelude IDS/SIEM data with user management and authentication. The API provides comprehensive access to security alerts and related information from your Prelude SIEM system.

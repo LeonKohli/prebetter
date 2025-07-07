@@ -1,183 +1,107 @@
-# Prelude SIEM Dashboard
+# Prebetter - SIEM Dashboard
 
-A modern, comprehensive Security Information and Event Management (SIEM) dashboard that combines a FastAPI backend with a Nuxt.js frontend to provide real-time monitoring, analysis, and management of security alerts.
+A modern Security Information and Event Management (SIEM) dashboard that provides a comprehensive interface for monitoring and analyzing security alerts from Prelude IDS/SIEM systems.
 
-## Project Overview
+## Overview
 
-This project consists of two main components:
+Prebetter consists of two main components working together:
 
-1. **Backend API (FastAPI)**: A performant REST API for accessing Prelude IDS/SIEM data with user management and authentication. See the [Backend README](./backend/README.md) for more details.
-2. **Frontend Dashboard (Nuxt.js)**: A responsive, user-friendly dashboard for visualizing and interacting with security alerts. See the [Frontend README](./frontend/README.md) for more details.
+- **Backend API**: FastAPI-based REST API that interfaces with Prelude databases
+- **Frontend Dashboard**: Nuxt.js 3 application providing interactive visualizations
 
-## Features
+## Architecture
 
-### Backend Features
+```
+prebetter/
+├── backend/          # FastAPI backend service
+├── frontend/         # Nuxt.js frontend application  
+├── CLAUDE.md        # AI assistant guidance
+└── README.md        # This file
+```
 
-- **User Management & Authentication**: JWT-based authentication with role-based access control
-- **Alert Management**: Filter, sort, and export security alerts
-- **Heartbeat Monitoring**: Monitor the status of security agents across your network
-- **Statistical Analysis**: Generate timelines and statistical summaries of security data
-- **Export Functionality**: Export alerts in CSV format for further analysis
+### Backend
+- FastAPI with Python 3.13+
+- Dual MySQL database system (Prelude + User management)
+- JWT authentication with role-based access control
+- Comprehensive API for alerts, statistics, and monitoring
 
-### Frontend Features
+### Frontend  
+- Nuxt 3 with Vue 3 Composition API
+- Modern UI with shadcn-vue components
+- Real-time dashboards and data visualization
+- Responsive design with dark/light mode support
 
-- **Responsive Dashboard**: Modern UI that works on desktop and mobile
-- **Real-time Visualization**: Interactive charts and graphs for security data
-- **Dark/Light Mode**: Theme support for different environments
-- **Data Tables**: Sortable, filterable tables for security alerts
-- **Timeline Views**: Chronological view of security events
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- Python 3.x+
+- Python 3.13+
 - Node.js 20+
 - MySQL 5.7+
-- uv package manager (for Python dependencies)
-- bun or npm (for JavaScript dependencies)
+- uv (Python package manager)
+- Bun (JavaScript package manager)
 
 ### Installation
 
-#### Backend Setup
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd prebetter
+   ```
 
-1. Navigate to the backend directory:
+2. **Set up the backend:**
    ```bash
    cd backend
-   ```
-
-2. Create and activate a virtual environment:
-   ```bash
-   uv venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```bash
    uv sync
-   ```
-
-4. Configure environment variables:
-   ```bash
    cp .env.example .env
-   # Edit .env with your database credentials and other settings
-   ```
-
-5. Start the API server:
-   ```bash
+   # Edit .env with your database credentials
    fastapi dev
    ```
 
-   The API will be available at http://localhost:8000 with documentation at http://localhost:8000/docs
-
-#### Frontend Setup
-
-1. Navigate to the frontend directory:
+3. **Set up the frontend:**
    ```bash
    cd frontend
-   ```
-
-2. Install dependencies:
-   ```bash
    bun install
-   # or
-   npm install
+   bun run dev
    ```
 
-3. Start the development server:
-   ```bash
-   bun dev
-   # or
-   npm run dev
-   ```
+4. **Access the application:**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - API Documentation: http://localhost:8000/api/v1/docs
 
-   The frontend will be available at http://localhost:3000
+## Features
 
-## Project Structure
+- **Security Alert Management**: View, filter, and analyze security alerts
+- **System Monitoring**: Real-time heartbeat monitoring of security agents
+- **Statistical Analysis**: Timeline views and summary statistics
+- **Data Export**: Export alerts in various formats for external analysis
+- **User Management**: Secure authentication and role-based access control
+- **Modern UI**: Responsive design with intuitive data visualization
 
-```
-prelude-siem/
-├── backend/                  # FastAPI Backend
-│   ├── app/                  # Application code
-│   │   ├── api/              # API endpoints
-│   │   ├── core/             # Core functionality
-│   │   ├── database/         # Database configuration
-│   │   ├── models/           # Data models
-│   │   ├── schemas/          # Pydantic schemas
-│   │   └── services/         # Business logic
-│   ├── tests/                # Test suite
-│   └── requirements.txt      # Python dependencies
-├── frontend/                 # Nuxt.js Frontend
-│   ├── app/                  # Application code
-│   │   ├── components/       # Reusable components
-│   │   ├── composables/      # Shared state and logic
-│   │   ├── layouts/          # Page layouts
-│   │   └── pages/            # Application pages
-│   └── package.json          # JavaScript dependencies
-└── README.md                 # Project documentation
-```
+## Documentation
 
-## Database Structure
-
-The application uses two separate MySQL databases:
-
-1. **Prelude Database**: Contains all SIEM/IDS data including alerts, heartbeats, and analyzer information. This database is treated as read-only by the API.
-2. **Prebetter Database**: Contains user management data. This database is managed by the API for user authentication and authorization.
-
-## API Documentation
-
-- Interactive API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Alternative API Documentation (ReDoc): [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- **Backend Documentation**: See [backend/README.md](./backend/README.md)
+- **Frontend Documentation**: See [frontend/README.md](./frontend/README.md)
+- **Development Guide**: See [CLAUDE.md](./CLAUDE.md) for development patterns and best practices
+- **API Documentation**: Available at `/api/v1/docs` when backend is running
 
 ## Development
 
-### Backend Development
+Each component has its own development workflow and requirements. Please refer to the individual README files in the `backend/` and `frontend/` directories for detailed instructions.
 
-```bash
-cd backend
+### Key Technologies
 
-# Run tests
-uv run pytest --cov=app
+**Backend**: FastAPI, SQLAlchemy, PyJWT, pytest, ruff  
+**Frontend**: Nuxt 3, Vue 3, shadcn-vue, Tailwind CSS, TypeScript
 
-# Run linter
-ruff check .
+## Contributing
 
-# Format code
-ruff format .
-```
-
-### Frontend Development
-
-```bash
-cd frontend
-
-# Run development server
-bun dev
-
-# Build for production
-bun build
-
-# Preview production build
-bun preview
-```
-
-## Environment Variables
-
-### Backend
-
-- `MYSQL_USER`: MySQL username
-- `MYSQL_PASSWORD`: MySQL password
-- `MYSQL_HOST`: MySQL host (default: localhost)
-- `MYSQL_PORT`: MySQL port (default: 3306)
-- `MYSQL_PRELUDE_DB`: Name of the Prelude database (default: prelude)
-- `MYSQL_PREBETTER_DB`: Name of the Prebetter database (default: prebetter)
-- `SECRET_KEY`: Secret key for JWT token generation
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes (default: 30)
-- `BACKEND_CORS_ORIGINS`: Allowed origins for CORS (default: ["*"])
-
-### Frontend
-
-- `NUXT_PUBLIC_API_BASE`: Base URL of the backend API
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes following the patterns in CLAUDE.md
+4. Test thoroughly
+5. Submit a pull request
 
 ## License
 
