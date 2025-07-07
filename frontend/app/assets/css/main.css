@@ -161,3 +161,8 @@
   }
 }
 
+/* Hide content until auth is ready to prevent flash */
+html[data-auth-ready="false"] {
+  visibility: hidden;
+}
+

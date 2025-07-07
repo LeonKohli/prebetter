@@ -45,6 +45,14 @@ A modern Security Information and Event Management (SIEM) dashboard built with N
 
    The application will be available at `http://localhost:3000`
 
+### Default Login Credentials
+
+For development, the backend creates a default admin user:
+- **Username**: `admin`
+- **Password**: `admin`
+
+**Important**: Change these credentials in production!
+
 ## Development
 
 ### Available Scripts
@@ -97,6 +105,19 @@ frontend/
 - **Chart Components**: Timeline visualizations for security events
 - **Filter System**: Advanced filtering for alerts by severity, classification, IP, etc.
 - **Authentication**: JWT-based auth integration with backend
+
+### Making Authenticated API Requests
+
+The frontend uses `nuxt-auth-utils` for session management. To make authenticated requests:
+
+```vue
+<script setup>
+// Use useFetch for SSR-compatible authenticated requests
+const { data } = await useFetch('/api/alerts')
+</script>
+```
+
+All requests through `/api/*` are automatically proxied to the backend with the JWT token from the secure session.
 
 ## API Integration
 
