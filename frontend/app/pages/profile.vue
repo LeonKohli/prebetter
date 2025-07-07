@@ -51,11 +51,16 @@
 <script setup lang="ts">
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
+// Require authentication to view this page
+definePageMeta({
+  requiresAuth: true
+})
+
 const { user } = await useUserSession()
 
 // Fetch users if superuser - must use trailing slash
 const { data: response, pending, error } = user.value?.isSuperuser 
-  ? await useFetch('/api/users/')
+  ? await useFetch('/api/users')
   : { data: ref(null), pending: ref(false), error: ref(null) }
 
 const users = computed(() => response.value?.items || [])
