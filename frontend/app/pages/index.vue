@@ -126,8 +126,9 @@
 </template>
 
 <script setup lang="ts">
-// This page is public - shows different content based on auth status
-const { loggedIn } = useUserSession()
+definePageMeta({
+  requiresAuth: true,
+})
 
 // SEO
 useSeoMeta({
