@@ -33,6 +33,10 @@
             />
           </div>
 
+          <div v-if="infoMsg" class="rounded-md bg-muted p-3">
+            <p class="text-sm text-muted-foreground">{{ infoMsg }}</p>
+          </div>
+
           <div v-if="errorMsg" class="rounded-md bg-destructive/10 p-3">
             <p class="text-sm text-destructive">{{ errorMsg }}</p>
           </div>
@@ -58,7 +62,18 @@ const route = useRoute()
 const username = ref('')
 const password = ref('')
 const errorMsg = ref<string | null>(null)
+const infoMsg = ref<string | null>(null)
 const loading = ref(false)
+
+// Handle reason messages
+onMounted(() => {
+  const reason = route.query.reason as string
+  if (reason === 'session-expired') {
+    infoMsg.value = 'Your session has expired. Please log in again.'
+  } else if (reason === 'unauthorized') {
+    infoMsg.value = 'Please log in to continue.'
+  }
+})
 
 async function handleLogin() {
   errorMsg.value = null
