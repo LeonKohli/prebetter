@@ -1,36 +1,38 @@
 {
-  "name": "nuxt-app",
+  "name": "nuxt-shadcn-boilerplate",
   "private": true,
   "type": "module",
+  "description": "A modern Nuxt 3 boilerplate with shadcn-vue, Tailwind CSS, VueUse, color mode, and SEO",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test": "vitest",
+    "typecheck": "nuxi typecheck"
   },
   "dependencies": {
-    "@nuxt/icon": "^1.10.2",
+    "@nuxt/icon": "1.12.0",
     "@nuxtjs/color-mode": "^3.5.2",
-    "@tanstack/vue-table": "^8.20.5",
-    "@unovis/ts": "^1.5.0",
-    "@unovis/vue": "^1.5.0",
-    "@vueuse/core": "^12.0.0",
+    "@nuxtjs/seo": "3.0.3",
+    "@tailwindcss/vite": "^4.1.5",
+    "@vueuse/core": "^13.1.0",
+    "@vueuse/nuxt": "13.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-vue-next": "^0.468.0",
-    "nuxt": "^3.14.1592",
-    "nuxt-auth-utils": "^0.4.4",
-    "radix-vue": "^1.9.11",
-    "shadcn-nuxt": "0.11.3",
-    "tailwind-merge": "^2.5.5",
-    "tailwindcss-animate": "^1.0.7",
-    "vue": "latest",
-    "vue-router": "latest"
+    "lucide-vue-next": "^0.507.0",
+    "nuxt": "^3.17.6",
+    "reka-ui": "^2.2.0",
+    "shadcn-nuxt": "2.1.0",
+    "tailwind-merge": "^3.2.0",
+    "tailwindcss": "^4.1.5",
+    "tw-animate-css": "^1.2.9",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1"
   },
   "devDependencies": {
-    "@iconify-json/radix-icons": "^1.2.2",
-    "@nuxtjs/tailwindcss": "^6.12.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.8.3",
+    "vue-tsc": "^2.2.10"
   }
 }
