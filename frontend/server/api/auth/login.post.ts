@@ -17,7 +17,13 @@ export default defineEventHandler(async (event) => {
     const accessToken = tokens.access_token
 
     // 2. Fetch user information from the backend using the new token
-    const userInfo = await $fetch(`${apiBase}/api/v1/auth/users/me`, {
+    const userInfo = await $fetch<{
+      id: number
+      email: string
+      username: string
+      full_name: string
+      is_superuser: boolean
+    }>(`${apiBase}/api/v1/auth/users/me`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
