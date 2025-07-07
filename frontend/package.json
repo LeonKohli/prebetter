@@ -1,8 +1,8 @@
 {
-  "name": "nuxt-shadcn-boilerplate",
+  "name": "prebetter-frontend",
   "private": true,
   "type": "module",
-  "description": "A modern Nuxt 3 boilerplate with shadcn-vue, Tailwind CSS, VueUse, color mode, and SEO",
+  "description": "Frontend for Prebetter SIEM Dashboard - A modern Security Information and Event Management system",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
@@ -23,6 +23,7 @@
     "clsx": "^2.1.1",
     "lucide-vue-next": "^0.507.0",
     "nuxt": "^3.17.6",
+    "nuxt-auth-utils": "^0.5.20",
     "reka-ui": "^2.2.0",
     "shadcn-nuxt": "2.1.0",
     "tailwind-merge": "^3.2.0",
@@ -32,6 +33,7 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
+    "@iconify-json/lucide": "^1.2.56",
     "typescript": "^5.8.3",
     "vue-tsc": "^2.2.10"
   }
