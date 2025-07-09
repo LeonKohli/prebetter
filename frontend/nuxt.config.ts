@@ -17,6 +17,10 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     apiBase: 'http://localhost:8000',
+    session: {
+      maxAge: 60 * 30,  // 30 minutes - match backend JWT expiration
+      password: process.env.NUXT_SESSION_PASSWORD || '',
+    },
   },
   // Basic SEO site configuration
   site: {
