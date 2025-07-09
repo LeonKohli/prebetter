@@ -32,15 +32,6 @@
               :disabled="loading"
             />
           </div>
-
-          <div v-if="infoMsg" class="rounded-md bg-muted p-3">
-            <p class="text-sm text-muted-foreground">{{ infoMsg }}</p>
-          </div>
-
-          <div v-if="errorMsg" class="rounded-md bg-destructive/10 p-3">
-            <p class="text-sm text-destructive">{{ errorMsg }}</p>
-          </div>
-
           <Button type="submit" class="w-full" :disabled="loading">
             <Icon v-if="loading" name="lucide:loader-2" class="mr-2 size-4 animate-spin" />
             {{ loading ? 'Logging in...' : 'Login' }}
@@ -61,22 +52,10 @@ const session = useUserSession()
 const route = useRoute()
 const username = ref('')
 const password = ref('')
-const errorMsg = ref<string | null>(null)
-const infoMsg = ref<string | null>(null)
 const loading = ref(false)
 
-// Handle reason messages
-onMounted(() => {
-  const reason = route.query.reason as string
-  if (reason === 'session-expired') {
-    infoMsg.value = 'Your session has expired. Please log in again.'
-  } else if (reason === 'unauthorized') {
-    infoMsg.value = 'Please log in to continue.'
-  }
-})
 
 async function handleLogin() {
-  errorMsg.value = null
   loading.value = true
   
   try {
@@ -95,7 +74,7 @@ async function handleLogin() {
     const redirect = route.query.redirect as string || '/'
     await navigateTo(redirect)
   } catch (error: any) {
-    errorMsg.value = error.data?.statusMessage || 'An error occurred.'
+    console.error('Login error:', error)
   } finally {
     loading.value = false
   }
