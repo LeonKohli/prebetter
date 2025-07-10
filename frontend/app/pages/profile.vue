@@ -58,10 +58,21 @@ definePageMeta({
 
 const { user } = await useUserSession()
 
+// Define type for user list response
+interface UserListResponse {
+  items: Array<{
+    id: number
+    email: string
+    username: string
+    full_name?: string
+    is_superuser: boolean
+  }>
+}
+
 // Fetch users if superuser - must use trailing slash
 const { data: response, pending, error } = user.value?.isSuperuser 
-  ? await useFetch('/api/users')
-  : { data: ref(null), pending: ref(false), error: ref(null) }
+  ? await useFetch<UserListResponse>('/api/users')
+  : { data: ref<UserListResponse | null>(null), pending: ref(false), error: ref(null) }
 
 const users = computed(() => response.value?.items || [])
 </script>
