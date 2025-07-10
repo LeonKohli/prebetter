@@ -1,14 +1,14 @@
 <template>
   <header
     role="banner"
-    class="sticky top-0 z-20 border-b backdrop-blur supports-backdrop-blur:bg-background/60 px-4 md:px-8"
+    class="sticky top-0 z-20 border-b backdrop-blur supports-backdrop-blur:bg-background/95 px-2 md:px-4"
   >
-    <div class="max-w-8xl mx-auto h-16 flex items-center justify-between">
-      <NuxtLink to="/" class="flex items-center space-x-3 group" aria-label="Home">
-        <Icon name="lucide:shield-alert" class="h-8 w-8 text-primary" />
-        <div>
-          <span class="font-semibold text-lg tracking-tight">Prebetter</span>
-          <p class="text-xs text-muted-foreground hidden md:block">SIEM Dashboard</p>
+    <div class="h-12 flex items-center justify-between">
+      <NuxtLink to="/" class="flex items-center space-x-2 group" aria-label="Home">
+        <Icon name="lucide:shield-alert" class="h-5 w-5 text-primary" />
+        <div class="flex items-baseline space-x-1">
+          <span class="font-semibold text-sm tracking-tight">Prebetter</span>
+          <span class="text-xs text-muted-foreground hidden lg:inline">SIEM</span>
         </div>
       </NuxtLink>
 

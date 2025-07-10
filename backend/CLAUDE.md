@@ -1,12 +1,28 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with the Prebetter backend.
 
-**Note**: For overall project guidance and frontend integration details, see the [root CLAUDE.md](../CLAUDE.md).
+**Note**: For overall project architecture and frontend integration, see the [root CLAUDE.md](../CLAUDE.md).
 
-# Prebetter Backend Development Guide
+## Prebetter Backend Overview
 
-This is a FastAPI-based REST API for accessing Prelude IDS/SIEM data with user management and authentication. The API provides comprehensive access to security alerts and related information from your Prelude SIEM system.
+FastAPI-based REST API serving Prelude IDS/SIEM data with JWT authentication and user management.
+
+## Quick Reference
+
+```bash
+# Start development server
+fastapi dev
+
+# Run tests with coverage
+uv run pytest --cov
+
+# Format and lint code  
+ruff format . && ruff check . --fix
+
+# Access API documentation
+open http://localhost:8000/api/v1/docs
+```
 
 ## Architecture Overview
 
@@ -28,9 +44,18 @@ app/
 ```
 
 ### Security & Authentication
-- JWT-based authentication with role-based access control (superuser/regular user)
-- Password hashing using bcrypt
-- Request tracking with unique IDs for audit trails
+
+**Current Implementation:**
+- JWT tokens with HS256 algorithm (30-minute expiration)
+- Bcrypt password hashing (default 12 rounds)
+- Role-based access: superuser and regular user
+- Request tracking via `X-Request-ID` header
+
+**Known Limitations:**
+- No token revocation/blacklist mechanism
+- No refresh token support
+- No logout endpoint (tokens valid until expiration)
+- Conflicting secret key configuration (JWT_SECRET_KEY vs SECRET_KEY)
 
 ## Common Commands
 
@@ -103,9 +128,9 @@ uv add <package-name>
 
 ## Environment Configuration
 
-Required in `.env` file:
+**Required** in `.env` file:
 ```env
-# MySQL Connection
+# MySQL Connection (REQUIRED)
 MYSQL_USER=your_user
 MYSQL_PASSWORD=your_password
 MYSQL_HOST=localhost
@@ -113,19 +138,46 @@ MYSQL_PORT=3306
 MYSQL_PRELUDE_DB=prelude
 MYSQL_PREBETTER_DB=prebetter
 
-# Security
-JWT_SECRET_KEY=your-secret-key
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-SECRET_KEY=your-secret-key
+# Security (CRITICAL - Change in production!)
+SECRET_KEY=your-secure-random-key-here  # Used for JWT signing
+ACCESS_TOKEN_EXPIRE_MINUTES=30         # Token expiration time
 
 # Environment & Logging
-ENVIRONMENT=development
-LOG_LEVEL=INFO
+ENVIRONMENT=development  # development|production
+LOG_LEVEL=INFO          # DEBUG|INFO|WARNING|ERROR
 
-# CORS
-BACKEND_CORS_ORIGINS=["*"]
+# CORS (Restrict in production!)
+BACKEND_CORS_ORIGINS=["http://localhost:3000"]  # Frontend URL
 ```
+
+**Note**: The codebase uses `SECRET_KEY` for JWT signing (not `JWT_SECRET_KEY`). Ensure a strong, unique value in production.
+
+## API Endpoints
+
+### Authentication
+- `POST /api/v1/auth/token` - Login (returns JWT access token)
+- `GET /api/v1/auth/users/me` - Get current user info
+
+### Core Endpoints (Protected)
+- `/api/v1/alerts/` - Security alerts with filtering
+- `/api/v1/statistics/timeline` - Alert timeline stats
+- `/api/v1/statistics/summary` - Summary statistics
+- `/api/v1/heartbeats/status` - Agent status monitoring
+- `/api/v1/reference/classifications` - Alert classifications
+- `/api/v1/users/` - User management (superuser only)
+
+### Health & Monitoring
+- `/health` - Application health check
+- `/api/v1/docs` - Swagger UI documentation
+- `/api/v1/redoc` - ReDoc documentation
+
+## Authentication Flow
+
+1. **Login**: `POST /api/v1/auth/token` with username/password
+2. **Token Response**: `{"access_token": "...", "token_type": "bearer"}`
+3. **Protected Requests**: Include header `Authorization: Bearer <token>`
+4. **Token Validation**: Automatic via `get_current_user` dependency
+5. **Expiration**: Tokens expire after 30 minutes (no refresh mechanism)
 
 ## Code Patterns
 
@@ -336,23 +388,70 @@ if hasattr(sort_by, "value"):
 - ReDoc: `http://localhost:8000/api/v1/redoc`
 - OpenAPI JSON: `http://localhost:8000/api/v1/openapi.json`
 
-## Key Dependencies
 
-- **FastAPI**: Web framework with automatic OpenAPI docs
-- **SQLAlchemy 2.0**: ORM for database operations
-- **Pydantic 2.0**: Data validation and serialization
-- **PyJWT**: JWT token handling
-- **Passlib[bcrypt]**: Password hashing
-- **pytest**: Testing framework
-- **pytest-asyncio**: Async test support
-- **pytest-cov**: Coverage reporting
-- **ruff**: Linting and formatting
+## Important Implementation Details
 
-## Project Specifics
+### Python & Dependencies
+- **Python Version**: 3.13+ required
+- **Package Manager**: `uv` (NOT pip or poetry)
+- **Key Dependencies**: FastAPI, SQLAlchemy 2.0, Pydantic 2.0, PyJWT
 
-- **Python Version**: 3.13+ (specified in pyproject.toml)
-- **Package Manager**: uv (NOT pip or poetry)
-- **Timezone Handling**: All datetime operations are timezone-aware using `datetime_utils.ensure_timezone()`
-- **Request Tracking**: Every request gets a unique ID via middleware, returned in `X-Request-ID` header
-- **Health Monitoring**: Comprehensive health endpoint at `/health` for infrastructure monitoring
-- **Logging**: Environment-based formatting (human-readable for dev, JSON for production)
+### Database Specifics
+- **Connection Pooling**: `pool_size=5, max_overflow=10`
+- **Query Limits**: Always use `.limit()` to prevent large result sets
+- **Distinct Results**: Use `.distinct()` to eliminate duplicates
+- **Batch Processing**: Use `yield_per(1000)` for exports
+
+### Security Considerations
+- **Password Hashing**: Bcrypt with 12 rounds (consider increasing to 14+)
+- **JWT Claims**: Currently only `sub`, `exp`, `iat`, `jti`
+- **CORS**: Currently allows all origins - MUST restrict in production
+- **No Rate Limiting**: Consider implementing for login endpoints
+
+### Operational Details
+- **Timezone Handling**: All datetimes use UTC via `datetime_utils.ensure_timezone()`
+- **Request Tracking**: Unique ID in `X-Request-ID` header
+- **Health Endpoint**: `/health` returns database connectivity status
+- **Logging**: Human-readable for dev, JSON for production
+
+### Testing
+- **Test Coverage**: Run `uv run pytest --cov`
+- **Test Databases**: Uses separate test databases
+- **Fixtures**: Database sessions provided via `conftest.py`
+
+## Common Development Tasks
+
+### Adding a New Protected Endpoint
+```python
+from fastapi import APIRouter, Depends
+from app.api.v1.routes.auth import get_current_user
+
+router = APIRouter()
+
+@router.get("/protected")
+async def protected_route(current_user = Depends(get_current_user)):
+    return {"user": current_user.username}
+```
+
+### Creating a Query with Filters
+```python
+from app.database.query_builders import build_alert_base_query
+from app.database.utils import apply_standard_alert_filters
+
+query, models = build_alert_base_query(db)
+query = apply_standard_alert_filters(query=query, severity="high", **models)
+results = query.limit(100).all()
+```
+
+### Adding a New User
+```python
+from app.services.users import UserService
+
+user_service = UserService(db)
+new_user = user_service.create(
+    username="newuser",
+    email="user@example.com", 
+    password="securepassword",
+    is_superuser=False
+)
+```

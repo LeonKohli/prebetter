@@ -160,5 +160,28 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+    overscroll-behavior: none;
+  }
+  
+  /* Disable overscroll bounce on all scrollable elements */
+  * {
+    overscroll-behavior: contain;
+  }
+  
+  /* Ensure the root html element also prevents overscroll */
+  html {
+    overscroll-behavior: none;
+  }
+  
+  /* Keep smooth scrolling but prevent elastic bounce */
+  [data-slot="table-container"],
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: none;
+    /* Smooth scrolling without bounce */
+    scroll-behavior: smooth;
   }
 }
