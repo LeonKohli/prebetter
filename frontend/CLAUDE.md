@@ -1,175 +1,319 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with the Prebetter frontend.
 
-**Note**: For overall project guidance and backend integration details, see the [root CLAUDE.md](../CLAUDE.md).
+**Note**: For overall project architecture and backend API details, see the [root CLAUDE.md](../CLAUDE.md).
 
-## Project Overview
+## Prebetter Frontend Overview
 
-**Prebetter Frontend** is a SIEM/IDS (Security Information and Event Management / Intrusion Detection System) dashboard built with Nuxt 3. It interfaces with the Prebetter backend API to display security alerts, system heartbeats, and statistics from a Prelude SIEM system.
+Nuxt 3 SSR application providing a modern SIEM dashboard with secure session-based authentication.
 
-## Tech Stack
-
-- **Framework**: Nuxt 3 with Vue 3 (Composition API only)
-- **UI Components**: shadcn-vue (Reka UI)
-- **Styling**: Tailwind CSS v4 with CSS variables
-- **Package Manager**: Bun (required - do not use npm/yarn/pnpm)
-- **Type Checking**: TypeScript with vue-tsc
-- **Utilities**: VueUse for composition utilities
-
-## Development Commands
+## Quick Reference
 
 ```bash
-# Development
-bun run dev          # Start development server (runs on port 3000)
+# Start development server
+bun run dev         # Runs on port 3000 (or 3001 if occupied)
 
-# Type checking
-bun run typecheck    # Run type checking with nuxi typecheck
+# Type checking and building
+bun run typecheck   # Check TypeScript types
+bun run build       # Build for production
+bun run preview     # Preview production build
 
-# Building
-bun run build        # Build for production
-bun run preview      # Preview production build
-bun run generate     # Generate static site
-
-# Testing
-bun run test         # Run tests with Vitest
-
-# Adding UI components
+# Add UI components
 bunx shadcn-vue@latest add <component-name>
 ```
 
-## Backend API Integration
+## Tech Stack & Modules
 
-The Prebetter backend API is located at `/home/leon/Documents/GitHub/prebetter/backend` and provides:
+**Core:**
+- **Framework**: Nuxt 3.17 with Vue 3 (Composition API)
+- **Package Manager**: Bun (required - do not use npm/yarn/pnpm)
+- **TypeScript**: Full type safety with vue-tsc
 
-### Base URL: `http://localhost:8000/api/v1`
+**UI & Styling:**
+- **Components**: shadcn-vue (Button, Card, Checkbox, Dropdown, Input, Tabs, Textarea, Tooltip)
+- **Styling**: Tailwind CSS v4 with OKLCH color system
+- **Icons**: @nuxt/icon with Lucide icons
+- **Theme**: Dark/light mode via @nuxtjs/color-mode
 
-### Authentication
-- JWT Bearer token authentication
-- Login endpoint: `POST /api/v1/auth/token`
-- Use `useFetch` with auth headers for authenticated requests
+**Authentication & State:**
+- **Sessions**: nuxt-auth-utils (secure server-side sessions)
+- **State**: Built-in useState for reactive state management
 
-### Key API Endpoints
-- **Alerts**: `/alerts/` - Security alerts with extensive filtering
-- **Statistics**: `/statistics/timeline`, `/statistics/summary`
-- **Heartbeats**: `/heartbeats/status`, `/heartbeats/tree`
-- **Reference Data**: `/reference/classifications`, `/reference/severities`
-- **Export**: `/export/alerts/{format}` (CSV support)
+## Authentication Architecture
 
-## Architecture Guidelines
+**Session-Based with Server-Side JWT Storage:**
 
-### Directory Structure
-- `app/components/` - Vue components (PascalCase naming)
-- `app/components/ui/` - shadcn-vue UI components
-- `app/pages/` - File-based routing (camelCase naming)
-- `app/composables/` - Reusable composition functions (use[Name] pattern)
-- `app/layouts/` - Layout templates
-- `app/utils/` - Utility functions
-- `server/api/` - Server API endpoints (for BFF pattern if needed)
+1. **Login Flow**: 
+   - User submits credentials to `/api/auth/login`
+   - Frontend proxies to backend `/api/v1/auth/token`
+   - JWT stored in secure server-side session only
+   - Session cookie (httpOnly) sent to browser
 
-### State Management & Data Fetching
+2. **API Proxy Pattern**:
+   - All API calls go through `/server/api/[...].ts`
+   - Server automatically injects JWT token
+   - Client never sees or handles tokens
 
-1. **Authentication State**: Create `useAuth` composable for JWT token management
-2. **API Composables**: Create dedicated composables for each API domain:
-   - `useAlerts()` - Alert fetching and filtering
-   - `useStatistics()` - Dashboard statistics
-   - `useHeartbeats()` - System health monitoring
-   - `useReference()` - Reference data caching
+3. **Session Configuration**:
+   - 30-minute expiration (matches backend JWT)
+   - Encrypted with `NUXT_SESSION_PASSWORD`
+   - Uses `useUserSession()` composable
 
-3. **Data Fetching Patterns**:
+4. **Route Protection**:
    ```typescript
-   // For SSR-optimized requests
-   const { data, error, pending } = await useFetch('/api/v1/alerts', {
-     baseURL: 'http://localhost:8000',
-     headers: {
-       Authorization: `Bearer ${token.value}`
-     }
+   // In pages that require auth
+   definePageMeta({
+     requiresAuth: true
+   })
+   
+   // For guest-only pages (like login)
+   definePageMeta({
+     guestOnly: true
    })
    ```
 
-## Component Development
+## Project Structure
 
-### UI Components
-- Use existing shadcn-vue components from `app/components/ui/`
-- Available components include: Button, Card, Checkbox, Input, Dropdown Menu, Tabs, Textarea, Tooltip
-- Add new shadcn components as needed: `bunx shadcn-vue@latest add <component-name>`
-
-### Styling Guidelines
-- Use inline Tailwind classes only - no @apply directives
-- **IMPORTANT**: Always use predefined color variables from `app/assets/css/main.css`:
-  - `bg-background`, `text-foreground` for main content
-  - `bg-card`, `text-card-foreground` for cards
-  - `bg-primary`, `text-primary-foreground` for primary actions
-  - `bg-secondary`, `text-secondary-foreground` for secondary elements
-  - `bg-muted`, `text-muted-foreground` for muted/subtle content
-  - `bg-destructive`, `text-destructive-foreground` for errors/warnings
-  - `border-border` for borders
-  - `ring-ring` for focus states
-- Never use arbitrary color values or Tailwind's default colors
-- The color system uses OKLCH color space and automatically adapts to dark/light modes
-
-### Icons
-Use `<Icon>` component from @nuxt/icon with Lucide icons:
-```vue
-<Icon name="lucide:shield-alert" class="size-5" />
+```
+frontend/
+├── app/                        # Nuxt 4 app directory
+│   ├── assets/css/            # Global styles
+│   ├── components/            # Vue components
+│   │   ├── ui/               # shadcn-vue components
+│   │   ├── Navbar.vue        # App navigation
+│   │   └── ColorModeToggle.vue
+│   ├── composables/           # Auto-imported composables (empty - add as needed)
+│   ├── layouts/              # Layout templates
+│   ├── middleware/           # Route middleware
+│   │   └── auth.global.ts    # Global auth checks
+│   ├── pages/                # File-based routing
+│   │   ├── index.vue        # Dashboard (protected)
+│   │   ├── login.vue        # Login page (guest only)
+│   │   └── profile.vue      # User profile (protected)
+│   └── utils/               # Utility functions
+├── server/                    # Nitro server directory
+│   └── api/                 # Server API routes
+│       ├── [...].ts         # API proxy with auth
+│       └── auth/            # Auth endpoints
+└── nuxt.config.ts           # Nuxt configuration
 ```
 
-## Prebetter-Specific Features
+## Data Fetching Patterns
 
-### Alert Dashboard
-- Display alerts in a data table with sorting and filtering
-- Implement faceted filters for severity, classification, analyzer
-- Show alert timeline charts using chart components
-- Group alerts by source/target IPs
+**Current Implementation:**
+```typescript
+// All API calls use the proxy - NO direct backend calls
+const { data, error, pending } = await useFetch('/api/users')  // Auto-proxied to backend
 
-### System Health Monitoring
-- Display heartbeat status in a tree view
-- Show online/offline status for hosts and agents
-- Implement real-time updates using polling or WebSocket
+// Authentication is automatic via session
+const { user, loggedIn } = useUserSession()
 
-### Statistics & Analytics
-- Create dashboard cards for summary statistics
-- Implement timeline charts (hourly, daily, weekly, monthly)
-- Export functionality for alerts (CSV format)
+// Protected API calls work automatically
+const { data } = await useFetch('/api/alerts')  // Token injected server-side
+```
 
-### Filter System
-Create a comprehensive filter system supporting:
-- Date range selection
-- Severity levels (High, Medium, Low, Info)
-- Classifications
-- IP address filtering (source/target)
-- Analyzer selection
-- Pagination with configurable page size
+**Important**: Never call backend directly. Always use `/api/*` routes.
 
-## Code Style Requirements
+## UI Development
 
-1. **Always use Composition API with TypeScript**
-2. **No manual imports for Vue/Nuxt functions** - They are auto-imported
-3. **Error Handling**:
-   - Client: `throw createError('Error message')`
-   - Server: `throw createError({ statusCode: 404, statusMessage: 'Not found' })`
-4. **TypeScript**: Use interfaces over types for better extendability
+### Styling Rules
 
-## Performance Considerations
+**Color System (OKLCH-based):**
+```css
+/* Use these Tailwind classes - NO arbitrary colors */
+bg-background / text-foreground      /* Main background/text */
+bg-card / text-card-foreground       /* Card surfaces */
+bg-primary / text-primary-foreground /* Primary actions */
+bg-muted / text-muted-foreground    /* Subtle content */
+bg-destructive                      /* Errors/warnings */
+border-border                       /* All borders */
+ring-ring                          /* Focus rings */
+```
 
-- Implement pagination for large datasets
-- Use lazy loading for below-fold content
-- Cache reference data (classifications, severities) using `useState`
-- Debounce search inputs and filters
-- Consider virtual scrolling for large alert tables
+**Best Practices:**
+- ✅ Use inline Tailwind classes
+- ❌ NO @apply directives in CSS
+- ❌ NO arbitrary color values like `bg-blue-500`
+- ✅ Dark/light mode handled automatically
 
-## Security Considerations
+### Icons
+```vue
+<!-- Always use icons via @nuxt/icon -->
+<Icon name="mdi:alert-circle" class="size-4" />
+<Icon name="lucide:shield" class="size-5" />
+```
 
-- Store JWT tokens securely (consider using httpOnly cookies)
-- Implement token refresh logic
-- Validate all user inputs
-- Sanitize displayed alert data to prevent XSS
-- Never expose sensitive information in client-side code
+## Environment Configuration
+
+**Required** in `.env`:
+```env
+# Session encryption key (minimum 32 characters)
+NUXT_SESSION_PASSWORD=your-very-secure-password-here-minimum-32-chars
+```
+
+**In `nuxt.config.ts`:**
+- Session timeout: 30 minutes (matches backend)
+- API base URL: `http://localhost:8000`
+- Modules configured: auth, icons, color mode, SEO
+
+## Code Patterns & Best Practices
+
+### Component Development
+```vue
+<script setup lang="ts">
+// TypeScript always enabled
+definePageMeta({
+  requiresAuth: true  // For protected pages
+})
+
+// All Vue/Nuxt functions auto-imported
+const { user, loggedIn } = useUserSession()
+const { data, error, pending } = await useFetch('/api/alerts')
+
+// Refs are typed automatically
+const searchQuery = ref('')  // Inferred as Ref<string>
+</script>
+```
+
+### Error Handling
+```typescript
+// Client-side errors
+throw createError('Something went wrong')
+
+// Server-side errors with status
+throw createError({ 
+  statusCode: 404, 
+  statusMessage: 'Resource not found' 
+})
+```
+
+### State Management
+```typescript
+// Use built-in useState for shared state
+const alerts = useState('alerts', () => [])
+
+// For complex state, create composables
+export const useAlertFilters = () => {
+  const severity = useState('filter-severity', () => '')
+  const dateRange = useState('filter-dateRange', () => null)
+  
+  return { severity, dateRange }
+}
+```
+
+## Security Implementation
+
+**Current Security Features:**
+- ✅ JWT tokens stored server-side only
+- ✅ Session cookies are httpOnly and encrypted
+- ✅ Automatic CSRF protection via session cookies
+- ✅ API proxy prevents direct backend exposure
+
+**Security Best Practices:**
+- Never store tokens in localStorage/sessionStorage
+- All API calls must go through server proxy
+- Validate and sanitize user inputs
+- Use server-side validation for critical operations
+
+## Performance Optimization
+
+**Currently Implemented:**
+- SSR for initial page load
+- Auto-imports reduce bundle size
+- Tailwind CSS tree-shaking
+
+**Recommended Optimizations:**
+- Add `lazy: true` to non-critical data fetches
+- Implement virtual scrolling for large lists
+- Use `useState` to cache reference data
+
+## Testing
+
+**Current Status:**
+- Vitest configured but no tests implemented
+- Type checking via `bun run typecheck`
+
+**Testing Commands:**
+```bash
+bun run test        # Run tests (when implemented)
+bun run typecheck   # Check TypeScript types
+```
+
+## Common Development Tasks
+
+### Adding a Protected Page
+```vue
+<!-- app/pages/newpage.vue -->
+<template>
+  <div>Protected content here</div>
+</template>
+
+<script setup lang="ts">
+definePageMeta({
+  requiresAuth: true
+})
+
+const { user } = useUserSession()
+const { data } = await useFetch('/api/protected-data')
+</script>
+```
+
+### Creating a Reusable Component
+```vue
+<!-- app/components/AlertCard.vue -->
+<template>
+  <Card>
+    <CardHeader>
+      <CardTitle>{{ alert.title }}</CardTitle>
+    </CardHeader>
+    <CardContent>
+      {{ alert.message }}
+    </CardContent>
+  </Card>
+</template>
+
+<script setup lang="ts">
+interface Props {
+  alert: {
+    title: string
+    message: string
+  }
+}
+
+defineProps<Props>()
+</script>
+```
+
+### Handling Forms
+```vue
+<script setup lang="ts">
+const form = reactive({
+  email: '',
+  message: ''
+})
+
+const { $fetch } = useNuxtApp()
+
+async function submitForm() {
+  try {
+    await $fetch('/api/contact', {
+      method: 'POST',
+      body: form
+    })
+    // Success handling
+  } catch (error) {
+    // Error handling
+  }
+}
+</script>
+```
 
 ## Important Conventions
 
-- **PascalCase**: Component files (e.g., `AlertTable.vue`)
-- **camelCase**: Pages and functions (e.g., `alerts.vue`, `useAlerts`)
-- **Composables**: Named as `use[Name]` (e.g., `useAuth`, `useAlerts`)
-- **No classes**: Use functional programming patterns only
-- **Git commits**: Never include "Co-Authored-By: Claude" in commit messages
+- **Package Manager**: Always use `bun` (not npm/yarn/pnpm)
+- **Node Version**: 18+ required
+- **Auto-imports**: Never manually import Vue/Nuxt functions
+- **API Calls**: Always use proxy routes (`/api/*`)
+- **Type Safety**: TypeScript is enforced throughout
+- **Git Commits**: Never include "Co-Authored-By: Claude"
