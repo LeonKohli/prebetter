@@ -15,6 +15,8 @@ import {
 } from '@tanstack/vue-table'
 import { Users, List } from 'lucide-vue-next'
 import { ref, computed, watch, shallowRef, onMounted, onUnmounted } from 'vue'
+import type { Ref } from 'vue'
+import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
 import { useDebounceFn } from '@vueuse/core'
 import { valueUpdater } from '@/utils/utils'
 import type { AlertListItem, GroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
@@ -22,107 +24,119 @@ import type { AlertListItem, GroupedAlert, AlertListResponse, GroupedAlertRespon
 // Get column definitions from composable
 const { groupedColumns, ungroupedColumns, sortFieldMap, filterFieldMap } = useAlertTableColumns()
 
-// View mode toggle
-const isGrouped = ref(true)
+// URL state synchronization using VueUse Router
+const urlState = useTableUrlState({
+  defaultView: 'grouped',
+  defaultPageSize: 100,
+  defaultSortBy: 'detected_at',
+  defaultSortOrder: 'desc'
+})
 
-// Table state
-const sorting = ref<SortingState>([{ id: 'detected_at', desc: true }])
-const columnFilters = ref<ColumnFiltersState>([])
-const columnVisibility = ref<VisibilityState>({})
+// View mode from URL
+const isGrouped = computed({
+  get: () => urlState.view.value === 'grouped',
+  set: (value) => urlState.view.value = value ? 'grouped' : 'ungrouped'
+})
+
+// Table state synchronized with URL
+const sorting = computed<SortingState>({
+  get: () => urlState.toSortingState.value,
+  set: (value) => urlState.fromSortingState(value)
+})
+
+const columnFilters = computed<ColumnFiltersState>({
+  get: () => urlState.toFilterState.value,
+  set: (value) => urlState.fromFilterState(value)
+})
+
+const columnVisibility = computed<VisibilityState>({
+  get: () => urlState.toVisibilityState.value,
+  set: (value) => urlState.fromVisibilityState(value)
+})
+
+const pagination = computed({
+  get: () => urlState.toPaginationState.value,
+  set: (value) => urlState.fromPaginationState(value.pageIndex, value.pageSize)
+})
+
+// Local state (not in URL)
 const rowSelection = ref({})
-const pagination = ref({ pageIndex: 0, pageSize: 100 }) // Max allowed by backend
 
 
-// Abort controller for cancelling requests
-let abortController: AbortController | null = null
-
-// Data fetching for grouped view
-const { data: groupedData, pending: groupedPending, refresh: refreshGrouped, error: groupedError } = await useFetch<GroupedAlertResponse>('/api/alerts/groups', {
+// Single data fetch with reactive URL
+const { data, pending, error, refresh } = await useFetch<GroupedAlertResponse | AlertListResponse>(() => {
+  const endpoint = isGrouped.value ? '/api/alerts/groups' : '/api/alerts'
+  return endpoint
+}, {
   query: computed(() => {
-    // Only fetch if this is the active view
-    if (!isGrouped.value) return null
-    
-    const sortField = sorting.value[0]?.id
-    const mappedSortField = sortField ? (sortFieldMap[sortField as keyof typeof sortFieldMap] || sortField) : 'detect_time'
+    const mappedSortField = sortFieldMap[urlState.sortBy.value as keyof typeof sortFieldMap] || urlState.sortBy.value || 'detect_time'
     
     const filters = Object.fromEntries(
-      columnFilters.value.map(f => [filterFieldMap[f.id as keyof typeof filterFieldMap] || f.id, f.value])
+      Object.entries(urlState.filters.value).map(([key, value]) => [
+        filterFieldMap[key as keyof typeof filterFieldMap] || key,
+        value
+      ])
     )
     
     return {
-      page: pagination.value.pageIndex + 1,
-      size: pagination.value.pageSize,
+      page: urlState.page.value,
+      size: urlState.pageSize.value,
       sort_by: mappedSortField,
-      sort_order: sorting.value[0]?.desc ? 'desc' : 'asc',
+      sort_order: urlState.sortOrder.value,
       ...filters
     }
   }),
-  server: true,  // Enable SSR for SEO and initial load
-  lazy: true,    // Don't block navigation
-  immediate: true,
-  getCachedData(key) {
-    // Return cached data if less than 30 seconds old
-    const nuxtApp = useNuxtApp()
-    const cached = nuxtApp.payload.data[key] || nuxtApp.static.data[key]
-    if (cached && cached.fetchedAt && Date.now() - cached.fetchedAt < 30000) {
-      return cached
-    }
-  },
-  watch: false  // Manual control for better performance
-})
-
-// Data fetching for ungrouped view
-const { data: ungroupedData, pending: ungroupedPending, refresh: refreshUngrouped, error: ungroupedError } = await useFetch<AlertListResponse>('/api/alerts', {
-  query: computed(() => {
-    // Only fetch if this is the active view
-    if (isGrouped.value) return null
-    
-    const sortField = sorting.value[0]?.id
-    const mappedSortField = sortField ? (sortFieldMap[sortField as keyof typeof sortFieldMap] || sortField) : 'detect_time'
-    
-    const filters = Object.fromEntries(
-      columnFilters.value.map(f => [filterFieldMap[f.id as keyof typeof filterFieldMap] || f.id, f.value])
-    )
-    
-    return {
-      page: pagination.value.pageIndex + 1,
-      size: pagination.value.pageSize,
-      sort_by: mappedSortField,
-      sort_order: sorting.value[0]?.desc ? 'desc' : 'asc',
-      ...filters
-    }
-  }),
-  server: true,  // Enable SSR
+  key: computed(() => `alerts-${isGrouped.value ? 'grouped' : 'ungrouped'}`),
+  server: true,
   lazy: true,
-  immediate: false,  // Don't fetch immediately since it's not the default view
-  getCachedData(key) {
-    const nuxtApp = useNuxtApp()
-    const cached = nuxtApp.payload.data[key] || nuxtApp.static.data[key]
-    if (cached && cached.fetchedAt && Date.now() - cached.fetchedAt < 30000) {
-      return cached
-    }
-  },
-  watch: false
+  dedupe: 'cancel'
+  // No manual watch needed - reactive query handles this automatically
 })
-
-// Reactive data for table with caching
-type TableDataItem = GroupedAlert | AlertListItem;
-const tableData = shallowRef<TableDataItem[]>([])
-const previousTableData = shallowRef<TableDataItem[]>([])
-const isInitialLoad = ref(true)
-const dataTransitionTimeout = ref<number | null>(null)
-const isSwitchingView = ref(false)
 
 // Auto-refresh configuration
 const AUTO_REFRESH_INTERVAL = 30000 // 30 seconds
-const autoRefreshEnabled = ref(true)
+const autoRefreshEnabled = computed({
+  get: () => urlState.autoRefresh.value,
+  set: (value) => urlState.autoRefresh.value = value
+})
 const refreshTimer = ref<NodeJS.Timeout | null>(null)
 const isUserInteracting = ref(false)
 const interactionTimeout = ref<NodeJS.Timeout | null>(null)
-const isSilentRefresh = ref(false)
 
 // Animation state - only enable after hydration
 const isAnimationReady = ref(false)
+
+// Individual column visibility refs (shadcn-vue pattern)
+type Checked = DropdownMenuCheckboxItemProps['modelValue']
+const columnRefs: Record<string, Ref<Checked>> = {}
+
+// Initialize column refs and sync with URL state
+const initializeColumnRefs = () => {
+  const allColumns = ['source_ipv4', 'target_ipv4', 'detected_at', 'severity', 'classification_text', 'analyzer', 'total_count']
+  
+  for (const colId of allColumns) {
+    columnRefs[colId] = ref<Checked>(true)
+    
+    // Watch each ref and update URL state
+    watch(columnRefs[colId], (visible) => {
+      const currentState = columnVisibility.value as any || {}
+      columnVisibility.value = { ...currentState, [colId]: visible } as any
+    })
+  }
+  
+  // Watch URL state and update refs
+  watch(columnVisibility, (newState) => {
+    for (const colId of allColumns) {
+      if (columnRefs[colId]) {
+        columnRefs[colId].value = (newState as any)?.[colId] !== false
+      }
+    }
+  }, { immediate: true })
+}
+
+initializeColumnRefs()
+
+
 
 // Type guards for safe data access
 function isGroupedResponse(data: unknown): data is GroupedAlertResponse {
@@ -139,82 +153,30 @@ function isAlertListResponse(data: unknown): data is AlertListResponse {
          Array.isArray((data as any).items);
 }
 
-// Update table data when view mode or data changes
-watch([isGrouped, groupedData, ungroupedData], () => {
-  // Clear switching flag when new data arrives
-  isSwitchingView.value = false
-  
-  if (isGrouped.value && groupedData.value && isGroupedResponse(groupedData.value)) {
-    const newData = groupedData.value.groups || []
-    if (newData.length > 0) {
-      previousTableData.value = tableData.value
-      tableData.value = newData
-      isInitialLoad.value = false
-      
-      // Clear previous data after transition completes
-      if (dataTransitionTimeout.value) {
-        clearTimeout(dataTransitionTimeout.value)
-      }
-      dataTransitionTimeout.value = setTimeout(() => {
-        previousTableData.value = []
-      }, 500) as unknown as number
-    }
-  } else if (!isGrouped.value && ungroupedData.value && isAlertListResponse(ungroupedData.value)) {
-    const newData = ungroupedData.value.items || []
-    if (newData.length > 0) {
-      previousTableData.value = tableData.value
-      tableData.value = newData
-      isInitialLoad.value = false
-      
-      // Clear previous data after transition
-      if (dataTransitionTimeout.value) {
-        clearTimeout(dataTransitionTimeout.value)
-      }
-      dataTransitionTimeout.value = setTimeout(() => {
-        previousTableData.value = []
-      }, 500) as unknown as number
-    }
-  }
-}, { immediate: true })
-
 // Current columns based on view mode
 const columns = computed(() => isGrouped.value ? groupedColumns : ungroupedColumns)
 
-// Pagination info
+// Extract data and pagination from response
+const displayData = computed(() => {
+  if (!data.value) return []
+  
+  if (isGrouped.value && isGroupedResponse(data.value)) {
+    return data.value.groups || []
+  } else if (!isGrouped.value && isAlertListResponse(data.value)) {
+    return data.value.items || []
+  }
+  return []
+})
+
 const paginationInfo = computed((): PaginatedResponse => {
-  if (isGrouped.value && groupedData.value && isGroupedResponse(groupedData.value)) {
-    return groupedData.value.pagination || { total: 0, pages: 0, page: 1, size: 100 }
-  } else if (!isGrouped.value && ungroupedData.value && isAlertListResponse(ungroupedData.value)) {
-    return ungroupedData.value.pagination || { total: 0, pages: 0, page: 1, size: 100 }
+  if (!data.value) return { total: 0, pages: 0, page: 1, size: 100 }
+  
+  if (isGrouped.value && isGroupedResponse(data.value)) {
+    return data.value.pagination || { total: 0, pages: 0, page: 1, size: 100 }
+  } else if (!isGrouped.value && isAlertListResponse(data.value)) {
+    return data.value.pagination || { total: 0, pages: 0, page: 1, size: 100 }
   }
   return { total: 0, pages: 0, page: 1, size: 100 }
-})
-
-// Loading and error states
-const pending = computed(() => {
-  // During SSR, always return false to prevent hydration mismatches
-  if (import.meta.server) return false
-  return isGrouped.value ? groupedPending.value : ungroupedPending.value
-})
-const error = computed(() => isGrouped.value ? groupedError.value : ungroupedError.value)
-
-// Display data - use previous data while loading new data
-const displayData = computed(() => {
-  // During view switch, show empty to trigger loading state immediately
-  if (isSwitchingView.value) {
-    return []
-  }
-  
-  // If we have current data, use it
-  if (tableData.value.length > 0) {
-    return tableData.value
-  }
-  // If loading and we have previous data, keep showing it
-  if (pending.value && previousTableData.value.length > 0) {
-    return previousTableData.value
-  }
-  // Otherwise return empty array
-  return []
 })
 
 // Handle errors
@@ -228,9 +190,12 @@ watch(error, (newError) => {
   }
 })
 
+// Define table data type
+type TableDataItem = GroupedAlert | AlertListItem;
+
 // Create table instance
 const table = useVueTable({
-  get data() { return displayData.value },
+  get data() { return displayData.value as TableDataItem[] },
   get columns() { return columns.value as ColumnDef<TableDataItem>[] },
   getCoreRowModel: getCoreRowModel(),
   getPaginationRowModel: getPaginationRowModel(),
@@ -262,109 +227,26 @@ const table = useVueTable({
   },
 })
 
-// Toggle view function
-async function toggleView() {
-  // Don't switch if currently loading
-  if (pending.value) return
-  
-  // Set switching flag
-  isSwitchingView.value = true
-  
-  // Clear current data to prevent flash
-  tableData.value = []
-  previousTableData.value = []
-  
-  isGrouped.value = !isGrouped.value
-  // Reset pagination when switching views
-  pagination.value.pageIndex = 0
-  // Clear selection
-  rowSelection.value = {}
-  
-  // Stop auto-refresh during switch
-  stopAutoRefresh()
-  
-  try {
-    // Trigger the appropriate fetch
-    if (isGrouped.value) {
-      await refreshGrouped()
-    } else {
-      await refreshUngrouped()
-    }
-  } finally {
-    isSwitchingView.value = false
-    // Restart auto-refresh
-    startAutoRefresh()
-  }
+// Toggle view function - simplified!
+function toggleView() {
+  urlState.view.value = urlState.view.value === 'grouped' ? 'ungrouped' : 'grouped'
+  urlState.page.value = 1 // Reset pagination
+  rowSelection.value = {} // Clear selection
+  urlState.hiddenColumns.value = [] // Reset column visibility
 }
 
-// Debounced refresh function
-const debouncedRefresh = useDebounceFn(async () => {
-  // Cancel any pending requests
-  if (abortController) {
-    abortController.abort()
-  }
-  
-  // Create new abort controller
-  abortController = new AbortController()
-  
-  try {
-    if (isGrouped.value) {
-      await refreshGrouped()
-    } else {
-      await refreshUngrouped()
-    }
-  } catch (error: any) {
-    if (error.name !== 'AbortError') {
-      console.error('Failed to refresh data:', error)
-    }
-  }
-}, 300)
-
-// Watch for pagination changes
-watch(() => pagination.value.pageIndex, () => {
-  debouncedRefresh()
-})
-
-watch(() => pagination.value.pageSize, () => {
-  pagination.value.pageIndex = 0  // Reset to first page
-  debouncedRefresh()
-})
-
-// Watch for sorting/filter changes
-watch([sorting, columnFilters], () => {
-  pagination.value.pageIndex = 0
-  debouncedRefresh()
-}, { deep: true })
-
-// Auto-refresh functions
+// Auto-refresh functions - simplified!
 const performSilentRefresh = async () => {
   // Skip if user is interacting or data is loading
-  if (isUserInteracting.value || pending.value) {
-    return
-  }
+  if (isUserInteracting.value || pending.value) return
   
   // Skip if user has active selections
-  if (Object.keys(rowSelection.value).length > 0) {
-    return
-  }
+  if (Object.keys(rowSelection.value).length > 0) return
   
-  // Mark as silent refresh
-  isSilentRefresh.value = true
-  
-  // Perform the refresh
   try {
-    if (isGrouped.value) {
-      await refreshGrouped()
-    } else {
-      await refreshUngrouped()
-    }
+    await refresh()
   } catch (error) {
     console.error('Auto-refresh failed:', error)
-  } finally {
-    // Reset flag after a short delay to ensure UI has updated
-    setTimeout(() => {
-      isSilentRefresh.value = false
-    }, 100)
   }
 }
 
@@ -422,12 +304,6 @@ const handleVisibilityChange = async () => {
 // Cleanup on unmount
 onUnmounted(() => {
   stopAutoRefresh()
-  if (abortController) {
-    abortController.abort()
-  }
-  if (dataTransitionTimeout.value) {
-    clearTimeout(dataTransitionTimeout.value)
-  }
   if (interactionTimeout.value) {
     clearTimeout(interactionTimeout.value)
   }
@@ -445,20 +321,13 @@ onUnmounted(() => {
           <Input
             class="h-9 w-72 pl-9 pr-3 border-border bg-background/50 focus:bg-background transition-colors"
             placeholder="Filter alerts by classification..."
-            :model-value="(columnFilters.find(f => f.id === 'classification_text')?.value as string) || ''"
+            :model-value="urlState.filters.value.classification_text || ''"
             @update:model-value="(value) => {
-              const existing = columnFilters.findIndex(f => f.id === 'classification_text')
               if (value) {
-                if (existing >= 0) {
-                  const filter = columnFilters[existing]
-                  if (filter) {
-                    filter.value = value
-                  }
-                } else {
-                  columnFilters.push({ id: 'classification_text', value })
-                }
-              } else if (existing >= 0) {
-                columnFilters.splice(existing, 1)
+                urlState.filters.value = { ...urlState.filters.value, classification_text: value }
+              } else {
+                const { classification_text, ...rest } = urlState.filters.value
+                urlState.filters.value = rest
               }
             }"
           />
@@ -470,8 +339,8 @@ onUnmounted(() => {
           variant="ghost"
           size="icon"
           @click="async () => {
-            autoRefreshEnabled = !autoRefreshEnabled
-            if (autoRefreshEnabled) {
+            urlState.autoRefresh.value = !urlState.autoRefresh.value
+            if (urlState.autoRefresh.value) {
               startAutoRefresh()
               await performSilentRefresh() // Refresh immediately
             } else {
@@ -491,17 +360,30 @@ onUnmounted(() => {
           />
         </Button>
         
-        <Button
-          variant="outline"
-          size="sm"
-          @click="toggleView"
-          class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
-          :disabled="isSwitchingView || pending"
-        >
-          <Users v-if="!isGrouped" class="mr-2 h-3.5 w-3.5" />
-          <List v-else class="mr-2 h-3.5 w-3.5" />
-          {{ isGrouped ? 'Show Individual' : 'Group by IP' }}
-        </Button>
+        <ClientOnly>
+          <Button
+            variant="outline"
+            size="sm"
+            @click="toggleView"
+            class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
+            :disabled="pending"
+          >
+            <Users v-if="!isGrouped" class="mr-2 h-3.5 w-3.5" />
+            <List v-else class="mr-2 h-3.5 w-3.5" />
+            {{ isGrouped ? 'Show Individual' : 'Group by IP' }}
+          </Button>
+          <template #fallback>
+            <Button
+              variant="outline"
+              size="sm"
+              class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
+            >
+              <Users v-if="!isGrouped" class="mr-2 h-3.5 w-3.5" />
+              <List v-else class="mr-2 h-3.5 w-3.5" />
+              {{ isGrouped ? 'Show Individual' : 'Group by IP' }}
+            </Button>
+          </template>
+        </ClientOnly>
         
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
@@ -511,15 +393,24 @@ onUnmounted(() => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuCheckboxItem
+            <template
               v-for="column in table.getAllColumns().filter((column) => column.getCanHide())"
               :key="column.id"
-              class="capitalize"
-              :model-value="column.getIsVisible()"
-              @update:model-value="(value) => column.toggleVisibility(!!value)"
             >
-              {{ column.id }}
-            </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                v-if="columnRefs[column.id]"
+                class="capitalize"
+                :model-value="columnRefs[column.id]?.value"
+                @update:model-value="(value) => {
+                  const ref = columnRefs[column.id]
+                  if (ref) {
+                    ref.value = value
+                  }
+                }"
+              >
+                {{ column.id }}
+              </DropdownMenuCheckboxItem>
+            </template>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -536,7 +427,7 @@ onUnmounted(() => {
       <!-- Loading overlay - only show for user-initiated actions -->
       <Transition name="fade">
         <div 
-          v-if="pending && !isInitialLoad && !isSilentRefresh" 
+          v-if="pending" 
           class="absolute inset-0 bg-background/50 backdrop-blur-sm z-20 flex items-center justify-center rounded-lg"
           role="status"
           aria-live="polite"
@@ -560,16 +451,8 @@ onUnmounted(() => {
         </TableHeader>
         <TableBody>
           <ClientOnly>
-            <!-- Initial loading state with skeleton -->
-            <template v-if="isInitialLoad && pending">
-              <TableRow v-for="i in 10" :key="`skeleton-${i}`" class="h-11 border-b border-border">
-                <TableCell v-for="j in columns.length" :key="`skeleton-${i}-${j}`" class="py-2 px-4">
-                  <div class="h-4 bg-muted animate-pulse rounded" />
-                </TableCell>
-              </TableRow>
-            </template>
             <!-- Show data -->
-            <template v-else-if="table.getRowModel().rows?.length">
+            <template v-if="table.getRowModel().rows?.length">
               <template v-for="row in table.getRowModel().rows" :key="row.id">
                 <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-b border-border hover:bg-muted/30 transition-colors duration-150">
                   <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="py-2 px-4 text-sm font-normal">
@@ -588,9 +471,9 @@ onUnmounted(() => {
               </TableCell>
             </TableRow>
             <template #fallback>
-              <!-- Server-side render skeleton -->
-              <TableRow v-for="i in 10" :key="`ssr-skeleton-${i}`" class="h-11 border-b border-border">
-                <TableCell v-for="j in columns.length" :key="`ssr-skeleton-${i}-${j}`" class="py-2 px-4">
+              <!-- Loading skeleton -->
+              <TableRow v-for="i in 5" :key="`skeleton-${i}`" class="h-11 border-b border-border">
+                <TableCell v-for="j in columns.length" :key="`skeleton-${i}-${j}`" class="py-2 px-4">
                   <div class="h-4 bg-muted animate-pulse rounded" />
                 </TableCell>
               </TableRow>
@@ -603,19 +486,26 @@ onUnmounted(() => {
     <!-- Brandenburg-style pagination -->
     <div class="flex items-center justify-between h-12 px-4 border-t border-border bg-muted/20">
       <div class="flex items-center gap-4">
-        <div class="text-sm text-muted-foreground">
-          <template v-if="!isGrouped && table.getFilteredSelectedRowModel().rows.length > 0">
-            {{ table.getFilteredSelectedRowModel().rows.length }} of
+        <ClientOnly>
+          <div class="text-sm text-muted-foreground">
+            <template v-if="!isGrouped && table.getFilteredSelectedRowModel().rows.length > 0">
+              {{ table.getFilteredSelectedRowModel().rows.length }} of
+            </template>
+            {{ paginationInfo.total }} {{ isGrouped ? 'groups' : 'alerts' }}
+          </div>
+          <template #fallback>
+            <div class="text-sm text-muted-foreground">
+              Loading...
+            </div>
           </template>
-          {{ paginationInfo.total }} {{ isGrouped ? 'groups' : 'alerts' }}
-        </div>
+        </ClientOnly>
         
         <div class="flex items-center gap-2">
           <span class="text-sm text-muted-foreground">Show</span>
           <Select
-            :model-value="pagination.pageSize.toString()"
+            :model-value="urlState.pageSize.value.toString()"
             @update:model-value="(value) => {
-              table.setPageSize(Number(value))
+              urlState.pageSize.value = Number(value)
             }"
           >
             <SelectTrigger class="h-8 w-[70px] text-xs border-border">
@@ -637,9 +527,9 @@ onUnmounted(() => {
           <Button
             variant="outline"
             size="sm"
-            :disabled="pagination.pageIndex === 0 || pending"
+            :disabled="urlState.page.value === 1 || pending"
             @click="() => {
-              pagination.pageIndex = Math.max(0, pagination.pageIndex - 1)
+              urlState.page.value = Math.max(1, urlState.page.value - 1)
             }"
             class="h-8 px-3 text-xs font-medium border-border hover:bg-background disabled:opacity-50 transition-all"
           >
@@ -651,19 +541,26 @@ onUnmounted(() => {
           </template>
         </ClientOnly>
         
-        <div class="flex items-center gap-1">
-          <span class="text-sm">
-            Page {{ pagination.pageIndex + 1 }} of {{ paginationInfo.pages || 1 }}
-          </span>
-        </div>
+        <ClientOnly>
+          <div class="flex items-center gap-1">
+            <span class="text-sm">
+              Page {{ urlState.page.value }} of {{ paginationInfo.pages || 1 }}
+            </span>
+          </div>
+          <template #fallback>
+            <div class="flex items-center gap-1">
+              <span class="text-sm">Page 1 of 1</span>
+            </div>
+          </template>
+        </ClientOnly>
         
         <ClientOnly>
           <Button
             variant="outline"
             size="sm"
-            :disabled="pagination.pageIndex >= (paginationInfo.pages - 1) || pending"
+            :disabled="urlState.page.value >= paginationInfo.pages || pending"
             @click="() => {
-              pagination.pageIndex = Math.min(paginationInfo.pages - 1, pagination.pageIndex + 1)
+              urlState.page.value = Math.min(paginationInfo.pages, urlState.page.value + 1)
             }"
             class="h-8 px-3 text-xs font-medium border-border hover:bg-background disabled:opacity-50 transition-all"
           >
