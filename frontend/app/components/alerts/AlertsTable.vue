@@ -13,14 +13,14 @@ import {
   getSortedRowModel,
   useVueTable,
 } from '@tanstack/vue-table'
-import { ArrowUpDown, Users, List } from 'lucide-vue-next'
-import { h, ref, computed, watch, shallowRef, onMounted, onUnmounted } from 'vue'
+import { Users, List } from 'lucide-vue-next'
+import { ref, computed, watch, shallowRef, onMounted, onUnmounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { valueUpdater } from '@/utils/utils'
-import type { AlertListItem, GroupedAlert, AlertListResponse, GroupedAlertResponse, TimeInfo, AnalyzerInfo, PaginatedResponse } from '@/types/alerts'
-import AlertActions from './AlertActions.vue'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import type { AlertListItem, GroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
+
+// Get column definitions from composable
+const { groupedColumns, ungroupedColumns, sortFieldMap, filterFieldMap } = useAlertTableColumns()
 
 // View mode toggle
 const isGrouped = ref(true)
@@ -32,23 +32,6 @@ const columnVisibility = ref<VisibilityState>({})
 const rowSelection = ref({})
 const pagination = ref({ pageIndex: 0, pageSize: 100 }) // Max allowed by backend
 
-// Map frontend column names to backend field names
-const sortFieldMap = {
-  'detected_at': 'detect_time',
-  'created_at': 'create_time',
-  'source_ipv4': 'source_ip',
-  'target_ipv4': 'target_ip',
-  'classification_text': 'classification',
-  'analyzer': 'analyzer',
-  'severity': 'severity',
-  'total_count': 'alert_id',
-} as const satisfies Record<string, string>
-
-const filterFieldMap = {
-  'classification_text': 'classification',
-  'source_ipv4': 'source_ip',
-  'target_ipv4': 'target_ip',
-} as const satisfies Record<string, string>
 
 // Abort controller for cancelling requests
 let abortController: AbortController | null = null
@@ -111,7 +94,7 @@ const { data: ungroupedData, pending: ungroupedPending, refresh: refreshUngroupe
   }),
   server: true,  // Enable SSR
   lazy: true,
-  immediate: false,
+  immediate: false,  // Don't fetch immediately since it's not the default view
   getCachedData(key) {
     const nuxtApp = useNuxtApp()
     const cached = nuxtApp.payload.data[key] || nuxtApp.static.data[key]
@@ -137,6 +120,9 @@ const refreshTimer = ref<NodeJS.Timeout | null>(null)
 const isUserInteracting = ref(false)
 const interactionTimeout = ref<NodeJS.Timeout | null>(null)
 const isSilentRefresh = ref(false)
+
+// Animation state - only enable after hydration
+const isAnimationReady = ref(false)
 
 // Type guards for safe data access
 function isGroupedResponse(data: unknown): data is GroupedAlertResponse {
@@ -169,9 +155,9 @@ watch([isGrouped, groupedData, ungroupedData], () => {
       if (dataTransitionTimeout.value) {
         clearTimeout(dataTransitionTimeout.value)
       }
-      dataTransitionTimeout.value = window.setTimeout(() => {
+      dataTransitionTimeout.value = setTimeout(() => {
         previousTableData.value = []
-      }, 500)
+      }, 500) as unknown as number
     }
   } else if (!isGrouped.value && ungroupedData.value && isAlertListResponse(ungroupedData.value)) {
     const newData = ungroupedData.value.items || []
@@ -184,182 +170,12 @@ watch([isGrouped, groupedData, ungroupedData], () => {
       if (dataTransitionTimeout.value) {
         clearTimeout(dataTransitionTimeout.value)
       }
-      dataTransitionTimeout.value = window.setTimeout(() => {
+      dataTransitionTimeout.value = setTimeout(() => {
         previousTableData.value = []
-      }, 500)
+      }, 500) as unknown as number
     }
   }
 }, { immediate: true })
-
-// Column definitions for grouped view
-const groupedColumns: ColumnDef<GroupedAlert>[] = [
-  {
-    accessorKey: 'source_ipv4',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Source IP', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => row.getValue('source_ipv4') || 'Unknown',
-  },
-  {
-    accessorKey: 'target_ipv4',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Target IP', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => row.getValue('target_ipv4') || 'Unknown',
-  },
-  {
-    accessorKey: 'total_count',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Count', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => h('div', { class: 'font-semibold text-foreground' }, row.getValue('total_count')),
-  },
-  {
-    id: 'actions',
-    enableHiding: false,
-    cell: ({ row }) => h(AlertActions, {
-      alert: row.original,
-      isGrouped: true,
-    }),
-  },
-]
-
-// Column definitions for ungrouped view
-const ungroupedColumns: ColumnDef<AlertListItem>[] = [
-  {
-    id: 'select',
-    header: ({ table }) => h(Checkbox, {
-      'modelValue': table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate'),
-      'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
-        if (typeof value === 'boolean') {
-          table.toggleAllPageRowsSelected(value)
-        }
-      },
-      'ariaLabel': 'Select all',
-    }),
-    cell: ({ row }) => h(Checkbox, {
-      'modelValue': row.getIsSelected(),
-      'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
-        if (typeof value === 'boolean') {
-          row.toggleSelected(value)
-        }
-      },
-      'ariaLabel': 'Select row',
-    }),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: 'detected_at',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Time', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => {
-      const time = row.getValue<TimeInfo | string>('detected_at')
-      const timestamp = time && typeof time === 'object' && 'timestamp' in time ? time.timestamp : time
-      const date = timestamp ? new Date(timestamp) : new Date()
-      return h('div', { class: 'text-sm' }, [
-        h('div', { class: 'font-medium' }, date.toLocaleDateString()),
-        h('div', { class: 'text-xs text-muted-foreground' }, date.toLocaleTimeString())
-      ])
-    },
-  },
-  {
-    accessorKey: 'severity',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Severity', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => {
-      const severity = row.getValue('severity') as string
-      const severityLower = severity?.toLowerCase()
-      
-      const severityClasses: Record<string, string> = {
-        high: 'inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-primary text-primary-foreground',
-        medium: 'inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-accent text-accent-foreground',
-        low: 'inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-muted text-muted-foreground',
-      }
-      
-      return h('span', { 
-        class: severityClasses[severityLower] || severityClasses.low
-      }, severity?.toUpperCase() || 'UNKNOWN')
-    },
-  },
-  {
-    accessorKey: 'classification_text',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Classification', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => row.getValue('classification_text') || 'Unknown',
-  },
-  {
-    accessorKey: 'source_ipv4',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Source IP', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => row.getValue('source_ipv4') || 'Unknown',
-  },
-  {
-    accessorKey: 'target_ipv4',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Target IP', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => row.getValue('target_ipv4') || 'Unknown',
-  },
-  {
-    accessorKey: 'analyzer',
-    header: ({ column }) => {
-      return h(Button, {
-        variant: 'ghost',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-        class: 'hover:bg-transparent px-0 font-semibold',
-      }, () => ['Analyzer', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-    },
-    cell: ({ row }) => {
-      const analyzer = row.getValue<AnalyzerInfo | undefined>('analyzer')
-      return analyzer?.name || 'Unknown'
-    },
-  },
-  {
-    id: 'actions',
-    enableHiding: false,
-    cell: ({ row }) => h(AlertActions, {
-      alert: row.original,
-      isGrouped: false,
-    }),
-  },
-]
 
 // Current columns based on view mode
 const columns = computed(() => isGrouped.value ? groupedColumns : ungroupedColumns)
@@ -375,7 +191,11 @@ const paginationInfo = computed((): PaginatedResponse => {
 })
 
 // Loading and error states
-const pending = computed(() => isGrouped.value ? groupedPending.value : ungroupedPending.value)
+const pending = computed(() => {
+  // During SSR, always return false to prevent hydration mismatches
+  if (import.meta.server) return false
+  return isGrouped.value ? groupedPending.value : ungroupedPending.value
+})
 const error = computed(() => isGrouped.value ? groupedError.value : ungroupedError.value)
 
 // Display data - use previous data while loading new data
@@ -580,6 +400,9 @@ const handleUserInteraction = () => {
 
 // Start auto-refresh on mount
 onMounted(() => {
+  // Enable animations after hydration
+  isAnimationReady.value = true
+  
   startAutoRefresh()
   
   // Pause when tab is hidden
@@ -660,11 +483,11 @@ onUnmounted(() => {
         >
           <Icon 
             :name="autoRefreshEnabled ? 'lucide:refresh-cw' : 'lucide:refresh-cw-off'" 
-            class="h-4 w-4"
-            :class="{ 
-              'animate-spin': pending && autoRefreshEnabled,
-              'text-muted-foreground': !autoRefreshEnabled 
-            }"
+            :class="[
+              'h-4 w-4',
+              !autoRefreshEnabled && 'text-muted-foreground',
+              isAnimationReady && pending && autoRefreshEnabled && 'animate-spin'
+            ]"
           />
         </Button>
         
@@ -673,7 +496,7 @@ onUnmounted(() => {
           size="sm"
           @click="toggleView"
           class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
-          :disabled="pending"
+          :disabled="isSwitchingView || pending"
         >
           <Users v-if="!isGrouped" class="mr-2 h-3.5 w-3.5" />
           <List v-else class="mr-2 h-3.5 w-3.5" />
