@@ -18,7 +18,7 @@ interface TableUrlState {
   sortOrder: Ref<'asc' | 'desc'>
   filters: Ref<Record<string, string | number>>
   hiddenColumns: Ref<string[]>
-  autoRefresh: Ref<boolean>
+  autoRefresh: Ref<number>
   
   toSortingState: ComputedRef<SortingState>
   fromSortingState: (state: SortingState) => void
@@ -105,8 +105,12 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
   const sortParam = useRouteQuery('sort', `${defaults.sortBy}:${defaults.sortOrder}`)
   const filterParam = useRouteQuery('filter', '', { transform: parseFilters })
   const colsParam = useRouteQuery('cols', '', { transform: parseHiddenColumns })
-  const refreshParam = useRouteQuery('refresh', '', { 
-    transform: (value) => !value || value !== 'false' 
+  const refreshParam = useRouteQuery('refresh', '30', { 
+    transform: (value) => {
+      const num = parseInt(value)
+      if (isNaN(num)) return 30
+      return [0, 30, 60, 300, 600].includes(num) ? num : 30
+    }
   })
 
   // Clean computed properties with proper parameter clearing
@@ -200,13 +204,15 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     }
   })
 
-  const autoRefresh = computed<boolean>({
+  const autoRefresh = computed<number>({
     get: () => refreshParam.value,
     set: (value) => {
-      if (value) {
-        refreshParam.value = undefined as any
+      if (value === 0) {
+        ;(refreshParam as any).value = 0
+      } else if (value === 30) {
+        ;(refreshParam as any).value = undefined
       } else {
-        refreshParam.value = false
+        ;(refreshParam as any).value = value
       }
     }
   })
@@ -297,7 +303,7 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     sortOrder.value = defaults.sortOrder
     filters.value = {}
     hiddenColumns.value = []
-    autoRefresh.value = true
+    autoRefresh.value = 30
   }
 
   return {
