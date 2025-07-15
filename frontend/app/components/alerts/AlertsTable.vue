@@ -16,7 +16,7 @@ import {
 import { ref, computed, watch, shallowRef, onMounted, onUnmounted } from 'vue'
 import type { Ref } from 'vue'
 import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
-import { useDebounceFn } from '@vueuse/core'
+import { useDebounceFn, useIntervalFn, useTimeoutFn, useDocumentVisibility } from '@vueuse/core'
 import { valueUpdater } from '@/utils/utils'
 import type { AlertListItem, GroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
 
@@ -95,42 +95,42 @@ const { data, pending, error, refresh } = await useFetch<GroupedAlertResponse | 
 // Auto-refresh configuration
 const autoRefreshInterval = computed(() => urlState.autoRefresh.value * 1000) // Convert to milliseconds
 const autoRefreshEnabled = computed(() => urlState.autoRefresh.value > 0)
-const refreshTimer = ref<NodeJS.Timeout | null>(null)
+
+// User interaction state
 const isUserInteracting = ref(false)
-const interactionTimeout = ref<NodeJS.Timeout | null>(null)
+const { start: startInteractionTimeout, stop: stopInteractionTimeout } = useTimeoutFn(
+  () => { isUserInteracting.value = false },
+  3000,
+  { immediate: false }
+)
 
 // Animation state - only enable after hydration
 const isAnimationReady = ref(false)
 
-// Individual column visibility refs (shadcn-vue pattern)
+// All available columns
+const allColumns = ['source_ipv4', 'target_ipv4', 'detected_at', 'severity', 'classification_text', 'analyzer', 'total_count'] as const
+
+// Declarative column visibility refs
 type Checked = DropdownMenuCheckboxItemProps['modelValue']
+
+// Create computed refs for each column that sync with URL state
 const columnRefs: Record<string, Ref<Checked>> = {}
 
-// Initialize column refs and sync with URL state
-const initializeColumnRefs = () => {
-  const allColumns = ['source_ipv4', 'target_ipv4', 'detected_at', 'severity', 'classification_text', 'analyzer', 'total_count']
-  
-  for (const colId of allColumns) {
-    columnRefs[colId] = ref<Checked>(true)
-    
-    // Watch each ref and update URL state
-    watch(columnRefs[colId], (visible) => {
-      const currentState = columnVisibility.value as any || {}
-      columnVisibility.value = { ...currentState, [colId]: visible } as any
-    })
-  }
-  
-  // Watch URL state and update refs
-  watch(columnVisibility, (newState) => {
-    for (const colId of allColumns) {
-      if (columnRefs[colId]) {
-        columnRefs[colId].value = (newState as any)?.[colId] !== false
+// Initialize computed refs for each column
+allColumns.forEach(colId => {
+  columnRefs[colId] = computed<Checked>({
+    get: () => columnVisibility.value[colId] !== false,
+    set: (value) => {
+      const newVisibility = { ...columnVisibility.value }
+      if (value) {
+        newVisibility[colId] = true
+      } else {
+        newVisibility[colId] = false
       }
+      columnVisibility.value = newVisibility
     }
-  }, { immediate: true })
-}
-
-initializeColumnRefs()
+  })
+})
 
 
 
@@ -231,7 +231,7 @@ function toggleView() {
   urlState.hiddenColumns.value = [] // Reset column visibility
 }
 
-// Auto-refresh functions - simplified!
+// Auto-refresh functionality using VueUse
 const performSilentRefresh = async () => {
   // Skip if user is interacting or data is loading
   if (isUserInteracting.value || pending.value) return
@@ -246,64 +246,60 @@ const performSilentRefresh = async () => {
   }
 }
 
-const startAutoRefresh = () => {
-  stopAutoRefresh() // Clear any existing timer
-  
-  if (autoRefreshEnabled.value) {
-    refreshTimer.value = setInterval(performSilentRefresh, autoRefreshInterval.value)
+// Declarative auto-refresh with useIntervalFn
+const { pause: stopAutoRefresh, resume: startAutoRefresh, isActive: isAutoRefreshActive } = useIntervalFn(
+  performSilentRefresh,
+  autoRefreshInterval,
+  { 
+    immediate: false,
+    immediateCallback: false 
   }
-}
+)
 
-const stopAutoRefresh = () => {
-  if (refreshTimer.value) {
-    clearInterval(refreshTimer.value)
-    refreshTimer.value = null
+// Watch for auto-refresh enable/disable
+watch(autoRefreshEnabled, (enabled) => {
+  if (enabled) {
+    startAutoRefresh()
+  } else {
+    stopAutoRefresh()
   }
-}
+})
 
 // User interaction detection
 const handleUserInteraction = () => {
   isUserInteracting.value = true
-  
-  // Clear existing timeout
-  if (interactionTimeout.value) {
-    clearTimeout(interactionTimeout.value)
-  }
-  
-  // Reset after 3 seconds of no interaction
-  interactionTimeout.value = setTimeout(() => {
-    isUserInteracting.value = false
-  }, 3000)
+  stopInteractionTimeout() // Clear existing timeout
+  startInteractionTimeout() // Start new timeout
 }
+
+// Document visibility handling
+const documentVisibility = useDocumentVisibility()
+
+// Watch document visibility and handle auto-refresh
+watch(documentVisibility, async (visibility) => {
+  if (visibility === 'hidden') {
+    stopAutoRefresh()
+  } else if (visibility === 'visible' && autoRefreshEnabled.value) {
+    startAutoRefresh()
+    // Refresh immediately when coming back to tab
+    await performSilentRefresh()
+  }
+})
 
 // Start auto-refresh on mount
 onMounted(() => {
   // Enable animations after hydration
   isAnimationReady.value = true
   
-  startAutoRefresh()
-  
-  // Pause when tab is hidden
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-})
-
-const handleVisibilityChange = async () => {
-  if (document.hidden) {
-    stopAutoRefresh()
-  } else if (autoRefreshEnabled.value) {
+  if (autoRefreshEnabled.value) {
     startAutoRefresh()
-    // Refresh immediately when coming back to tab
-    await performSilentRefresh()
   }
-}
+})
 
 // Cleanup on unmount
 onUnmounted(() => {
   stopAutoRefresh()
-  if (interactionTimeout.value) {
-    clearTimeout(interactionTimeout.value)
-  }
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  stopInteractionTimeout()
 })
 </script>
 
