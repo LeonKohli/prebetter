@@ -7,7 +7,7 @@
       >
         <Icon name="lucide:calendar" class="mr-2 h-3.5 w-3.5 flex-shrink-0" />
         <div class="flex items-center gap-2 flex-1">
-          <template v-if="value?.start">
+          <template v-if="formattedDateRange">
             <!-- Show active preset if applicable -->
             <template v-if="activePresetLabel">
               <span class="font-medium">{{ activePresetLabel }}</span>
@@ -15,24 +15,7 @@
             </template>
             
             <!-- Show date range -->
-            <span class="text-muted-foreground">
-              <template v-if="value.end">
-                <template v-if="includeTime">
-                  {{ dtf.format(value.start.toDate(getLocalTimeZone())) }} - {{ dtf.format(value.end.toDate(getLocalTimeZone())) }}
-                </template>
-                <template v-else>
-                  {{ df.format(value.start.toDate(getLocalTimeZone())) }} - {{ df.format(value.end.toDate(getLocalTimeZone())) }}
-                </template>
-              </template>
-              <template v-else>
-                <template v-if="includeTime">
-                  {{ dtf.format(value.start.toDate(getLocalTimeZone())) }}
-                </template>
-                <template v-else>
-                  {{ df.format(value.start.toDate(getLocalTimeZone())) }}
-                </template>
-              </template>
-            </span>
+            <span class="text-muted-foreground">{{ formattedDateRange }}</span>
           </template>
           <template v-else>
             <span class="text-muted-foreground">Pick a date range</span>
@@ -43,7 +26,7 @@
     <PopoverContent class="w-auto p-0" align="start">
       <div class="flex">
         <!-- Quick Presets -->
-        <div class="flex flex-col p-4 border-r min-w-[180px] max-h-[430px]">
+        <div class="flex flex-col p-4 border-r min-w-[180px] max-h-[390px]">
           <h4 class="text-sm font-semibold mb-2">Quick Select</h4>
           <div class="grid gap-1 overflow-y-auto pr-2 -mr-2">
             <Button
@@ -105,7 +88,6 @@ import {
   CalendarDateTime,
   DateFormatter,
   getLocalTimeZone,
-  type DateValue,
   today,
   now,
   startOfWeek as rekaStartOfWeek,
@@ -115,7 +97,6 @@ import {
   endOfMonth as rekaEndOfMonth,
   endOfYear as rekaEndOfYear,
 } from '@internationalized/date'
-import type { Ref } from 'vue'
 
 interface DateRangeValue {
   from: Date | undefined
@@ -126,6 +107,13 @@ interface QuickPreset {
   label: string
   getValue: () => DateRange
 }
+
+// Constants
+const DEFAULT_START_HOUR = '00'
+const DEFAULT_START_MINUTE = '00'
+const DEFAULT_END_HOUR = '23'
+const DEFAULT_END_MINUTE = '59'
+const PRESET_MATCH_TOLERANCE_MS = 60000 // 1 minute tolerance for preset matching
 
 const props = defineProps<{
   modelValue?: DateRangeValue
@@ -143,18 +131,18 @@ const activePresetLabel = ref<string | null>(null)
 const isSelectingPreset = ref(false)
 
 // Time state - reactive refs
-const startHour = ref('00')
-const startMinute = ref('00')
-const endHour = ref('23')
-const endMinute = ref('59')
+const startHour = ref(DEFAULT_START_HOUR)
+const startMinute = ref(DEFAULT_START_MINUTE)
+const endHour = ref(DEFAULT_END_HOUR)
+const endMinute = ref(DEFAULT_END_MINUTE)
 
 // Computed properties for v-model binding
 const startTime = computed({
   get: () => `${startHour.value}:${startMinute.value}`,
   set: (value: string) => {
     const [h, m] = value.split(':')
-    startHour.value = h || '00'
-    startMinute.value = m || '00'
+    startHour.value = h || DEFAULT_START_HOUR
+    startMinute.value = m || DEFAULT_START_MINUTE
   }
 })
 
@@ -162,8 +150,8 @@ const endTime = computed({
   get: () => `${endHour.value}:${endMinute.value}`,
   set: (value: string) => {
     const [h, m] = value.split(':')
-    endHour.value = h || '23'
-    endMinute.value = m || '59'
+    endHour.value = h || DEFAULT_END_HOUR
+    endMinute.value = m || DEFAULT_END_MINUTE
   }
 })
 
@@ -178,6 +166,21 @@ const dtf = new DateFormatter('en-US', {
   day: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
+})
+
+// Computed property for formatted date range display
+const formattedDateRange = computed(() => {
+  if (!value.value?.start) return null
+  
+  const formatter = props.includeTime ? dtf : df
+  const startStr = formatter.format(value.value.start.toDate(getLocalTimeZone()))
+  
+  if (!value.value.end) {
+    return startStr
+  }
+  
+  const endStr = formatter.format(value.value.end.toDate(getLocalTimeZone()))
+  return `${startStr} - ${endStr}`
 })
 
 // Convert between Date and CalendarDate/CalendarDateTime
@@ -204,33 +207,13 @@ const value = computed<DateRange>({
     }
     
     const start = props.includeTime 
-      ? new CalendarDateTime(
-          from.getFullYear(),
-          from.getMonth() + 1,
-          from.getDate(),
-          from.getHours(),
-          from.getMinutes()
-        )
-      : new CalendarDate(
-          from.getFullYear(),
-          from.getMonth() + 1,
-          from.getDate()
-        )
+      ? dateToCalendarDateTime(from)
+      : dateToCalendarDate(from)
     
     const end = to 
       ? (props.includeTime 
-          ? new CalendarDateTime(
-              to.getFullYear(),
-              to.getMonth() + 1,
-              to.getDate(),
-              to.getHours(),
-              to.getMinutes()
-            )
-          : new CalendarDate(
-              to.getFullYear(),
-              to.getMonth() + 1,
-              to.getDate()
-            ))
+          ? dateToCalendarDateTime(to)
+          : dateToCalendarDate(to))
       : undefined
     
     return {
@@ -248,8 +231,8 @@ const value = computed<DateRange>({
         from = new Date(baseDate)
         // If this is a new date selection (not just time change), set default times
         if (!props.modelValue?.from || baseDate.toDateString() !== props.modelValue.from.toDateString()) {
-          startHour.value = '00'
-          startMinute.value = '00'
+          startHour.value = DEFAULT_START_HOUR
+          startMinute.value = DEFAULT_START_MINUTE
         }
         from.setHours(parseInt(startHour.value), parseInt(startMinute.value))
       } else {
@@ -263,8 +246,8 @@ const value = computed<DateRange>({
         to = new Date(baseDate)
         // If this is a new date selection (not just time change), set default times
         if (!props.modelValue?.to || baseDate.toDateString() !== props.modelValue.to.toDateString()) {
-          endHour.value = '23'
-          endMinute.value = '59'
+          endHour.value = DEFAULT_END_HOUR
+          endMinute.value = DEFAULT_END_MINUTE
         }
         to.setHours(parseInt(endHour.value), parseInt(endMinute.value))
       } else {
@@ -286,6 +269,39 @@ watch([startHour, startMinute, endHour, endMinute], () => {
 
 const todayDate = today(getLocalTimeZone())
 const nowDateTime = now(getLocalTimeZone())
+
+// Helper function to create hour-based presets
+function createHourPreset(hours: number): () => DateRange {
+  return () => {
+    const now = new Date()
+    const hoursAgo = new Date(now.getTime() - hours * 60 * 60 * 1000)
+    
+    return {
+      start: dateToCalendarDateTime(hoursAgo),
+      end: dateToCalendarDateTime(now),
+    } as DateRange
+  }
+}
+
+// Helper function to convert Date to CalendarDateTime
+function dateToCalendarDateTime(date: Date): CalendarDateTime {
+  return new CalendarDateTime(
+    date.getFullYear(),
+    date.getMonth() + 1,
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes()
+  )
+}
+
+// Helper function to convert Date to CalendarDate
+function dateToCalendarDate(date: Date): CalendarDate {
+  return new CalendarDate(
+    date.getFullYear(),
+    date.getMonth() + 1,
+    date.getDate()
+  )
+}
 
 const quickPresets: QuickPreset[] = [
   // Current period presets
@@ -320,60 +336,11 @@ const quickPresets: QuickPreset[] = [
   // Hour-based presets
   {
     label: 'Last 1 Hour',
-    getValue: () => {
-      // Create CalendarDateTime from current time minus 1 hour
-      const now = new Date()
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
-      
-      const start = new CalendarDateTime(
-        oneHourAgo.getFullYear(),
-        oneHourAgo.getMonth() + 1,
-        oneHourAgo.getDate(),
-        oneHourAgo.getHours(),
-        oneHourAgo.getMinutes()
-      )
-      
-      const end = new CalendarDateTime(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        now.getDate(),
-        now.getHours(),
-        now.getMinutes()
-      )
-      
-      return {
-        start,
-        end,
-      } as DateRange
-    }
+    getValue: createHourPreset(1)
   },
   {
     label: 'Last 2 Hours',
-    getValue: () => {
-      const now = new Date()
-      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000)
-      
-      const start = new CalendarDateTime(
-        twoHoursAgo.getFullYear(),
-        twoHoursAgo.getMonth() + 1,
-        twoHoursAgo.getDate(),
-        twoHoursAgo.getHours(),
-        twoHoursAgo.getMinutes()
-      )
-      
-      const end = new CalendarDateTime(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        now.getDate(),
-        now.getHours(),
-        now.getMinutes()
-      )
-      
-      return {
-        start,
-        end,
-      } as DateRange
-    }
+    getValue: createHourPreset(2)
   },
   // Day-based presets
   {
@@ -481,10 +448,10 @@ function selectPreset(preset: QuickPreset) {
       endMinute.value = String(endDate.getMinutes()).padStart(2, '0')
     } else if (label.includes('today') || label.includes('week') || label.includes('month') || label.includes('year')) {
       // For full day presets, use 00:00 - 23:59
-      startHour.value = '00'
-      startMinute.value = '00'
-      endHour.value = '23'
-      endMinute.value = '59'
+      startHour.value = DEFAULT_START_HOUR
+      startMinute.value = DEFAULT_START_MINUTE
+      endHour.value = DEFAULT_END_HOUR
+      endMinute.value = DEFAULT_END_MINUTE
     }
   }
   
@@ -537,9 +504,9 @@ function checkForMatchingPreset() {
       const presetFrom = presetRange.start.toDate(getLocalTimeZone()).getTime()
       const presetTo = presetRange.end.toDate(getLocalTimeZone()).getTime()
       
-      // Allow small time differences (within 1 minute) for time-based presets
+      // Allow small time differences for time-based presets
       const timeDiff = Math.abs(from - presetFrom) + Math.abs(to - presetTo)
-      if (timeDiff < 60000) { // 1 minute tolerance
+      if (timeDiff < PRESET_MATCH_TOLERANCE_MS) {
         activePresetLabel.value = preset.label
         return
       }
