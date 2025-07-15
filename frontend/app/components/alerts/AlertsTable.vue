@@ -16,8 +16,9 @@ import {
 import { ref, computed, watch, shallowRef, onMounted, onUnmounted } from 'vue'
 import type { Ref } from 'vue'
 import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
-import { useDebounceFn, useIntervalFn, useTimeoutFn, useDocumentVisibility } from '@vueuse/core'
+import { useDebounceFn, useIntervalFn, useTimeoutFn, useDocumentVisibility, useToggle } from '@vueuse/core'
 import { valueUpdater } from '@/utils/utils'
+import { applyDefaultDateFilters } from '@/utils/dateHelpers'
 import type { AlertListItem, GroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
 
 // Get column definitions from composable
@@ -31,10 +32,21 @@ const urlState = useTableUrlState({
   defaultSortOrder: 'desc'
 })
 
-// View mode from URL
-const isGrouped = computed({
-  get: () => urlState.view.value === 'grouped',
-  set: (value) => urlState.view.value = value ? 'grouped' : 'ungrouped'
+
+// View mode from URL using VueUse toggle pattern
+const [isGrouped, toggleView] = useToggle(urlState.view.value === 'grouped')
+
+// Sync toggle state with URL
+watch(isGrouped, (grouped) => {
+  urlState.view.value = grouped ? 'grouped' : 'ungrouped'
+})
+
+// Sync URL changes back to toggle
+watch(() => urlState.view.value, (view) => {
+  const shouldBeGrouped = view === 'grouped'
+  if (isGrouped.value !== shouldBeGrouped) {
+    isGrouped.value = shouldBeGrouped
+  }
 })
 
 // Table state synchronized with URL
@@ -70,26 +82,30 @@ const { data, pending, error, refresh } = await useFetch<GroupedAlertResponse | 
   query: computed(() => {
     const mappedSortField = sortFieldMap[urlState.sortBy.value as keyof typeof sortFieldMap] || urlState.sortBy.value || 'detect_time'
     
-    const filters = Object.fromEntries(
+    // Map filter fields
+    const urlFilters = Object.fromEntries(
       Object.entries(urlState.filters.value).map(([key, value]) => [
         filterFieldMap[key as keyof typeof filterFieldMap] || key,
         value
       ])
     )
     
+    // Apply defaults to filters
+    const effectiveFilters = applyDefaultDateFilters(urlFilters)
+    
     return {
       page: urlState.page.value,
       size: urlState.pageSize.value,
       sort_by: mappedSortField,
       sort_order: urlState.sortOrder.value,
-      ...filters
+      ...effectiveFilters
     }
   }),
-  key: computed(() => `alerts-${isGrouped.value ? 'grouped' : 'ungrouped'}`),
+  // Use a key that changes with both view and sort params to force refetch
+  key: computed(() => `alerts-${isGrouped.value ? 'grouped' : 'ungrouped'}-${urlState.sortBy.value}-${urlState.sortOrder.value}`),
   server: true,
   lazy: true,
   dedupe: 'cancel'
-  // No manual watch needed - reactive query handles this automatically
 })
 
 // Auto-refresh configuration
@@ -223,12 +239,25 @@ const table = useVueTable({
   },
 })
 
-// Toggle view function - simplified!
-function toggleView() {
-  urlState.view.value = urlState.view.value === 'grouped' ? 'ungrouped' : 'grouped'
-  urlState.page.value = 1 // Reset pagination
-  rowSelection.value = {} // Clear selection
-  urlState.hiddenColumns.value = [] // Reset column visibility
+// Enhanced toggle view function with VueUse pattern
+function handleToggleView() {
+  // Use VueUse toggle
+  toggleView()
+  
+  // Reset page and selection
+  urlState.page.value = 1
+  rowSelection.value = {}
+  urlState.hiddenColumns.value = []
+  
+  // Get available columns for the new view
+  const newColumns = columns.value.map(c => c.id || (c as any).accessorKey).filter(Boolean)
+  
+  // Check if current sort field exists in new view
+  if (!newColumns.includes(urlState.sortBy.value)) {
+    // Reset to a safe default that exists in both views
+    urlState.sortBy.value = 'source_ipv4'
+    urlState.sortOrder.value = 'desc'
+  }
 }
 
 // Auto-refresh functionality using VueUse
@@ -312,7 +341,7 @@ onUnmounted(() => {
       :isGrouped="isGrouped"
       :table="table"
       :columnRefs="columnRefs"
-      @toggleView="toggleView"
+      @toggleView="handleToggleView"
       @startAutoRefresh="startAutoRefresh"
       @stopAutoRefresh="stopAutoRefresh"
     />

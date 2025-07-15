@@ -141,6 +141,7 @@ import { Users, List } from 'lucide-vue-next'
 import type { Table } from '@tanstack/vue-table'
 import type { Ref } from 'vue'
 import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
+import { getTodayRange, isToday } from '@/utils/dateHelpers'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 
 interface DateRangeValue {
@@ -165,31 +166,43 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+
 // Date range state synchronized with URL
 const dateRange = computed<DateRangeValue>({
   get: () => {
     const filters = props.urlState.filters.value
+    
+    // Show "Today" as default when no date filters in URL
+    if (!filters.start_date && !filters.end_date) {
+      return getTodayRange()
+    }
+    
     return {
       from: filters.start_date ? new Date(filters.start_date as string) : undefined,
       to: filters.end_date ? new Date(filters.end_date as string) : undefined
     }
   },
   set: (value) => {
-    const currentFilters = { ...props.urlState.filters.value }
-    
-    if (value.from) {
-      currentFilters.start_date = value.from.toISOString()
-    } else {
-      delete currentFilters.start_date
+    if (!value.from || !value.to) {
+      // Clear date filters
+      const { start_date, end_date, ...otherFilters } = props.urlState.filters.value
+      props.urlState.filters.value = otherFilters
+      return
     }
     
-    if (value.to) {
-      currentFilters.end_date = value.to.toISOString()
-    } else {
-      delete currentFilters.end_date
+    // If selecting "Today", don't add to URL (use default)
+    if (isToday(value.from, value.to)) {
+      const { start_date, end_date, ...otherFilters } = props.urlState.filters.value
+      props.urlState.filters.value = otherFilters
+      return
     }
     
-    props.urlState.filters.value = currentFilters
+    // Set custom date range
+    props.urlState.filters.value = {
+      ...props.urlState.filters.value,
+      start_date: value.from.toISOString(),
+      end_date: value.to.toISOString()
+    }
   }
 })
 
