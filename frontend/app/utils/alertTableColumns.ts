@@ -190,6 +190,8 @@ export const useAlertTableColumns = () => {
     'classification_text': 'classification',
     'source_ipv4': 'source_ip',
     'target_ipv4': 'target_ip',
+    'start_date': 'start_date',
+    'end_date': 'end_date',
   } as const satisfies Record<string, string>
 
   return {

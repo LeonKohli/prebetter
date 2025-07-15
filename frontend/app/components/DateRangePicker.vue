@@ -26,7 +26,7 @@
     <PopoverContent class="w-auto p-0" align="start">
       <div class="flex">
         <!-- Quick Presets -->
-        <div class="flex flex-col p-4 border-r min-w-[180px] max-h-[390px]">
+        <div class="flex flex-col p-4 border-r min-w-[180px] max-h-[380px]">
           <h4 class="text-sm font-semibold mb-2">Quick Select</h4>
           <div class="grid gap-1 overflow-y-auto pr-2 -mr-2">
             <Button
@@ -113,7 +113,6 @@ const DEFAULT_START_HOUR = '00'
 const DEFAULT_START_MINUTE = '00'
 const DEFAULT_END_HOUR = '23'
 const DEFAULT_END_MINUTE = '59'
-const PRESET_MATCH_TOLERANCE_MS = 60000 // 1 minute tolerance for preset matching
 
 const props = defineProps<{
   modelValue?: DateRangeValue
@@ -126,9 +125,55 @@ const emit = defineEmits<{
 
 const open = ref(false)
 
-// Track active preset
-const activePresetLabel = ref<string | null>(null)
-const isSelectingPreset = ref(false)
+// Computed property to find active preset based on current date range
+const activePreset = computed(() => {
+  if (!props.modelValue?.from || !props.modelValue?.to) {
+    return null
+  }
+  
+  const from = props.modelValue.from.getTime()
+  const to = props.modelValue.to.getTime()
+  
+  let bestMatch = null
+  let bestScore = Infinity
+  
+  // Check each preset to see if it matches current date range
+  for (const preset of quickPresets) {
+    const presetRange = preset.getValue()
+    if (presetRange.start && presetRange.end) {
+      const presetFrom = presetRange.start.toDate(getLocalTimeZone()).getTime()
+      const presetTo = presetRange.end.toDate(getLocalTimeZone()).getTime()
+      
+      // Calculate the difference score
+      const fromDiff = Math.abs(from - presetFrom)
+      const toDiff = Math.abs(to - presetTo)
+      const totalDiff = fromDiff + toDiff
+      
+      // Different tolerance based on preset type
+      const label = preset.label.toLowerCase()
+      let tolerance = 60000 // 1 minute default
+      
+      // For day-based presets, we modify the end time to 23:59, so need bigger tolerance
+      if (label.includes('today') || label.includes('day') || label.includes('week') || label.includes('month') || label.includes('year')) {
+        tolerance = 86400000 // 24 hours tolerance for day-based presets
+      }
+      
+      const fromMatch = fromDiff <= tolerance
+      const toMatch = toDiff <= tolerance
+      
+      // If both match and this is the best score so far
+      if (fromMatch && toMatch && totalDiff < bestScore) {
+        bestScore = totalDiff
+        bestMatch = preset
+      }
+    }
+  }
+  
+  return bestMatch
+})
+
+// Computed property for the active preset label
+const activePresetLabel = computed(() => activePreset.value?.label || null)
 
 // Time state - reactive refs
 const startHour = ref(DEFAULT_START_HOUR)
@@ -262,7 +307,6 @@ const value = computed<DateRange>({
 // Watch time changes and update the value
 watch([startHour, startMinute, endHour, endMinute], () => {
   if (props.includeTime && value.value.start) {
-    // Trigger an update with the new time values
     value.value = { ...value.value }
   }
 })
@@ -344,17 +388,6 @@ const quickPresets: QuickPreset[] = [
   },
   // Day-based presets
   {
-    label: 'Last 24 Hours',
-    getValue: () => {
-      const end = nowDateTime
-      const start = nowDateTime.subtract({ days: 1 })
-      return {
-        start,
-        end,
-      } as DateRange
-    }
-  },
-  {
     label: 'Last 2 Days',
     getValue: () => {
       const end = todayDate
@@ -426,12 +459,6 @@ const quickPresets: QuickPreset[] = [
 function selectPreset(preset: QuickPreset) {
   const dateRange = preset.getValue()
   
-  // Set flag to prevent watcher from clearing the preset
-  isSelectingPreset.value = true
-  
-  // Track the active preset
-  activePresetLabel.value = preset.label
-  
   // For presets, set appropriate times
   if (props.includeTime && dateRange.start && dateRange.end) {
     const label = preset.label.toLowerCase()
@@ -456,63 +483,8 @@ function selectPreset(preset: QuickPreset) {
   }
   
   value.value = dateRange
-  
-  // Reset flag after a tick to allow the value to update
-  nextTick(() => {
-    isSelectingPreset.value = false
-  })
-  
   open.value = false
 }
 
-// Clear active preset when user manually changes the calendar
-watch(value, (newValue, oldValue) => {
-  // Skip if we're selecting a preset
-  if (isSelectingPreset.value) return
-  
-  // Only clear if this wasn't triggered by selectPreset
-  if (activePresetLabel.value && oldValue?.start && newValue?.start) {
-    const oldStart = oldValue.start.toDate(getLocalTimeZone())
-    const newStart = newValue.start.toDate(getLocalTimeZone())
-    if (oldStart.getTime() !== newStart.getTime()) {
-      activePresetLabel.value = null
-    }
-  }
-})
-
-// Check if current value matches any preset on mount
-onMounted(() => {
-  if (props.modelValue?.from && props.modelValue?.to) {
-    checkForMatchingPreset()
-  }
-})
-
-// Check if the current date range matches any preset
-function checkForMatchingPreset() {
-  if (!props.modelValue?.from || !props.modelValue?.to) {
-    activePresetLabel.value = null
-    return
-  }
-  
-  const from = props.modelValue.from.getTime()
-  const to = props.modelValue.to.getTime()
-  
-  // Check each preset to see if it matches
-  for (const preset of quickPresets) {
-    const presetRange = preset.getValue()
-    if (presetRange.start && presetRange.end) {
-      const presetFrom = presetRange.start.toDate(getLocalTimeZone()).getTime()
-      const presetTo = presetRange.end.toDate(getLocalTimeZone()).getTime()
-      
-      // Allow small time differences for time-based presets
-      const timeDiff = Math.abs(from - presetFrom) + Math.abs(to - presetTo)
-      if (timeDiff < PRESET_MATCH_TOLERANCE_MS) {
-        activePresetLabel.value = preset.label
-        return
-      }
-    }
-  }
-  
-  activePresetLabel.value = null
-}
+// No complex watchers needed - the computed property handles everything!
 </script>

@@ -165,10 +165,32 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-// Date range state (for now just local state, no functionality)
-const dateRange = ref<DateRangeValue>({
-  from: undefined,
-  to: undefined
+// Date range state synchronized with URL
+const dateRange = computed<DateRangeValue>({
+  get: () => {
+    const filters = props.urlState.filters.value
+    return {
+      from: filters.start_date ? new Date(filters.start_date as string) : undefined,
+      to: filters.end_date ? new Date(filters.end_date as string) : undefined
+    }
+  },
+  set: (value) => {
+    const currentFilters = { ...props.urlState.filters.value }
+    
+    if (value.from) {
+      currentFilters.start_date = value.from.toISOString()
+    } else {
+      delete currentFilters.start_date
+    }
+    
+    if (value.to) {
+      currentFilters.end_date = value.to.toISOString()
+    } else {
+      delete currentFilters.end_date
+    }
+    
+    props.urlState.filters.value = currentFilters
+  }
 })
 
 // Computed properties
