@@ -1,6 +1,7 @@
 import type { ColumnDef } from '@tanstack/vue-table'
 import { h } from 'vue'
 import { ArrowUpDown } from 'lucide-vue-next'
+import { useTimeAgo } from '@vueuse/core'
 import type { AlertListItem, GroupedAlert, TimeInfo, AnalyzerInfo } from '@/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
 import { Button } from '@/components/ui/button'
@@ -88,9 +89,15 @@ export const useAlertTableColumns = () => {
         const time = row.getValue<TimeInfo | string>('detected_at')
         const timestamp = time && typeof time === 'object' && 'timestamp' in time ? time.timestamp : time
         const date = timestamp ? new Date(timestamp) : new Date()
+        const timeAgo = useTimeAgo(date)
+        
         return h('div', { class: 'text-sm' }, [
           h('div', { class: 'font-medium' }, date.toLocaleDateString()),
-          h('div', { class: 'text-xs text-muted-foreground' }, date.toLocaleTimeString())
+          h('div', { class: 'text-xs text-muted-foreground flex items-center gap-1' }, [
+            h('span', {}, date.toLocaleTimeString()),
+            h('span', { class: 'text-muted-foreground/70' }, '•'),
+            h('span', { class: 'text-muted-foreground/70' }, timeAgo.value)
+          ])
         ])
       },
     },
