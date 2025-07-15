@@ -188,7 +188,7 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
       if (Object.keys(value).length === 0) {
         filterParam.value = undefined as any
       } else {
-        filterParam.value = value
+        ;(filterParam as any).value = serializeFilters(value)
       }
     }
   })
