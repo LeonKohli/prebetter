@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import type { DateRange } from 'reka-ui'
+import { useNow } from '@vueuse/core'
 import {
   CalendarDate,
   CalendarDateTime,
@@ -149,13 +150,32 @@ const activePreset = computed(() => {
       const toDiff = Math.abs(to - presetTo)
       const totalDiff = fromDiff + toDiff
       
-      // Different tolerance based on preset type
+      // Realistic tolerance based on preset type and real-world variations
       const label = preset.label.toLowerCase()
-      let tolerance = 60000 // 1 minute default
+      const timeSpan = Math.abs(presetTo - presetFrom)
+      let tolerance: number
       
-      // For day-based presets, we modify the end time to 23:59, so need bigger tolerance
-      if (label.includes('today') || label.includes('day') || label.includes('week') || label.includes('month') || label.includes('year')) {
-        tolerance = 86400000 // 24 hours tolerance for day-based presets
+      if (label.includes('hour')) {
+        // Hour presets: reasonable tolerance for user interaction delays
+        tolerance = 15 * 60 * 1000 // 15 minutes
+      } else if (label === 'today') {
+        // Today preset: handle as single day - very flexible since it's often 00:00-23:59
+        tolerance = 12 * 60 * 60 * 1000 // 12 hours - very forgiving for day boundaries
+      } else if (label.includes('week') || label.includes('this week') || label.includes('last 7') || label.includes('7 days')) {
+        // Week presets: week boundaries can vary significantly (check before 'day' to avoid conflict)
+        tolerance = 2 * 24 * 60 * 60 * 1000 // 2 days
+      } else if (label.includes('month') || label.includes('this month') || label.includes('30 days')) {
+        // Month presets: month boundaries vary
+        tolerance = 3 * 24 * 60 * 60 * 1000 // 3 days
+      } else if (label.includes('year') || label.includes('this year')) {
+        // Year presets: year boundaries
+        tolerance = 7 * 24 * 60 * 60 * 1000 // 1 week
+      } else if (label.includes('day')) {
+        // Day presets: account for timezone and daylight savings variations (check after week/month)
+        tolerance = 4 * 60 * 60 * 1000 // 4 hours
+      } else {
+        // Default: use 5% of the time span as tolerance, minimum 1 hour
+        tolerance = Math.max(60 * 60 * 1000, timeSpan * 0.05)
       }
       
       const fromMatch = fromDiff <= tolerance
@@ -314,10 +334,13 @@ watch([startHour, startMinute, endHour, endMinute], () => {
 const todayDate = today(getLocalTimeZone())
 const nowDateTime = now(getLocalTimeZone())
 
-// Helper function to create hour-based presets
+// Reactive current time using VueUse
+const currentTime = useNow()
+
+// Helper function to create hour-based presets with VueUse
 function createHourPreset(hours: number): () => DateRange {
   return () => {
-    const now = new Date()
+    const now = currentTime.value
     const hoursAgo = new Date(now.getTime() - hours * 60 * 60 * 1000)
     
     return {
@@ -348,14 +371,38 @@ function dateToCalendarDate(date: Date): CalendarDate {
 }
 
 const quickPresets: QuickPreset[] = [
-  // Current period presets
+  // Most common presets first
   {
     label: 'Today',
-    getValue: () => ({
-      start: todayDate,
-      end: todayDate,
-    } as DateRange)
+    getValue: () => {
+      // Create a proper full-day range from 00:00:00 to 23:59:59
+      const startOfDay = todayDate
+      // For end of day, create a CalendarDateTime with 23:59:59
+      const endOfDay = new CalendarDateTime(
+        todayDate.year,
+        todayDate.month,
+        todayDate.day,
+        23,
+        59,
+        59,
+        999
+      )
+      return {
+        start: startOfDay,
+        end: endOfDay,
+      } as DateRange
+    }
   },
+  // Hour-based presets
+  {
+    label: 'Last 1 Hour',
+    getValue: createHourPreset(1)
+  },
+  {
+    label: 'Last 2 Hours',
+    getValue: createHourPreset(2)
+  },
+  // Current period presets
   {
     label: 'This Week',
     getValue: () => ({
@@ -376,15 +423,6 @@ const quickPresets: QuickPreset[] = [
       start: rekaStartOfYear(todayDate),
       end: rekaEndOfYear(todayDate),
     } as DateRange)
-  },
-  // Hour-based presets
-  {
-    label: 'Last 1 Hour',
-    getValue: createHourPreset(1)
-  },
-  {
-    label: 'Last 2 Hours',
-    getValue: createHourPreset(2)
   },
   // Day-based presets
   {
