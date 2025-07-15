@@ -59,7 +59,7 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
   }
 
   const parseFilters = (filterString: string): Record<string, string | number> => {
-    if (!filterString.trim()) return {}
+    if (!filterString || !filterString.trim()) return {}
     
     try {
       const parsed = JSON.parse(decodeURIComponent(filterString))
