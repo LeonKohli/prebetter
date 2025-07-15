@@ -113,39 +113,48 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     }
   })
 
-  // Clean computed properties with proper parameter clearing
-  const view = computed<'grouped' | 'ungrouped'>({
-    get: () => viewParam.value,
-    set: (value) => {
-      if (value === defaults.view) {
-        ;(viewParam as any).value = undefined
-      } else {
-        viewParam.value = value
-      }
+  // Factory function for creating URL-synced computed properties
+  function createUrlParam<T>(
+    param: Ref<T | undefined>,
+    defaultValue: T,
+    options?: {
+      clearCondition?: (value: T) => boolean
+      serialize?: (value: T) => any
+      deserialize?: (value: any) => T
     }
-  })
+  ) {
+    return computed({
+      get: () => {
+        const value = param.value
+        if (options?.deserialize && value !== undefined) {
+          return options.deserialize(value)
+        }
+        return value !== undefined ? value : defaultValue
+      },
+      set: (value: T) => {
+        const shouldClear = options?.clearCondition 
+          ? options.clearCondition(value) 
+          : value === defaultValue
+        
+        if (shouldClear) {
+          (param as any).value = undefined
+        } else {
+          const serialized = options?.serialize ? options.serialize(value) : value
+          ;(param as any).value = serialized
+        }
+      }
+    })
+  }
 
-  const page = computed<number>({
-    get: () => pageParam.value,
-    set: (value) => {
-      if (value <= 1) {
-        pageParam.value = undefined as any
-      } else {
-        pageParam.value = value
-      }
-    }
+  // Use factory function for cleaner URL parameter definitions
+  const view = createUrlParam(viewParam, defaults.view)
+  
+  const page = createUrlParam(pageParam, 1, {
+    clearCondition: (value) => value <= 1
   })
-
-  const pageSize = computed<number>({
-    get: () => sizeParam.value,
-    set: (value) => {
-      const validSize = validatePageSize(value)
-      if (validSize === defaults.pageSize) {
-        sizeParam.value = undefined as any
-      } else {
-        sizeParam.value = validSize
-      }
-    }
+  
+  const pageSize = createUrlParam(sizeParam as Ref<number | undefined>, defaults.pageSize, {
+    serialize: (value) => validatePageSize(value)
   })
 
   const sortBy = computed<string>({
@@ -182,39 +191,20 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     }
   })
 
-  const filters = computed<Record<string, string | number>>({
-    get: () => filterParam.value,
-    set: (value) => {
-      if (Object.keys(value).length === 0) {
-        filterParam.value = undefined as any
-      } else {
-        ;(filterParam as any).value = serializeFilters(value)
-      }
-    }
+  const filters = createUrlParam(filterParam as Ref<Record<string, string | number> | undefined>, {}, {
+    clearCondition: (value) => Object.keys(value).length === 0,
+    serialize: (value) => serializeFilters(value)
   })
 
-  const hiddenColumns = computed<string[]>({
-    get: () => colsParam.value,
-    set: (value) => {
-      if (value.length === 0) {
-        colsParam.value = undefined as any
-      } else {
-        ;(colsParam as any).value = value.join(',')
-      }
-    }
+  const hiddenColumns = createUrlParam(colsParam as Ref<string[] | undefined>, [], {
+    clearCondition: (value) => value.length === 0,
+    serialize: (value) => value.join(',')
   })
 
-  const autoRefresh = computed<number>({
-    get: () => refreshParam.value,
-    set: (value) => {
-      if (value === 0) {
-        ;(refreshParam as any).value = 0
-      } else if (value === 30) {
-        ;(refreshParam as any).value = undefined
-      } else {
-        ;(refreshParam as any).value = value
-      }
-    }
+  const autoRefresh = createUrlParam(refreshParam as Ref<number | undefined>, 30, {
+    clearCondition: (value) => value === 30,
+    // Special handling for 0 value (disabled state)
+    serialize: (value) => value === 0 ? 0 : value
   })
 
   // TanStack Table integration helpers

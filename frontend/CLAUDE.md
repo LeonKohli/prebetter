@@ -159,48 +159,59 @@ NUXT_SESSION_PASSWORD=your-very-secure-password-here-minimum-32-chars
 
 ## Code Patterns & Best Practices
 
-### Component Development
-```vue
-<script setup lang="ts">
-// TypeScript always enabled
-definePageMeta({
-  requiresAuth: true  // For protected pages
-})
+### Core Vue/Nuxt Development Principles
 
-// All Vue/Nuxt functions auto-imported
-const { user, loggedIn } = useUserSession()
-const { data, error, pending } = await useFetch('/api/alerts')
+**Follow these principles for all frontend development:**
 
-// Refs are typed automatically
-const searchQuery = ref('')  // Inferred as Ref<string>
-</script>
-```
+1. **Declarative Over Imperative** - Describe what the UI should be, not how to update it
+2. **Embrace Reactivity** - Use computed properties and let Vue handle updates automatically
+3. **Composition Over Complexity** - Keep components focused, extract logic into composables
+4. **Leverage VueUse** - Don't reinvent common patterns (intervals, timeouts, visibility, etc.)
+5. **Group Related State** - Use reactive objects for related data instead of multiple refs
+6. **Minimize Side Effects** - Keep components predictable and testable
+7. **Think in Terms of Data Flow** - Let data drive the UI, not manual DOM updates
 
-### Error Handling
+### Essential Resources to Use
+
+**Always consult these resources when developing:**
+
+1. **Context7** - Your primary documentation source for ALL libraries:
+   - Use `mcp__context7__resolve-library-id` to find any library
+   - Use `mcp__context7__get-library-docs` to get specific documentation
+   - Works for: Vue, Nuxt, VueUse, TanStack, Tailwind, TypeScript, and more
+   - Always check for best practices, patterns, and examples
+
+2. **Common Libraries to Check via Context7:**
+   - **VueUse** - Utilities for Vue (timers, browser APIs, state, sensors)
+   - **TanStack Table** - For table functionality
+   - **Tailwind CSS** - For styling patterns and utilities
+   - **Reka UI** - For UI component patterns
+   - **TypeScript** - For type utilities and patterns
+
+**Example workflow:**
 ```typescript
-// Client-side errors
-throw createError('Something went wrong')
-
-// Server-side errors with status
-throw createError({ 
-  statusCode: 404, 
-  statusMessage: 'Resource not found' 
-})
+// Before implementing ANY feature:
+// 1. Search Context7 for relevant libraries: "tanstack table sorting"
+// 2. Get documentation for the specific topic
+// 3. Use the library's solution instead of custom implementation
+// 4. Follow the documented patterns and best practices
 ```
 
-### State Management
-```typescript
-// Use built-in useState for shared state
-const alerts = useState('alerts', () => [])
+### Common Patterns to Follow
 
-// For complex state, create composables
-export const useAlertFilters = () => {
-  const severity = useState('filter-severity', () => '')
-  const dateRange = useState('filter-dateRange', () => null)
-  
-  return { severity, dateRange }
-}
-```
+- Prefer `computed` over `watch` for derived state
+- Use `reactive` for forms and complex state objects
+- Use `shallowRef` for large objects when deep reactivity isn't needed
+- Always use TypeScript for type safety
+- Extract reusable logic into composables
+- Create factory functions to reduce repetitive patterns
+
+### Performance Considerations
+
+- Use `lazy: true` for non-critical data fetches
+- Add `deep: false` to `useFetch` for large datasets
+- Implement conditional fetching with computed properties
+- Use proper key management for caching
 
 ## Security Implementation
 
@@ -227,6 +238,8 @@ export const useAlertFilters = () => {
 - Add `lazy: true` to non-critical data fetches
 - Implement virtual scrolling for large lists
 - Use `useState` to cache reference data
+- Use `deep: false` for large datasets
+- Implement proper loading states with `status` instead of just `pending`
 
 ## Testing
 
@@ -261,27 +274,25 @@ const { data } = await useFetch('/api/protected-data')
 
 ### Creating a Reusable Component
 ```vue
-<!-- app/components/AlertCard.vue -->
-<template>
-  <Card>
-    <CardHeader>
-      <CardTitle>{{ alert.title }}</CardTitle>
-    </CardHeader>
-    <CardContent>
-      {{ alert.message }}
-    </CardContent>
-  </Card>
-</template>
-
 <script setup lang="ts">
+// Define props with TypeScript
 interface Props {
-  alert: {
-    title: string
-    message: string
-  }
+  data: YourDataType
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+// Use computed properties for derived state
+const displayValue = computed(() => 
+  // Transform data declaratively
+  props.data.someTransformation()
+)
+
+// Group related state
+const uiState = reactive({
+  isExpanded: false,
+  selectedItem: null
+})
 </script>
 ```
 
@@ -298,7 +309,7 @@ const { $fetch } = useNuxtApp()
 async function submitForm() {
   try {
     await $fetch('/api/contact', {
-      method: 'POST',
+      method: 'POST', 
       body: form
     })
     // Success handling
@@ -317,3 +328,21 @@ async function submitForm() {
 - **API Calls**: Always use proxy routes (`/api/*`)
 - **Type Safety**: TypeScript is enforced throughout
 - **Git Commits**: Never include "Co-Authored-By: Claude"
+
+  ## Key Development Philosophy
+
+  **When developing Vue/Nuxt components:**
+  - Write declarative code that describes the desired state
+  - Let Vue's reactivity handle updates automatically
+  - Use composables and computed properties extensively
+  - Avoid manual DOM manipulation and imperative patterns
+  - Group related state in reactive objects
+  - **ALWAYS check VueUse and Context7 before implementing utilities**
+
+  **Development Process:**
+  1. Check if VueUse has a utility for your need
+  2. Use Context7 to find Vue/Nuxt best practices
+  3. Follow established patterns from the documentation
+  4. Only create custom solutions when absolutely necessary
+
+  **Remember**: The goal is clean, maintainable code that leverages existing solutions rather than reinventing them.
