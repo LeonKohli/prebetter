@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Prebetter Frontend Overview
 
-Nuxt 3 SSR application providing a modern SIEM dashboard with secure session-based authentication.
+Nuxt 4 SSR application providing a modern SIEM dashboard with secure session-based authentication.
 
 ## Quick Reference
 
@@ -26,7 +26,7 @@ bunx shadcn-vue@latest add <component-name>
 ## Tech Stack & Modules
 
 **Core:**
-- **Framework**: Nuxt 3.17 with Vue 3 (Composition API)
+- **Framework**: Nuxt 4 with Vue 3 (Composition API)
 - **Package Manager**: Bun (required - do not use npm/yarn/pnpm)
 - **TypeScript**: Full type safety with vue-tsc
 
@@ -328,6 +328,13 @@ async function submitForm() {
 - **API Calls**: Always use proxy routes (`/api/*`)
 - **Type Safety**: TypeScript is enforced throughout
 - **Git Commits**: Never include "Co-Authored-By: Claude"
+
+## Critical: Dynamic URL Switching with useFetch
+
+**When switching between different API endpoints dynamically (e.g., `/api/alerts` ↔ `/api/alerts/groups`):**
+1. Use a comprehensive key that includes ALL reactive state to prevent NS_BINDING_ABORTED errors
+2. Set `immediate: false` and `watch: false` in useFetch options, then manually control with `watchDebounced`
+3. This approach prevents request cancellation while maintaining reactivity and follows Nuxt 4 patterns
 
   ## Key Development Philosophy
 
