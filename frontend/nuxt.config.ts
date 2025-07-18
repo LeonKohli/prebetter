@@ -12,11 +12,8 @@ export default defineNuxtConfig({
     '@nuxtjs/seo',
     'nuxt-auth-utils',
   ],
-  future: {
-    compatibilityVersion: 4,
-  },
   runtimeConfig: {
-    apiBase: 'http://localhost:8000',
+    apiBase: 'http://10.129.9.60:8000',
     session: {
       maxAge: 60 * 60, // 60 minutes
       password: process.env.NUXT_SESSION_PASSWORD || '',
