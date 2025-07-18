@@ -77,6 +77,7 @@ class SortField(str, Enum):
     TARGET_IP = "target_ip"
     ANALYZER = "analyzer"
     ALERT_ID = "alert_id"
+    TOTAL_COUNT = "total_count"  # For grouped alerts
 
 
 class SortOrder(str, Enum):
@@ -296,6 +297,7 @@ async def get_grouped_alerts(
             "target_ip": target_addr.address,
             "analyzer": func.max(Analyzer.name),
             "alert_id": func.count(Alert._ident),  # Actually count in this context
+            "total_count": func.count(Alert._ident),  # Proper sort by count
         }
 
         # Apply the selected sort option
