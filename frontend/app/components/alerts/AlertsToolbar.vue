@@ -112,24 +112,15 @@
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <template
+          <DropdownMenuCheckboxItem
             v-for="column in table.getAllColumns().filter((column) => column.getCanHide())"
             :key="column.id"
+            class="capitalize"
+            :model-value="column.getIsVisible()"
+            @update:model-value="(value) => column.toggleVisibility(!!value)"
           >
-            <DropdownMenuCheckboxItem
-              v-if="columnRefs[column.id]"
-              class="capitalize"
-              :model-value="columnRefs[column.id]?.value"
-              @update:model-value="(value) => {
-                const ref = columnRefs[column.id]
-                if (ref) {
-                  ref.value = value
-                }
-              }"
-            >
-              {{ column.id }}
-            </DropdownMenuCheckboxItem>
-          </template>
+            {{ column.id }}
+          </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -141,6 +132,7 @@ import { Users, List } from 'lucide-vue-next'
 import type { Table } from '@tanstack/vue-table'
 import type { Ref } from 'vue'
 import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
+import { useDebounceFn } from '@vueuse/core'
 import { getTodayRange, isToday } from '@/utils/dateHelpers'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 
@@ -154,7 +146,6 @@ interface Props {
   pending: boolean
   isGrouped: boolean
   table: Table<any>
-  columnRefs: Record<string, Ref<DropdownMenuCheckboxItemProps['modelValue']>>
 }
 
 interface Emits {
@@ -216,7 +207,7 @@ const autoRefreshDisplayText = computed(() => {
 })
 
 // Methods
-function handleSearchFilter(value: string | number) {
+const updateSearchFilter = (value: string | number) => {
   const stringValue = String(value)
   if (stringValue) {
     props.urlState.filters.value = { 
@@ -228,6 +219,9 @@ function handleSearchFilter(value: string | number) {
     props.urlState.filters.value = rest
   }
 }
+
+// Create debounced version with 300ms delay
+const handleSearchFilter = useDebounceFn(updateSearchFilter, 300)
 
 function setAutoRefresh(seconds: number) {
   props.urlState.autoRefresh.value = seconds
