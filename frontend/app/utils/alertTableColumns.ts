@@ -1,6 +1,6 @@
-import type { ColumnDef } from '@tanstack/vue-table'
+import type { ColumnDef, Column } from '@tanstack/vue-table'
 import { h } from 'vue'
-import { ArrowUpDown } from 'lucide-vue-next'
+import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
 import { useTimeAgo } from '@vueuse/core'
 import type { AlertListItem, GroupedAlert, TimeInfo, AnalyzerInfo } from '@/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
@@ -8,38 +8,55 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 
 export const useAlertTableColumns = () => {
+  // Helper to create sortable header with proper indicators
+  // Using computed-like pattern for better reactivity as per Vue best practices
+  const createSortableHeader = <TData,>(label: string) => ({ column }: { column: Column<TData> }) => {
+    // Use computed-like derivation for reactive state
+    const sortState = column.getIsSorted()
+    const isActive = sortState !== false
+    const isAscending = sortState === 'asc'
+    const isDescending = sortState === 'desc'
+    
+    // Determine which icon to show based on state
+    const SortIcon = isAscending 
+      ? ArrowUp 
+      : isDescending 
+        ? ArrowDown 
+        : ArrowUpDown
+    
+    // Computed styling based on sort state
+    const iconClass = isActive 
+      ? 'ml-2 h-3.5 w-3.5 text-foreground transition-all' // Active: larger and primary color
+      : 'ml-2 h-3 w-3 text-muted-foreground opacity-60 transition-all' // Inactive: smaller and muted
+    
+    const buttonClass = isActive
+      ? 'hover:bg-transparent px-0 font-semibold text-foreground' // Active column
+      : 'hover:bg-transparent px-0 font-semibold text-muted-foreground' // Inactive column
+    
+    // Return VNode with proper event handler
+    return h(Button, {
+      variant: 'ghost',
+      onClick: () => column.toggleSorting(isAscending),
+      class: buttonClass,
+      'aria-label': `Sort by ${label} ${isAscending ? 'descending' : 'ascending'}`,
+      'aria-sort': isAscending ? 'ascending' : isDescending ? 'descending' : 'none'
+    }, () => [label, h(SortIcon, { class: iconClass })])
+  }
+
   const groupedColumns: ColumnDef<GroupedAlert>[] = [
     {
       accessorKey: 'source_ipv4',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Source IP', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Source IP'),
       cell: ({ row }) => row.getValue('source_ipv4') || 'Unknown',
     },
     {
       accessorKey: 'target_ipv4',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Target IP', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Target IP'),
       cell: ({ row }) => row.getValue('target_ipv4') || 'Unknown',
     },
     {
       accessorKey: 'total_count',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Count', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Count'),
       cell: ({ row }) => h('div', { class: 'font-semibold text-foreground' }, row.getValue('total_count')),
     },
     {
@@ -78,13 +95,7 @@ export const useAlertTableColumns = () => {
     },
     {
       accessorKey: 'detected_at',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Time', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Time'),
       cell: ({ row }) => {
         const time = row.getValue<TimeInfo | string>('detected_at')
         const timestamp = time && typeof time === 'object' && 'timestamp' in time ? time.timestamp : time
@@ -103,13 +114,7 @@ export const useAlertTableColumns = () => {
     },
     {
       accessorKey: 'severity',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Severity', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Severity'),
       cell: ({ row }) => {
         const severity = row.getValue('severity') as string
         const severityLower = severity?.toLowerCase()
@@ -127,46 +132,22 @@ export const useAlertTableColumns = () => {
     },
     {
       accessorKey: 'classification_text',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Classification', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Classification'),
       cell: ({ row }) => row.getValue('classification_text') || 'Unknown',
     },
     {
       accessorKey: 'source_ipv4',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Source IP', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Source IP'),
       cell: ({ row }) => row.getValue('source_ipv4') || 'Unknown',
     },
     {
       accessorKey: 'target_ipv4',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Target IP', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Target IP'),
       cell: ({ row }) => row.getValue('target_ipv4') || 'Unknown',
     },
     {
       accessorKey: 'analyzer',
-      header: ({ column }) => {
-        return h(Button, {
-          variant: 'ghost',
-          onClick: () => column.toggleSorting(column.getIsSorted() === 'asc'),
-          class: 'hover:bg-transparent px-0 font-semibold',
-        }, () => ['Analyzer', h(ArrowUpDown, { class: 'ml-2 h-3 w-3 text-muted-foreground' })])
-      },
+      header: createSortableHeader('Analyzer'),
       cell: ({ row }) => {
         const analyzer = row.getValue<AnalyzerInfo | undefined>('analyzer')
         return analyzer?.name || 'Unknown'
@@ -190,7 +171,7 @@ export const useAlertTableColumns = () => {
     'classification_text': 'classification',
     'analyzer': 'analyzer',
     'severity': 'severity',
-    'total_count': 'alert_id',
+    'total_count': 'total_count', // Backend now supports this!
   } as const satisfies Record<string, string>
 
   const filterFieldMap = {
