@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import type { Ref, ComputedRef } from 'vue'
+import type { Ref, ComputedRef, WritableComputedRef } from 'vue'
 import { useRouteQuery } from '@vueuse/router'
 import type { SortingState, ColumnFiltersState, VisibilityState } from '@tanstack/vue-table'
 
@@ -8,16 +8,18 @@ interface TableUrlStateOptions {
   defaultPageSize?: number
   defaultSortBy?: string
   defaultSortOrder?: 'asc' | 'desc'
+  defaultGroupedSortBy?: string
+  defaultUngroupedSortBy?: string
 }
 
 interface TableUrlState {
   view: Ref<'grouped' | 'ungrouped'>
   page: Ref<number>
   pageSize: Ref<number>
-  sortBy: Ref<string>
-  sortOrder: Ref<'asc' | 'desc'>
-  filters: Ref<Record<string, string | number>>
-  hiddenColumns: Ref<string[]>
+  sortBy: WritableComputedRef<string>
+  sortOrder: WritableComputedRef<'asc' | 'desc'>
+  filters: WritableComputedRef<Record<string, string | number>>
+  hiddenColumns: WritableComputedRef<string[]>
   autoRefresh: Ref<number>
   
   toSortingState: ComputedRef<SortingState>
@@ -44,6 +46,8 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     pageSize: (options.defaultPageSize || 100) as PageSize,
     sortBy: options.defaultSortBy || 'detected_at',
     sortOrder: (options.defaultSortOrder || 'desc') as SortOrder,
+    groupedSortBy: options.defaultGroupedSortBy || 'total_count',
+    ungroupedSortBy: options.defaultUngroupedSortBy || 'detected_at',
   } as const
 
   const validatePageSize = (size: number): PageSize => {
@@ -94,69 +98,61 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     return colString.split(',').filter(col => typeof col === 'string' && col.trim().length > 0)
   }
 
-  // Route query parameters
-  const viewParam = useRouteQuery('view', defaults.view, { transform: validateView })
-  const pageParam = useRouteQuery('page', '1', { 
-    transform: (value) => Math.max(1, parseInt(value) || 1) 
+  // Route query parameters with transforms
+  const viewParam = useRouteQuery('view', defaults.view, { 
+    transform: validateView 
   })
-  const sizeParam = useRouteQuery('size', defaults.pageSize.toString(), { 
-    transform: (value) => validatePageSize(parseInt(value) || defaults.pageSize) 
+  
+  const pageParam = useRouteQuery('page', 1, { 
+    transform: (value) => Math.max(1, parseInt(String(value)) || 1) 
   })
+  
+  const sizeParam = useRouteQuery('size', defaults.pageSize, { 
+    transform: (value) => validatePageSize(parseInt(String(value)) || defaults.pageSize) 
+  })
+  
   const sortParam = useRouteQuery('sort', `${defaults.sortBy}:${defaults.sortOrder}`)
-  const filterParam = useRouteQuery('filter', '', { transform: parseFilters })
-  const colsParam = useRouteQuery('cols', '', { transform: parseHiddenColumns })
-  const refreshParam = useRouteQuery('refresh', '30', { 
+  
+  const filterParam = useRouteQuery<string>('filter', '')
+  
+  const colsParam = useRouteQuery<string>('cols', '', { 
     transform: (value) => {
-      const num = parseInt(value)
+      if (!value || typeof value !== 'string') return ''
+      return value
+    }
+  })
+  
+  const refreshParam = useRouteQuery('refresh', 30, { 
+    transform: (value) => {
+      const num = parseInt(String(value))
       if (isNaN(num)) return 30
       return [0, 30, 60, 300, 600].includes(num) ? num : 30
     }
   })
 
-  // Factory function for creating URL-synced computed properties
-  function createUrlParam<T>(
-    param: Ref<T | undefined>,
-    defaultValue: T,
-    options?: {
-      clearCondition?: (value: T) => boolean
-      serialize?: (value: T) => any
-      deserialize?: (value: any) => T
+  // Direct computed properties - no factory pattern needed
+  const view = viewParam as Ref<'grouped' | 'ungrouped'>
+  const page = pageParam as Ref<number>
+  const pageSize = sizeParam as Ref<number>
+  const autoRefresh = refreshParam as Ref<number>
+  
+  // hiddenColumns needs special handling for array conversion
+  const hiddenColumns = computed<string[]>({
+    get: () => parseHiddenColumns(colsParam.value),
+    set: (value) => {
+      colsParam.value = value.length > 0 ? value.join(',') : ''
     }
-  ) {
-    return computed({
-      get: () => {
-        const value = param.value
-        if (options?.deserialize && value !== undefined) {
-          return options.deserialize(value)
-        }
-        return value !== undefined ? value : defaultValue
-      },
-      set: (value: T) => {
-        const shouldClear = options?.clearCondition 
-          ? options.clearCondition(value) 
-          : value === defaultValue
-        
-        if (shouldClear) {
-          (param as any).value = undefined
-        } else {
-          const serialized = options?.serialize ? options.serialize(value) : value
-          ;(param as any).value = serialized
-        }
-      }
-    })
-  }
-
-  // Use factory function for cleaner URL parameter definitions
-  const view = createUrlParam(viewParam, defaults.view)
-  
-  const page = createUrlParam(pageParam, 1, {
-    clearCondition: (value) => value <= 1
   })
   
-  const pageSize = createUrlParam(sizeParam as Ref<number | undefined>, defaults.pageSize, {
-    serialize: (value) => validatePageSize(value)
+  // Filters need special handling for serialization
+  const filters = computed<Record<string, string | number>>({
+    get: () => parseFilters(filterParam.value),
+    set: (value) => {
+      filterParam.value = Object.keys(value).length > 0 ? serializeFilters(value) : ''
+    }
   })
 
+  // Parse sort parameter into separate fields
   const sortBy = computed<string>({
     get: () => {
       const [field] = sortParam.value.split(':')
@@ -164,13 +160,7 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     },
     set: (value) => {
       const currentOrder = sortOrder.value
-      const sortString = `${value}:${currentOrder}`
-      const defaultSort = `${defaults.sortBy}:${defaults.sortOrder}`
-      if (sortString === defaultSort) {
-        sortParam.value = undefined as any
-      } else {
-        sortParam.value = sortString as any
-      }
+      sortParam.value = `${value}:${currentOrder}`
     }
   })
 
@@ -181,30 +171,8 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     },
     set: (value) => {
       const currentBy = sortBy.value
-      const sortString = `${currentBy}:${value}`
-      const defaultSort = `${defaults.sortBy}:${defaults.sortOrder}`
-      if (sortString === defaultSort) {
-        sortParam.value = undefined as any
-      } else {
-        sortParam.value = sortString as any
-      }
+      sortParam.value = `${currentBy}:${value}`
     }
-  })
-
-  const filters = createUrlParam(filterParam as Ref<Record<string, string | number> | undefined>, {}, {
-    clearCondition: (value) => Object.keys(value).length === 0,
-    serialize: (value) => serializeFilters(value)
-  })
-
-  const hiddenColumns = createUrlParam(colsParam as Ref<string[] | undefined>, [], {
-    clearCondition: (value) => value.length === 0,
-    serialize: (value) => value.join(',')
-  })
-
-  const autoRefresh = createUrlParam(refreshParam as Ref<number | undefined>, 30, {
-    clearCondition: (value) => value === 30,
-    // Special handling for 0 value (disabled state)
-    serialize: (value) => value === 0 ? 0 : value
   })
 
   // TanStack Table integration helpers
@@ -236,6 +204,7 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
       }
     }
     
+    // Update filters directly - useRouteQuery will handle serialization
     filters.value = newFilters
   }
 
@@ -272,6 +241,7 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
         hidden.push(col)
       }
     }
+    // Update hiddenColumns which will update colsParam
     hiddenColumns.value = hidden
   }
 
@@ -289,7 +259,7 @@ export function useTableUrlState(options: TableUrlStateOptions = {}): TableUrlSt
     view.value = defaults.view
     page.value = 1
     pageSize.value = defaults.pageSize
-    sortBy.value = defaults.sortBy
+    sortBy.value = view.value === 'grouped' ? defaults.groupedSortBy : defaults.ungroupedSortBy
     sortOrder.value = defaults.sortOrder
     filters.value = {}
     hiddenColumns.value = []
