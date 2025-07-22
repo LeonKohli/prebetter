@@ -1,7 +1,11 @@
-export default defineNuxtRouteMiddleware(async (to) => {
-  // Make sure the composable already tried to fetch
+export default defineNuxtRouteMiddleware((to) => {
   const { loggedIn, ready } = useUserSession()
-  if (!ready.value) await nextTick() // tiny SSR-CSR gap guard
+  
+  // Skip middleware during SSR or if session is not ready yet
+  // The session will be properly hydrated during client-side initialization
+  if (!ready.value) {
+    return
+  }
 
   // Flags come from definePageMeta()
   const needsAuth = to.meta.requiresAuth === true
