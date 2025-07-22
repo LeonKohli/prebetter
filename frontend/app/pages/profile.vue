@@ -1,78 +1,149 @@
 <template>
-  <div class="container mx-auto py-6">
-    <h1 class="text-3xl font-bold mb-6">Profile</h1>
+  <div class="container mx-auto py-6 space-y-6">
+    <h1 class="text-3xl font-bold">Profile</h1>
     
-    <!-- User Info -->
-    <Card class="mb-6">
-      <CardHeader>
+    <!-- User Info Card -->
+    <Card>
+      <CardHeader class="flex flex-row items-center justify-between">
         <CardTitle>Your Information</CardTitle>
+        <div class="flex gap-2">
+          <ProfileEditDialog 
+            v-if="user" 
+            :user="user" 
+            @update:success="handleProfileUpdate"
+          />
+          <ProfileChangePasswordDialog @update:success="handlePasswordChanged" />
+        </div>
       </CardHeader>
       <CardContent>
         <div class="space-y-2">
-          <p><span class="font-medium">Username:</span> {{ user?.username }}</p>
-          <p><span class="font-medium">Email:</span> {{ user?.email }}</p>
-          <p><span class="font-medium">Full Name:</span> {{ user?.fullName || 'Not set' }}</p>
-          <p><span class="font-medium">Role:</span> {{ user?.isSuperuser ? 'Administrator' : 'User' }}</p>
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-muted-foreground">Username:</span>
+            <span>{{ user?.username }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-muted-foreground">Email:</span>
+            <span>{{ user?.email }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-muted-foreground">Full Name:</span>
+            <span>{{ user?.full_name || 'Not set' }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-muted-foreground">Role:</span>
+            <Badge :variant="user?.is_superuser ? 'default' : 'secondary'">
+              {{ user?.is_superuser ? 'Administrator' : 'User' }}
+            </Badge>
+          </div>
         </div>
       </CardContent>
     </Card>
 
-    <!-- User List for Superusers -->
-    <Card v-if="user?.isSuperuser">
+    <!-- Admin Section - User Management -->
+    <Card v-if="user?.is_superuser">
       <CardHeader>
-        <CardTitle>All Users</CardTitle>
+        <CardTitle>Administration</CardTitle>
+        <CardDescription>
+          Manage users and system settings
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <div v-if="pending">Loading...</div>
-        <div v-else-if="error">Error: {{ error.message }}</div>
-        <table v-else class="w-full">
-          <thead>
-            <tr class="border-b">
-              <th class="text-left p-2">Username</th>
-              <th class="text-left p-2">Email</th>
-              <th class="text-left p-2">Full Name</th>
-              <th class="text-left p-2">Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="u in users" :key="u.id" class="border-b">
-              <td class="p-2">{{ u.username }}</td>
-              <td class="p-2">{{ u.email }}</td>
-              <td class="p-2">{{ u.full_name || '-' }}</td>
-              <td class="p-2">{{ u.is_superuser ? 'Admin' : 'User' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <ProfileUserManagementTable v-if="user" :current-user-id="user.id" />
       </CardContent>
     </Card>
+
+    <!-- Success/Error Alerts -->
+    <Transition name="fade">
+      <Alert v-if="alert" :variant="alert.variant" class="fixed bottom-4 right-4 w-auto max-w-md">
+        <Icon :name="alert.icon" class="size-4" />
+        <AlertTitle>{{ alert.title }}</AlertTitle>
+        <AlertDescription v-if="alert.description">
+          {{ alert.description }}
+        </AlertDescription>
+      </Alert>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 // Require authentication to view this page
 definePageMeta({
   requiresAuth: true
 })
 
-const { user } = await useUserSession()
+const session = useUserSession()
+const { user } = session
 
-// Define type for user list response
-interface UserListResponse {
-  items: Array<{
-    id: number
-    email: string
-    username: string
-    full_name?: string
-    is_superuser: boolean
-  }>
+// Alert state
+interface AlertState {
+  variant: 'default' | 'destructive'
+  icon: string
+  title: string
+  description?: string
 }
 
-// Fetch users if superuser - must use trailing slash
-const { data: response, pending, error } = user.value?.isSuperuser 
-  ? await useFetch<UserListResponse>('/api/users')
-  : { data: ref<UserListResponse | null>(null), pending: ref(false), error: ref(null) }
+const alert = ref<AlertState | null>(null)
+let alertTimeout: NodeJS.Timeout | null = null
 
-const users = computed(() => response.value?.items || [])
+// Show alert helper
+const showAlert = (alertData: AlertState) => {
+  alert.value = alertData
+  
+  // Clear existing timeout
+  if (alertTimeout) {
+    clearTimeout(alertTimeout)
+  }
+  
+  // Auto-hide after 5 seconds
+  alertTimeout = setTimeout(() => {
+    alert.value = null
+  }, 5000)
+}
+
+// Handlers
+const handleProfileUpdate = async () => {
+  // Refresh session to get updated user data
+  await session.fetch()
+  
+  showAlert({
+    variant: 'default',
+    icon: 'lucide:check-circle',
+    title: 'Profile Updated',
+    description: 'Your profile information has been successfully updated.',
+  })
+}
+
+const handlePasswordChanged = () => {
+  showAlert({
+    variant: 'default',
+    icon: 'lucide:check-circle',
+    title: 'Password Changed',
+    description: 'Your password has been successfully changed.',
+  })
+}
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (alertTimeout) {
+    clearTimeout(alertTimeout)
+  }
+})
 </script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+</style>
