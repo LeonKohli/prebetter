@@ -79,9 +79,4 @@ async function handleLogin() {
     loading.value = false
   }
 }
-
-// Redirect if already logged in
-if (session.loggedIn.value) {
-  navigateTo('/')
-}
 </script>

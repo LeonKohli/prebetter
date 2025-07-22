@@ -15,7 +15,7 @@ from app.core.security import (
 )
 from app.database.config import get_prebetter_db
 from app.models.users import User
-from app.schemas.users import Token, TokenData, User as UserSchema
+from app.schemas.users import Token, TokenData, User as UserSchema, UserUpdate
 from app.services.users import UserService
 
 router = APIRouter()
@@ -100,3 +100,29 @@ async def read_users_me(
     Retrieve the profile of the authenticated user.
     """
     return current_user
+
+
+@router.put("/users/me", response_model=UserSchema)
+async def update_profile(
+    profile_update: UserUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    user_service: UserService = Depends(get_user_service),
+) -> User:
+    """
+    Update the profile of the authenticated user.
+    Users can update their username, email, and full name.
+    Password updates should use the change-password endpoint.
+    """
+    # Prevent regular users from changing their superuser status
+    update_data = profile_update.model_dump(exclude_unset=True)
+    if "is_superuser" in update_data:
+        del update_data["is_superuser"]
+    
+    # Remove password from profile update (use change-password endpoint instead)
+    if "password" in update_data:
+        del update_data["password"]
+    
+    # Create a new UserUpdate instance with filtered data
+    filtered_update = UserUpdate(**update_data)
+    
+    return user_service.update_user(str(current_user.id), filtered_update)
