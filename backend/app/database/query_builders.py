@@ -237,12 +237,9 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
     source_addr = aliased(Address, name="source_addr")
     target_addr = aliased(Address, name="target_addr")
 
-    # Optimize pairs list to limit query complexity
-    # If too many pairs provided, limit to first 10 to avoid excessive query size
-    limited_pairs = pairs[:10] if len(pairs) > 10 else pairs
-
-    # Efficiently construct source-target pair list for IN clause
-    pair_tuples = [(p.source_ipv4, p.target_ipv4) for p in limited_pairs]
+    # Construct source-target pair list for IN clause
+    # Use all pairs passed in - pagination should already limit this appropriately
+    pair_tuples = [(p.source_ipv4, p.target_ipv4) for p in pairs]
 
     # Optimized alert details query with efficient joins and data retrieval
     alerts_query = (
@@ -259,7 +256,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
         .select_from(Alert)
         # Essential joins first
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .join(Classification, Classification._message_ident == Alert._ident)
+        .outerjoin(Classification, Classification._message_ident == Alert._ident)
         # Use efficient join conditions for addresses
         .join(
             source_addr,
