@@ -129,15 +129,8 @@ def process_grouped_alerts_details(alerts):
     # Use a dict comprehension for better performance
     alerts_map = {}
 
-    # Set a reasonable limit to avoid processing too many alerts
-    max_alerts = 1000
-
     # Create a map of alerts for each source-target pair
-    for i, a in enumerate(alerts):
-        # Exit early if we've processed enough alerts
-        if i >= max_alerts:
-            break
-
+    for a in alerts:
         key = (a.source_ipv4, a.target_ipv4)
         if key not in alerts_map:
             alerts_map[key] = []
