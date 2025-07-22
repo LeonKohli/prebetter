@@ -23,7 +23,7 @@ export default defineNuxtConfig({
   site: {
     name: 'Prebetter SIEM Dashboard',
     description: 'A modern Security Information and Event Management dashboard for Prelude IDS',
-    defaultLocale: 'en',
+    defaultLocale: 'de',
   },
   css: ['~/assets/css/main.css'],
   shadcn: {

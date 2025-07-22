@@ -18,7 +18,7 @@
             <span class="text-muted-foreground">{{ formattedDateRange }}</span>
           </template>
           <template v-else>
-            <span class="text-muted-foreground">Pick a date range</span>
+            <span class="text-muted-foreground">Zeitraum auswählen</span>
           </template>
         </div>
       </Button>
@@ -27,7 +27,7 @@
       <div class="flex">
         <!-- Quick Presets -->
         <div class="flex flex-col p-4 border-r min-w-[180px]">
-          <h4 class="text-sm font-semibold mb-2">Quick Select</h4>
+          <h4 class="text-sm font-semibold mb-2">Schnellauswahl</h4>
           <div class="grid gap-1 overflow-y-auto pr-2 -mr-2 max-h-[370px]">
             <Button
               v-for="preset in quickPresets"
@@ -47,6 +47,8 @@
           <RangeCalendar 
             v-model="value" 
             :number-of-months="2"
+            locale="de-DE"
+            :week-starts-on="1"
             class="[&_[data-selection-start]:hover]:!bg-primary [&_[data-selection-start]:hover]:!text-primary-foreground [&_[data-selection-end]:hover]:!bg-primary [&_[data-selection-end]:hover]:!text-primary-foreground"
             @update:start-value="(startDate) => value.start = startDate"
           />
@@ -56,21 +58,31 @@
             <div class="grid grid-cols-2 gap-3">
               <!-- Start Time -->
               <div class="space-y-1.5">
-                <Label class="text-xs font-medium text-muted-foreground">Start Time</Label>
+                <div class="flex items-center justify-between">
+                  <Label class="text-xs font-medium text-muted-foreground">Startzeit</Label>
+                  <span class="text-xs text-muted-foreground">{{ startTime }}</span>
+                </div>
                 <Input 
                   type="time" 
                   v-model="startTime"
                   class="h-8 text-xs"
+                  step="60"
+                  lang="de-DE"
                 />
               </div>
               
               <!-- End Time -->
               <div class="space-y-1.5">
-                <Label class="text-xs font-medium text-muted-foreground">End Time</Label>
+                <div class="flex items-center justify-between">
+                  <Label class="text-xs font-medium text-muted-foreground">Endzeit</Label>
+                  <span class="text-xs text-muted-foreground">{{ endTime }}</span>
+                </div>
                 <Input 
                   type="time" 
                   v-model="endTime"
                   class="h-8 text-xs"
+                  step="60"
+                  lang="de-DE"
                 />
               </div>
             </div>
@@ -100,6 +112,12 @@ import {
   toCalendarDateTime,
   Time,
 } from '@internationalized/date'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { RangeCalendar } from '@/components/ui/range-calendar'
+
 
 interface DateRangeValue {
   from: Date | undefined
@@ -193,17 +211,20 @@ const endTime = computed({
   }
 })
 
-const df = new DateFormatter('en-US', {
-  month: 'short',
-  day: 'numeric',
+// Use German locale for date/time formatting
+const df = new DateFormatter('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
   year: 'numeric',
 })
 
-const dtf = new DateFormatter('en-US', {
-  month: 'short',
-  day: 'numeric',
+const dtf = new DateFormatter('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
+  hour12: false, // Use 24-hour format
 })
 
 // Computed property for formatted date range display
@@ -271,7 +292,7 @@ const value = computed<DateRange>({
         // Check if the CalendarDateTime has time information (from presets or manual selection)
         const hasTimeInfo = 'hour' in dateRange.start
         
-        if (hasTimeInfo) {
+        if (hasTimeInfo && dateRange.start instanceof CalendarDateTime) {
           // Use the time from the CalendarDateTime (e.g., from hour presets)
           startHour.value = String(dateRange.start.hour).padStart(2, '0')
           startMinute.value = String(dateRange.start.minute || 0).padStart(2, '0')
@@ -295,7 +316,7 @@ const value = computed<DateRange>({
         // Check if the CalendarDateTime has time information
         const hasTimeInfo = 'hour' in dateRange.end
         
-        if (hasTimeInfo) {
+        if (hasTimeInfo && dateRange.end instanceof CalendarDateTime) {
           // Use the time from the CalendarDateTime
           endHour.value = String(dateRange.end.hour).padStart(2, '0')
           endMinute.value = String(dateRange.end.minute || 0).padStart(2, '0')
@@ -376,7 +397,7 @@ function createDayRangePreset(label: string, subtract: any): QuickPreset {
 const quickPresets: QuickPreset[] = [
   // Most common presets first
   {
-    label: 'Today',
+    label: 'Heute',
     getValue: () => ({
       start: toCalendarDateTime(todayDate),
       end: toCalendarDateTime(todayDate, new Time(23, 59, 59))
@@ -384,53 +405,53 @@ const quickPresets: QuickPreset[] = [
   },
   // Hour-based presets
   {
-    label: 'Last 1 Hour',
+    label: 'Letzte Stunde',
     getValue: createHourPreset(1)
   },
   {
-    label: 'Last 2 Hours',
+    label: 'Letzte 2 Stunden',
     getValue: createHourPreset(2)
   },
   // Current period presets
   {
-    label: 'This Week',
+    label: 'Diese Woche',
     getValue: () => ({
-      start: toCalendarDateTime(rekaStartOfWeek(todayDate, 'en-US')),
-      end: toCalendarDateTime(rekaEndOfWeek(todayDate, 'en-US'), new Time(23, 59, 59))
+      start: toCalendarDateTime(rekaStartOfWeek(todayDate, 'de-DE')),
+      end: toCalendarDateTime(rekaEndOfWeek(todayDate, 'de-DE'), new Time(23, 59, 59))
     } as DateRange)
   },
   {
-    label: 'This Month',
+    label: 'Dieser Monat',
     getValue: () => ({
       start: toCalendarDateTime(rekaStartOfMonth(todayDate)),
       end: toCalendarDateTime(rekaEndOfMonth(todayDate), new Time(23, 59, 59))
     } as DateRange)
   },
   {
-    label: 'This Year', 
+    label: 'Dieses Jahr', 
     getValue: () => ({
       start: toCalendarDateTime(rekaStartOfYear(todayDate)),
       end: toCalendarDateTime(rekaEndOfYear(todayDate), new Time(23, 59, 59))
     } as DateRange)
   },
   // Day-based presets
-  createDayRangePreset('Last 2 Days', { days: 2 }),
-  createDayRangePreset('Last 7 Days', { days: 7 }),
-  createDayRangePreset('Last 30 Days', { days: 30 }),
-  createDayRangePreset('Last 3 Months', { months: 3 }),
-  createDayRangePreset('Last 6 Months', { months: 6 }),
-  createDayRangePreset('Last 1 Year', { years: 1 })
+  createDayRangePreset('Letzte 2 Tage', { days: 2 }),
+  createDayRangePreset('Letzte 7 Tage', { days: 7 }),
+  createDayRangePreset('Letzte 30 Tage', { days: 30 }),
+  createDayRangePreset('Letzte 3 Monate', { months: 3 }),
+  createDayRangePreset('Letzte 6 Monate', { months: 6 }),
+  createDayRangePreset('Letztes Jahr', { years: 1 })
 ]
 
 function selectPreset(preset: QuickPreset) {
   const dateRange = preset.getValue()
   
   // Update time refs from the preset's CalendarDateTime objects
-  if (props.includeTime && dateRange.start && 'hour' in dateRange.start) {
+  if (props.includeTime && dateRange.start && dateRange.start instanceof CalendarDateTime) {
     startHour.value = String(dateRange.start.hour).padStart(2, '0')
     startMinute.value = String(dateRange.start.minute || 0).padStart(2, '0')
   }
-  if (props.includeTime && dateRange.end && 'hour' in dateRange.end) {
+  if (props.includeTime && dateRange.end && dateRange.end instanceof CalendarDateTime) {
     endHour.value = String(dateRange.end.hour).padStart(2, '0')
     endMinute.value = String(dateRange.end.minute || 0).padStart(2, '0')
   }
