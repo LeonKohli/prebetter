@@ -97,6 +97,8 @@ import {
   endOfWeek as rekaEndOfWeek,
   endOfMonth as rekaEndOfMonth,
   endOfYear as rekaEndOfYear,
+  toCalendarDateTime,
+  Time,
 } from '@internationalized/date'
 
 interface DateRangeValue {
@@ -132,64 +134,35 @@ const activePreset = computed(() => {
     return null
   }
   
-  const from = props.modelValue.from.getTime()
-  const to = props.modelValue.to.getTime()
-  
-  let bestMatch = null
-  let bestScore = Infinity
-  
-  // Check each preset to see if it matches current date range
+  // Simple matching - check each preset and see if dates match (ignoring seconds/milliseconds)
   for (const preset of quickPresets) {
     const presetRange = preset.getValue()
     if (presetRange.start && presetRange.end) {
-      const presetFrom = presetRange.start.toDate(getLocalTimeZone()).getTime()
-      const presetTo = presetRange.end.toDate(getLocalTimeZone()).getTime()
+      const presetFrom = presetRange.start.toDate(getLocalTimeZone())
+      const presetTo = presetRange.end.toDate(getLocalTimeZone())
       
-      // Calculate the difference score
-      const fromDiff = Math.abs(from - presetFrom)
-      const toDiff = Math.abs(to - presetTo)
-      const totalDiff = fromDiff + toDiff
+      // Compare dates at minute precision (ignore seconds)
+      const fromMatches = 
+        props.modelValue.from.getFullYear() === presetFrom.getFullYear() &&
+        props.modelValue.from.getMonth() === presetFrom.getMonth() &&
+        props.modelValue.from.getDate() === presetFrom.getDate() &&
+        props.modelValue.from.getHours() === presetFrom.getHours() &&
+        Math.abs(props.modelValue.from.getMinutes() - presetFrom.getMinutes()) <= 1
       
-      // Realistic tolerance based on preset type and real-world variations
-      const label = preset.label.toLowerCase()
-      const timeSpan = Math.abs(presetTo - presetFrom)
-      let tolerance: number
+      const toMatches = 
+        props.modelValue.to.getFullYear() === presetTo.getFullYear() &&
+        props.modelValue.to.getMonth() === presetTo.getMonth() &&
+        props.modelValue.to.getDate() === presetTo.getDate() &&
+        props.modelValue.to.getHours() === presetTo.getHours() &&
+        Math.abs(props.modelValue.to.getMinutes() - presetTo.getMinutes()) <= 1
       
-      if (label.includes('hour')) {
-        // Hour presets: reasonable tolerance for user interaction delays
-        tolerance = 15 * 60 * 1000 // 15 minutes
-      } else if (label === 'today') {
-        // Today preset: handle as single day - very flexible since it's often 00:00-23:59
-        tolerance = 12 * 60 * 60 * 1000 // 12 hours - very forgiving for day boundaries
-      } else if (label.includes('week') || label.includes('this week') || label.includes('last 7') || label.includes('7 days')) {
-        // Week presets: week boundaries can vary significantly (check before 'day' to avoid conflict)
-        tolerance = 2 * 24 * 60 * 60 * 1000 // 2 days
-      } else if (label.includes('month') || label.includes('this month') || label.includes('30 days')) {
-        // Month presets: month boundaries vary
-        tolerance = 3 * 24 * 60 * 60 * 1000 // 3 days
-      } else if (label.includes('year') || label.includes('this year')) {
-        // Year presets: year boundaries
-        tolerance = 7 * 24 * 60 * 60 * 1000 // 1 week
-      } else if (label.includes('day')) {
-        // Day presets: account for timezone and daylight savings variations (check after week/month)
-        tolerance = 4 * 60 * 60 * 1000 // 4 hours
-      } else {
-        // Default: use 5% of the time span as tolerance, minimum 1 hour
-        tolerance = Math.max(60 * 60 * 1000, timeSpan * 0.05)
-      }
-      
-      const fromMatch = fromDiff <= tolerance
-      const toMatch = toDiff <= tolerance
-      
-      // If both match and this is the best score so far
-      if (fromMatch && toMatch && totalDiff < bestScore) {
-        bestScore = totalDiff
-        bestMatch = preset
+      if (fromMatches && toMatches) {
+        return preset
       }
     }
   }
   
-  return bestMatch
+  return null
 })
 
 // Computed property for the active preset label
@@ -294,11 +267,20 @@ const value = computed<DateRange>({
       const baseDate = dateRange.start.toDate(getLocalTimeZone())
       if (props.includeTime) {
         from = new Date(baseDate)
-        // If this is a new date selection (not just time change), set default times
-        if (!props.modelValue?.from || baseDate.toDateString() !== props.modelValue.from.toDateString()) {
+        
+        // Check if the CalendarDateTime has time information (from presets or manual selection)
+        const hasTimeInfo = 'hour' in dateRange.start
+        
+        if (hasTimeInfo) {
+          // Use the time from the CalendarDateTime (e.g., from hour presets)
+          startHour.value = String(dateRange.start.hour).padStart(2, '0')
+          startMinute.value = String(dateRange.start.minute || 0).padStart(2, '0')
+        } else if (!props.modelValue?.from || baseDate.toDateString() !== props.modelValue.from.toDateString()) {
+          // Only reset to defaults if it's a new date and no time info provided
           startHour.value = DEFAULT_START_HOUR
           startMinute.value = DEFAULT_START_MINUTE
         }
+        
         from.setHours(parseInt(startHour.value), parseInt(startMinute.value))
       } else {
         from = baseDate
@@ -309,11 +291,20 @@ const value = computed<DateRange>({
       const baseDate = dateRange.end.toDate(getLocalTimeZone())
       if (props.includeTime) {
         to = new Date(baseDate)
-        // If this is a new date selection (not just time change), set default times
-        if (!props.modelValue?.to || baseDate.toDateString() !== props.modelValue.to.toDateString()) {
+        
+        // Check if the CalendarDateTime has time information
+        const hasTimeInfo = 'hour' in dateRange.end
+        
+        if (hasTimeInfo) {
+          // Use the time from the CalendarDateTime
+          endHour.value = String(dateRange.end.hour).padStart(2, '0')
+          endMinute.value = String(dateRange.end.minute || 0).padStart(2, '0')
+        } else if (!props.modelValue?.to || baseDate.toDateString() !== props.modelValue.to.toDateString()) {
+          // Only reset to defaults if it's a new date and no time info provided
           endHour.value = DEFAULT_END_HOUR
           endMinute.value = DEFAULT_END_MINUTE
         }
+        
         to.setHours(parseInt(endHour.value), parseInt(endMinute.value))
       } else {
         to = baseDate
@@ -370,28 +361,26 @@ function dateToCalendarDate(date: Date): CalendarDate {
   )
 }
 
+// Helper to create day range presets with consistent times
+function createDayRangePreset(label: string, subtract: any): QuickPreset {
+  return {
+    label,
+    getValue: () => {
+      const start = toCalendarDateTime(todayDate.subtract(subtract))
+      const end = toCalendarDateTime(todayDate, new Time(23, 59, 59))
+      return { start, end } as DateRange
+    }
+  }
+}
+
 const quickPresets: QuickPreset[] = [
   // Most common presets first
   {
     label: 'Today',
-    getValue: () => {
-      // Create a proper full-day range from 00:00:00 to 23:59:59
-      const startOfDay = todayDate
-      // For end of day, create a CalendarDateTime with 23:59:59
-      const endOfDay = new CalendarDateTime(
-        todayDate.year,
-        todayDate.month,
-        todayDate.day,
-        23,
-        59,
-        59,
-        999
-      )
-      return {
-        start: startOfDay,
-        end: endOfDay,
-      } as DateRange
-    }
+    getValue: () => ({
+      start: toCalendarDateTime(todayDate),
+      end: toCalendarDateTime(todayDate, new Time(23, 59, 59))
+    } as DateRange)
   },
   // Hour-based presets
   {
@@ -406,118 +395,44 @@ const quickPresets: QuickPreset[] = [
   {
     label: 'This Week',
     getValue: () => ({
-      start: rekaStartOfWeek(todayDate, 'en-US'),
-      end: rekaEndOfWeek(todayDate, 'en-US'),
+      start: toCalendarDateTime(rekaStartOfWeek(todayDate, 'en-US')),
+      end: toCalendarDateTime(rekaEndOfWeek(todayDate, 'en-US'), new Time(23, 59, 59))
     } as DateRange)
   },
   {
     label: 'This Month',
     getValue: () => ({
-      start: rekaStartOfMonth(todayDate),
-      end: rekaEndOfMonth(todayDate),
+      start: toCalendarDateTime(rekaStartOfMonth(todayDate)),
+      end: toCalendarDateTime(rekaEndOfMonth(todayDate), new Time(23, 59, 59))
     } as DateRange)
   },
   {
-    label: 'This Year',
+    label: 'This Year', 
     getValue: () => ({
-      start: rekaStartOfYear(todayDate),
-      end: rekaEndOfYear(todayDate),
+      start: toCalendarDateTime(rekaStartOfYear(todayDate)),
+      end: toCalendarDateTime(rekaEndOfYear(todayDate), new Time(23, 59, 59))
     } as DateRange)
   },
   // Day-based presets
-  {
-    label: 'Last 2 Days',
-    getValue: () => {
-      const end = todayDate
-      const start = todayDate.subtract({ days: 2 })
-      return {
-        start,
-        end,
-      } as DateRange
-    }
-  },
-  {
-    label: 'Last 7 Days',
-    getValue: () => {
-      const end = todayDate
-      const start = todayDate.subtract({ days: 7 })
-      return {
-        start,
-        end,
-      } as DateRange
-    }
-  },
-  // Week/Month/Year presets
-  {
-    label: 'Last 30 Days',
-    getValue: () => {
-      const end = todayDate
-      const start = todayDate.subtract({ days: 30 })
-      return {
-        start,
-        end,
-      } as DateRange
-    }
-  },
-  {
-    label: 'Last 3 Months',
-    getValue: () => {
-      const end = todayDate
-      const start = todayDate.subtract({ months: 3 })
-      return {
-        start,
-        end,
-      } as DateRange
-    }
-  },
-  {
-    label: 'Last 6 Months',
-    getValue: () => {
-      const end = todayDate
-      const start = todayDate.subtract({ months: 6 })
-      return {
-        start,
-        end,
-      } as DateRange
-    }
-  },
-  {
-    label: 'Last 1 Year',
-    getValue: () => {
-      const end = todayDate
-      const start = todayDate.subtract({ years: 1 })
-      return {
-        start,
-        end,
-      } as DateRange
-    }
-  }
+  createDayRangePreset('Last 2 Days', { days: 2 }),
+  createDayRangePreset('Last 7 Days', { days: 7 }),
+  createDayRangePreset('Last 30 Days', { days: 30 }),
+  createDayRangePreset('Last 3 Months', { months: 3 }),
+  createDayRangePreset('Last 6 Months', { months: 6 }),
+  createDayRangePreset('Last 1 Year', { years: 1 })
 ]
 
 function selectPreset(preset: QuickPreset) {
   const dateRange = preset.getValue()
   
-  // For presets, set appropriate times
-  if (props.includeTime && dateRange.start && dateRange.end) {
-    const label = preset.label.toLowerCase()
-    
-    // For time-based presets (hours), preserve the actual times
-    if (label.includes('hour')) {
-      // Extract time from the CalendarDateTime
-      const startDate = dateRange.start.toDate(getLocalTimeZone())
-      const endDate = dateRange.end.toDate(getLocalTimeZone())
-      
-      startHour.value = String(startDate.getHours()).padStart(2, '0')
-      startMinute.value = String(startDate.getMinutes()).padStart(2, '0')
-      endHour.value = String(endDate.getHours()).padStart(2, '0')
-      endMinute.value = String(endDate.getMinutes()).padStart(2, '0')
-    } else if (label.includes('today') || label.includes('week') || label.includes('month') || label.includes('year')) {
-      // For full day presets, use 00:00 - 23:59
-      startHour.value = DEFAULT_START_HOUR
-      startMinute.value = DEFAULT_START_MINUTE
-      endHour.value = DEFAULT_END_HOUR
-      endMinute.value = DEFAULT_END_MINUTE
-    }
+  // Update time refs from the preset's CalendarDateTime objects
+  if (props.includeTime && dateRange.start && 'hour' in dateRange.start) {
+    startHour.value = String(dateRange.start.hour).padStart(2, '0')
+    startMinute.value = String(dateRange.start.minute || 0).padStart(2, '0')
+  }
+  if (props.includeTime && dateRange.end && 'hour' in dateRange.end) {
+    endHour.value = String(dateRange.end.hour).padStart(2, '0')
+    endMinute.value = String(dateRange.end.minute || 0).padStart(2, '0')
   }
   
   value.value = dateRange
