@@ -18,7 +18,7 @@
             <span class="text-muted-foreground">{{ formattedDateRange }}</span>
           </template>
           <template v-else>
-            <span class="text-muted-foreground">Zeitraum auswählen</span>
+            <span class="text-muted-foreground">Select date range</span>
           </template>
         </div>
       </Button>
@@ -27,7 +27,7 @@
       <div class="flex">
         <!-- Quick Presets -->
         <div class="flex flex-col p-4 border-r min-w-[180px]">
-          <h4 class="text-sm font-semibold mb-2">Schnellauswahl</h4>
+          <h4 class="text-sm font-semibold mb-2">Quick Select</h4>
           <div class="grid gap-1 overflow-y-auto pr-2 -mr-2 max-h-[370px]">
             <Button
               v-for="preset in quickPresets"
@@ -59,7 +59,7 @@
               <!-- Start Time -->
               <div class="space-y-1.5">
                 <div class="flex items-center justify-between">
-                  <Label class="text-xs font-medium text-muted-foreground">Startzeit</Label>
+                  <Label class="text-xs font-medium text-muted-foreground">Start Time</Label>
                   <span class="text-xs text-muted-foreground">{{ startTime }}</span>
                 </div>
                 <Input 
@@ -74,7 +74,7 @@
               <!-- End Time -->
               <div class="space-y-1.5">
                 <div class="flex items-center justify-between">
-                  <Label class="text-xs font-medium text-muted-foreground">Endzeit</Label>
+                  <Label class="text-xs font-medium text-muted-foreground">End Time</Label>
                   <span class="text-xs text-muted-foreground">{{ endTime }}</span>
                 </div>
                 <Input 
@@ -397,7 +397,7 @@ function createDayRangePreset(label: string, subtract: any): QuickPreset {
 const quickPresets: QuickPreset[] = [
   // Most common presets first
   {
-    label: 'Heute',
+    label: 'Today',
     getValue: () => ({
       start: toCalendarDateTime(todayDate),
       end: toCalendarDateTime(todayDate, new Time(23, 59, 59))
@@ -405,42 +405,42 @@ const quickPresets: QuickPreset[] = [
   },
   // Hour-based presets
   {
-    label: 'Letzte Stunde',
+    label: 'Last Hour',
     getValue: createHourPreset(1)
   },
   {
-    label: 'Letzte 2 Stunden',
+    label: 'Last 2 Hours',
     getValue: createHourPreset(2)
   },
   // Current period presets
   {
-    label: 'Diese Woche',
+    label: 'This Week',
     getValue: () => ({
       start: toCalendarDateTime(rekaStartOfWeek(todayDate, 'de-DE')),
       end: toCalendarDateTime(rekaEndOfWeek(todayDate, 'de-DE'), new Time(23, 59, 59))
     } as DateRange)
   },
   {
-    label: 'Dieser Monat',
+    label: 'This Month',
     getValue: () => ({
       start: toCalendarDateTime(rekaStartOfMonth(todayDate)),
       end: toCalendarDateTime(rekaEndOfMonth(todayDate), new Time(23, 59, 59))
     } as DateRange)
   },
   {
-    label: 'Dieses Jahr', 
+    label: 'This Year', 
     getValue: () => ({
       start: toCalendarDateTime(rekaStartOfYear(todayDate)),
       end: toCalendarDateTime(rekaEndOfYear(todayDate), new Time(23, 59, 59))
     } as DateRange)
   },
   // Day-based presets
-  createDayRangePreset('Letzte 2 Tage', { days: 2 }),
-  createDayRangePreset('Letzte 7 Tage', { days: 7 }),
-  createDayRangePreset('Letzte 30 Tage', { days: 30 }),
-  createDayRangePreset('Letzte 3 Monate', { months: 3 }),
-  createDayRangePreset('Letzte 6 Monate', { months: 6 }),
-  createDayRangePreset('Letztes Jahr', { years: 1 })
+  createDayRangePreset('Last 2 Days', { days: 2 }),
+  createDayRangePreset('Last 7 Days', { days: 7 }),
+  createDayRangePreset('Last 30 Days', { days: 30 }),
+  createDayRangePreset('Last 3 Months', { months: 3 }),
+  createDayRangePreset('Last 6 Months', { months: 6 }),
+  createDayRangePreset('Last Year', { years: 1 })
 ]
 
 function selectPreset(preset: QuickPreset) {
