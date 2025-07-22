@@ -338,17 +338,14 @@ async def get_grouped_alerts(
         source_addr = alert_models["source_addr"]
         target_addr = alert_models["target_addr"]
 
-        # Group by first, then apply limit
+        # Group by first
         alerts_query = alerts_query.group_by(
             source_addr.address,
             target_addr.address,
             Classification.text,
         )
 
-        # Add a limit after group_by
-        alerts_query = alerts_query.limit(1000)
-
-        # Execute query
+        # Execute query - no limit
         alerts = alerts_query.all()
 
         # Process the alerts using the utility function
