@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚨 CRITICAL: Git Commit Rules 🚨
+
+**NEVER EVER include "Co-Authored-By: Claude" in commit messages. This is ABSOLUTELY FORBIDDEN.**
+**NEVER EVER include "Co-Authored-By: Claude" in commit messages. This is ABSOLUTELY FORBIDDEN.**
+**NEVER EVER include "Co-Authored-By: Claude" in commit messages. This is ABSOLUTELY FORBIDDEN.**
+
 ## Project Overview
 
 **Prebetter** is a modern Security Information and Event Management (SIEM) dashboard that provides real-time security alert monitoring and analysis through a web-based interface.
