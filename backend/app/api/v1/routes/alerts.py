@@ -155,11 +155,9 @@ async def list_alerts(
     # This fixes the critical bug where IP filters were ignored in the count query
     # by using identical joins and filters for both count and results
     
-    # Use SQLAlchemy 2.0's with_only_columns method to count distinct alert IDs
-    # while preserving all the joins and filters from the main query
-    count_query = query.with_only_columns(func.count(distinct(Alert._ident)), maintain_column_froms=True)
-    
-    # Execute count query to get total
+    # Count distinct alert IDs using the same query with all joins and filters
+    # This ensures IP filters (and all other filters) are properly applied to the count
+    count_query = query.with_entities(func.count(distinct(Alert._ident)))
     total = count_query.scalar()
 
     # Calculate total pages
