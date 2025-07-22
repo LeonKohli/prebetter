@@ -18,10 +18,10 @@ export default defineEventHandler(async (event) => {
 
     // 2. Fetch user information from the backend using the new token
     const userInfo = await $fetch<{
-      id: number
+      id: string
       email: string
       username: string
-      full_name: string
+      full_name: string | null
       is_superuser: boolean
     }>(`${apiBase}/api/v1/auth/users/me`, {
       headers: {
@@ -35,8 +35,8 @@ export default defineEventHandler(async (event) => {
         id: userInfo.id,
         email: userInfo.email,
         username: userInfo.username,
-        fullName: userInfo.full_name,
-        isSuperuser: userInfo.is_superuser,
+        full_name: userInfo.full_name,
+        is_superuser: userInfo.is_superuser,
       },
       // Store the token in the 'secure' part of the session.
       // It will only be available on the server, not exposed to the client.
