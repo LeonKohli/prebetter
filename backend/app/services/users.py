@@ -69,7 +69,7 @@ class UserService:
             username=user_data.username,
             full_name=user_data.full_name,
             hashed_password=get_password_hash(user_data.password),
-            is_superuser=False,  # By default, user is not a superuser
+            is_superuser=getattr(user_data, 'is_superuser', False),  # Use value from user_data if provided
         )
         self.db.add(db_user)
         try:

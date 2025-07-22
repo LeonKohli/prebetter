@@ -26,7 +26,7 @@
               <DropdownMenuContent align="end" class="w-56">
                 <DropdownMenuLabel>
                   <div class="flex flex-col space-y-1">
-                    <p class="text-sm font-medium">{{ user.fullName || user.username }}</p>
+                    <p class="text-sm font-medium">{{ user.full_name || user.username }}</p>
                     <p class="text-xs text-muted-foreground">{{ user.email }}</p>
                   </div>
                 </DropdownMenuLabel>
