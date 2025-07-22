@@ -1,6 +1,5 @@
 // Date helper utilities for consistent date handling across the application
 import { useNow } from '@vueuse/core'
-import { computed } from 'vue'
 
 export interface DateRange {
   from: Date | undefined
