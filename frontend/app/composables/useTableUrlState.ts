@@ -1,4 +1,3 @@
-import { computed } from 'vue'
 import type { Ref, ComputedRef, WritableComputedRef } from 'vue'
 import { useRouteQuery } from '@vueuse/router'
 import type { SortingState, ColumnFiltersState, VisibilityState } from '@tanstack/vue-table'
