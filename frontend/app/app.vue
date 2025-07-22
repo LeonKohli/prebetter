@@ -1,7 +1,7 @@
 <template>
-  <NuxtLayout>
-    <NuxtPage />
-  </NuxtLayout>
+    <NuxtLayout>
+      <NuxtPage />
+    </NuxtLayout>
 </template>
 
 <script setup lang="ts">
@@ -14,6 +14,7 @@ useHead({
     return titleChunk ? `${titleChunk} - Prebetter SIEM` : 'Prebetter SIEM';
   },
   htmlAttrs: {
+    lang: 'de-DE',
     'data-auth-ready': () => String(ready.value)
   }
 })

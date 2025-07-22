@@ -1,8 +1,6 @@
 import type { ColumnDef, Column } from '@tanstack/vue-table'
-import { h } from 'vue'
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
-import { useTimeAgo } from '@vueuse/core'
-import type { AlertListItem, GroupedAlert, TimeInfo, AnalyzerInfo } from '@/types/alerts'
+import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo } from '@/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -45,19 +43,74 @@ export const useAlertTableColumns = () => {
 
   const groupedColumns: ColumnDef<GroupedAlert>[] = [
     {
+      accessorKey: 'total_count',
+      header: createSortableHeader('Count'),
+      cell: ({ row }) => h('div', { class: 'font-semibold text-foreground text-lg' }, row.getValue<number>('total_count').toString()),
+    },
+    {
       accessorKey: 'source_ipv4',
       header: createSortableHeader('Source IP'),
-      cell: ({ row }) => row.getValue('source_ipv4') || 'Unknown',
+      cell: ({ row }) => h('span', { class: 'font-mono text-sm' }, row.getValue('source_ipv4') || 'Unknown'),
     },
     {
       accessorKey: 'target_ipv4',
       header: createSortableHeader('Target IP'),
-      cell: ({ row }) => row.getValue('target_ipv4') || 'Unknown',
+      cell: ({ row }) => h('span', { class: 'font-mono text-sm' }, row.getValue('target_ipv4') || 'Unknown'),
     },
     {
-      accessorKey: 'total_count',
-      header: createSortableHeader('Count'),
-      cell: ({ row }) => h('div', { class: 'font-semibold text-foreground' }, row.getValue('total_count')),
+      id: 'details',
+      accessorKey: 'alerts',
+      header: 'Alert Details',
+      cell: ({ row }) => {
+        const alerts = row.original.alerts
+        const totalCount = row.original.total_count
+        
+        if (!alerts || alerts.length === 0) {
+          return h('div', { class: 'text-muted-foreground' }, 'No classification data available')
+        }
+        
+        // Sort alerts by count descending
+        const sortedAlerts = [...alerts].sort((a, b) => b.count - a.count)
+        
+        // Create a grid/table-like display for the alert details
+        return h('div', { class: 'space-y-2 py-1' }, 
+          sortedAlerts.map(alert => {
+            const date = alert.detected_at ? new Date(alert.detected_at) : null
+            const dateStr = date ? date.toLocaleDateString('de-DE', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false // Ensure 24-hour format
+            }) : 'Unknown'
+            
+            const analyzers = alert.analyzer || []
+            const analyzerStr = analyzers.length === 0 ? 'Unknown' : 
+                               analyzers.length === 1 ? analyzers[0] :
+                               analyzers.length <= 3 ? analyzers.join(', ') :
+                               `${analyzers[0]}, ${analyzers[1]} +${analyzers.length - 2} more`
+            
+            return h('div', { 
+              class: 'grid grid-cols-[auto_1fr_auto] gap-4 items-center p-2 rounded hover:bg-muted/50 transition-colors',
+              key: alert.classification 
+            }, [
+              // Count
+              h('div', { class: 'flex items-center gap-2' }, [
+                h('span', { class: 'font-semibold text-base min-w-[3rem] text-right' }, alert.count.toString()),
+                h('span', { class: 'text-muted-foreground' }, '×')
+              ]),
+              // Classification & Analyzer
+              h('div', { class: 'space-y-1' }, [
+                h('div', { class: 'font-medium' }, alert.classification),
+                h('div', { class: 'text-xs text-muted-foreground' }, `Analyzer: ${analyzerStr}`)
+              ]),
+              // Date
+              h('div', { class: 'text-xs text-muted-foreground text-right' }, dateStr)
+            ])
+          })
+        )
+      },
     },
     {
       id: 'actions',
@@ -103,9 +156,17 @@ export const useAlertTableColumns = () => {
         const timeAgo = useTimeAgo(date)
         
         return h('div', { class: 'text-sm' }, [
-          h('div', { class: 'font-medium' }, date.toLocaleDateString()),
+          h('div', { class: 'font-medium' }, date.toLocaleDateString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          })),
           h('div', { class: 'text-xs text-muted-foreground flex items-center gap-1' }, [
-            h('span', {}, date.toLocaleTimeString()),
+            h('span', {}, date.toLocaleTimeString('de-DE', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false
+            })),
             h('span', { class: 'text-muted-foreground/70' }, '•'),
             h('span', { class: 'text-muted-foreground/70' }, timeAgo.value)
           ])
