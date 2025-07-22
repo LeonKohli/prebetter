@@ -233,8 +233,8 @@ async def get_grouped_alerts(
             "source_ip": source_addr.address,
             "target_ip": target_addr.address,
             "analyzer": func.max(Analyzer.name),
-            "alert_id": func.count(Alert._ident),  # Actually count in this context
-            "total_count": func.count(Alert._ident),  # Proper sort by count
+            "alert_id": func.count(func.distinct(Alert._ident)),  # Count distinct alerts
+            "total_count": func.count(func.distinct(Alert._ident)),  # Count distinct alerts
         }
 
         # Apply the selected sort option

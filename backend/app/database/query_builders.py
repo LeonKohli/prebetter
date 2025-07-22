@@ -173,7 +173,7 @@ def build_grouped_alerts_query(db: Session):
         db.query(
             source_addr.address.label("source_ipv4"),
             target_addr.address.label("target_ipv4"),
-            func.count(Alert._ident).label("total_count"),
+            func.count(func.distinct(Alert._ident)).label("total_count"),
             func.max(DetectTime.time).label("latest_time"),
             func.max(Impact.severity).label("max_severity"),
             # Use group_concat for these to reduce separate queries
@@ -247,7 +247,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             source_addr.address.label("source_ipv4"),
             target_addr.address.label("target_ipv4"),
             Classification.text.label("classification"),
-            func.count(Alert._ident).label("count"),
+            func.count(func.distinct(Alert._ident)).label("count"),
             # Use group_concat with DISTINCT for better performance
             func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
             func.group_concat(func.distinct(Node.name)).label("analyzer_hosts"),
