@@ -12,7 +12,6 @@ from app.database.config import (
 )
 from app.database.query_builders import (
     build_alert_base_query,
-    build_alert_count_query,
     build_grouped_alerts_query,
     build_grouped_alerts_detail_query,
     build_alert_detail_query,
@@ -136,23 +135,6 @@ async def list_alerts(
         Analyzer=Analyzer,
     )
 
-    # Get count query and apply the same filters
-    count_query, count_models = build_alert_count_query(db)
-    count_query = apply_standard_alert_filters(
-        query=count_query,
-        severity=severity,
-        classification=classification,
-        start_date=start_date,
-        end_date=end_date,
-        source_ip=source_ip,
-        target_ip=target_ip,
-        analyzer_model=analyzer_model,
-        **count_models,
-        Impact=Impact,
-        Classification=Classification,
-        DetectTime=DetectTime,
-        Analyzer=Analyzer,
-    )
 
     # Apply sorting with support for multiple fields
     sort_options = {
@@ -169,59 +151,16 @@ async def list_alerts(
     # Apply sorting to the main query
     query = apply_sorting(query, sort_by, sort_order, sort_options, DetectTime.time)
 
-    # Calculate total distinct records with optimized query
-    # Use a more optimized approach to avoid cartesian product warning
-
-    # Create a new query just for counting alert IDs
-
-    # We need to handle the count in a way that avoids cartesian products
-    # Use a direct count of distinct Alert._ident that doesn't rely on joined tables
-    alert_ids_query = db.query(distinct(Alert._ident))
-
-    # Only add the joins that are needed for filtering
-    if start_date or end_date:
-        alert_ids_query = alert_ids_query.join(
-            DetectTime, Alert._ident == DetectTime._message_ident
-        )
-
-    if severity:
-        alert_ids_query = alert_ids_query.join(
-            Impact, Impact._message_ident == Alert._ident
-        )
-
-    if classification:
-        alert_ids_query = alert_ids_query.join(
-            Classification, Classification._message_ident == Alert._ident
-        )
-
-    if analyzer_model:
-        alert_ids_query = alert_ids_query.join(
-            Analyzer,
-            and_(
-                Analyzer._message_ident == Alert._ident,
-                Analyzer._parent_type == "A",
-                Analyzer._index == -1,
-            ),
-        )
-
-    # Apply the same filters to this query
-    alert_ids_query = apply_standard_alert_filters(
-        query=alert_ids_query,
-        severity=severity,
-        classification=classification,
-        start_date=start_date,
-        end_date=end_date,
-        source_ip=source_ip,
-        target_ip=target_ip,
-        analyzer_model=analyzer_model,
-        Impact=Impact,
-        Classification=Classification,
-        DetectTime=DetectTime,
-        Analyzer=Analyzer,
-    )
-
-    # Count the distinct alert IDs
-    total = alert_ids_query.count()
+    # Calculate total using the same filtered query to ensure consistency
+    # This fixes the critical bug where IP filters were ignored in the count query
+    # by using identical joins and filters for both count and results
+    
+    # Create count query from the same filtered query base
+    # Use with_only_columns to count distinct Alert._ident while preserving all joins and filters
+    count_query = query.with_only_columns(func.count(distinct(Alert._ident)))
+    
+    # Execute count query to get total
+    total = count_query.scalar()
 
     # Calculate total pages
     total_pages = (total + size - 1) // size
