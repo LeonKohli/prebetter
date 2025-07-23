@@ -79,7 +79,6 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const isSubmitting = ref(false)
 
-// Form schema
 const formSchema = toTypedSchema(profileEditSchema)
 
 // Initial values
@@ -89,7 +88,6 @@ const initialValues = computed(() => ({
   fullName: props.user.full_name || '',
 }))
 
-// Form submission
 const onSubmit = async (values: any, { setFieldError }: any) => {
   isSubmitting.value = true
   

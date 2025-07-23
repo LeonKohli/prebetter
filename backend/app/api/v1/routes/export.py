@@ -156,11 +156,11 @@ async def export_alerts(
         source_ip=source_ip,
         target_ip=target_ip,
         analyzer_model=analyzer_model,
-        **models,  # Use models from build_alert_base_query
-        Impact=Impact,  # Explicitly pass Impact model for severity filtering
-        Classification=Classification,  # Explicitly pass for classification filtering
-        DetectTime=DetectTime,  # Explicitly pass for date filtering
-        Analyzer=Analyzer,  # Explicitly pass for analyzer_model filtering
+        **models,
+        Impact=Impact,
+        Classification=Classification,
+        DetectTime=DetectTime,
+        Analyzer=Analyzer,
     )
 
     # Apply additional filter for alert IDs
