@@ -8,13 +8,11 @@
         <Icon name="lucide:calendar" class="mr-2 h-3.5 w-3.5 flex-shrink-0" />
         <div class="flex items-center gap-2 flex-1">
           <template v-if="formattedDateRange">
-            <!-- Show active preset if applicable -->
             <template v-if="activePresetLabel">
               <span class="font-medium">{{ activePresetLabel }}</span>
               <span class="text-muted-foreground">•</span>
             </template>
             
-            <!-- Show date range -->
             <span class="text-muted-foreground">{{ formattedDateRange }}</span>
           </template>
           <template v-else>
@@ -25,7 +23,6 @@
     </PopoverTrigger>
     <PopoverContent class="w-auto p-0" align="start">
       <div class="flex">
-        <!-- Quick Presets -->
         <div class="flex flex-col p-4 border-r min-w-[180px]">
           <h4 class="text-sm font-semibold mb-2">Quick Select</h4>
           <div class="grid gap-1 overflow-y-auto pr-2 -mr-2 max-h-[370px]">
@@ -42,7 +39,6 @@
           </div>
         </div>
         
-        <!-- Range Calendar -->
         <div class="p-3">
           <RangeCalendar 
             v-model="value" 
@@ -53,10 +49,8 @@
             @update:start-value="(startDate) => value.start = startDate"
           />
           
-          <!-- Time Selection -->
           <div v-if="includeTime" class="border-t pt-3 mt-3">
             <div class="grid grid-cols-2 gap-3">
-              <!-- Start Time -->
               <div class="space-y-1.5">
                 <div class="flex items-center justify-between">
                   <Label class="text-xs font-medium text-muted-foreground">Start Time</Label>
@@ -71,7 +65,6 @@
                 />
               </div>
               
-              <!-- End Time -->
               <div class="space-y-1.5">
                 <div class="flex items-center justify-between">
                   <Label class="text-xs font-medium text-muted-foreground">End Time</Label>
@@ -146,7 +139,6 @@ const emit = defineEmits<{
 
 const open = ref(false)
 
-// Computed property to find active preset based on current date range
 const activePreset = computed(() => {
   if (!props.modelValue?.from || !props.modelValue?.to) {
     return null
@@ -183,7 +175,6 @@ const activePreset = computed(() => {
   return null
 })
 
-// Computed property for the active preset label
 const activePresetLabel = computed(() => activePreset.value?.label || null)
 
 // Time state - reactive refs
@@ -227,7 +218,6 @@ const dtf = new DateFormatter('de-DE', {
   hour12: false, // Use 24-hour format
 })
 
-// Computed property for formatted date range display
 const formattedDateRange = computed(() => {
   if (!value.value?.start) return null
   
@@ -336,7 +326,6 @@ const value = computed<DateRange>({
   }
 })
 
-// Watch time changes and update the value
 watch([startHour, startMinute, endHour, endMinute], () => {
   if (props.includeTime && value.value.start) {
     value.value = { ...value.value }

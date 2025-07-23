@@ -1,12 +1,10 @@
 <template>
   <div class="space-y-4">
-    <!-- Header with title and add user button -->
     <div class="flex items-center justify-between">
       <h3 class="text-lg font-semibold">User Management</h3>
       <ProfileCreateUserDialog @create:success="handleUserCreated" />
     </div>
 
-    <!-- Table -->
     <div class="rounded-md border">
       <Table>
         <TableHeader>
@@ -70,7 +68,6 @@
       </Table>
     </div>
 
-    <!-- Pagination -->
     <div v-if="totalPages > 1" class="flex items-center justify-between">
       <p class="text-sm text-muted-foreground">
         Showing {{ startItem }}-{{ endItem }} of {{ totalItems }} users
@@ -98,14 +95,12 @@
       </div>
     </div>
 
-    <!-- Edit User Dialog -->
     <ProfileEditUserDialog
       ref="editDialog"
       :user="selectedUser"
       @update:success="handleUserUpdated"
     />
 
-    <!-- Delete Confirmation Dialog -->
     <AlertDialog v-model:open="isDeleteDialogOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -124,7 +119,6 @@
       </AlertDialogContent>
     </AlertDialog>
 
-    <!-- Reset Password Dialog -->
     <ProfileResetPasswordDialog
       ref="resetPasswordDialog"
       :user="userToReset"
@@ -136,7 +130,6 @@
 <script setup lang="ts">
 import type { User } from '#auth-utils'
 
-// Extended user type with timestamps for the table
 interface UserWithTimestamps extends User {
   created_at: string
   updated_at?: string | null
@@ -148,7 +141,6 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// State
 const currentPage = ref(1)
 const pageSize = ref(20)
 const selectedUser = ref<UserWithTimestamps | null>(null)
@@ -156,7 +148,6 @@ const userToDelete = ref<UserWithTimestamps | null>(null)
 const userToReset = ref<UserWithTimestamps | null>(null)
 const isDeleteDialogOpen = ref(false)
 
-// Fetch users with pagination
 const { data: response, pending, error, refresh } = await useFetch<{
   items: UserWithTimestamps[]
   pagination: {
@@ -173,14 +164,12 @@ const { data: response, pending, error, refresh } = await useFetch<{
   watch: [currentPage, pageSize],
 })
 
-// Computed values
 const users = computed(() => response.value?.items || [])
 const totalPages = computed(() => response.value?.pagination.pages || 1)
 const totalItems = computed(() => response.value?.pagination.total || 0)
 const startItem = computed(() => ((currentPage.value - 1) * pageSize.value) + 1)
 const endItem = computed(() => Math.min(currentPage.value * pageSize.value, totalItems.value))
 
-// Format date
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -189,7 +178,6 @@ const formatDate = (dateString: string) => {
   })
 }
 
-// Handlers
 const handleUserCreated = (user: User) => {
   refresh()
 }
@@ -205,16 +193,14 @@ const handleEditUser = (user: UserWithTimestamps) => {
 }
 
 const handleUserUpdated = async (updatedUser: User) => {
-  // Refresh the table data
   refresh()
   
-  // If the updated user is the current user, refresh the session
+  // Critical: Refresh session if user edited their own profile
   const session = useUserSession()
   if (session.user.value && session.user.value.id === updatedUser.id) {
     await session.fetch()
   }
   
-  // Dialog will close itself
 }
 
 const handleDeleteUser = (user: UserWithTimestamps) => {
