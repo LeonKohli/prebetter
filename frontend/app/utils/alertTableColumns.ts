@@ -1,6 +1,6 @@
 import type { ColumnDef, Column } from '@tanstack/vue-table'
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
-import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo } from '@/types/alerts'
+import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert } from '@/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -41,11 +41,38 @@ export const useAlertTableColumns = () => {
     }, () => [label, h(SortIcon, { class: iconClass })])
   }
 
-  const groupedColumns: ColumnDef<GroupedAlert>[] = [
+  const groupedColumns: ColumnDef<FlattenedGroupedAlert>[] = [
     {
-      accessorKey: 'total_count',
+      accessorKey: 'count',
       header: createSortableHeader('Count'),
-      cell: ({ row }) => h('div', { class: 'font-semibold text-foreground text-lg' }, row.getValue<number>('total_count').toString()),
+      cell: ({ row }) => {
+        const count = row.getValue<number>('count')
+        const isFirstInGroup = row.original.isFirstInGroup
+        const groupSize = row.original.groupSize
+        const totalCount = row.original.total_count
+        
+        return h('div', { class: 'flex items-center gap-2' }, [
+          h('span', { class: 'font-semibold text-foreground' }, count.toString()),
+          h('span', { class: 'text-muted-foreground text-xs' }, '×')
+        ])
+      },
+    },
+    {
+      accessorKey: 'classification',
+      header: createSortableHeader('Classification'),
+      cell: ({ row }) => {
+        return h('a', { 
+          class: 'font-medium text-primary hover:underline cursor-pointer',
+          onClick: () => {
+            const urlState = useNavigableUrlState()
+            urlState.navigateToDetails({
+              sourceIp: row.original.source_ipv4 || '',
+              targetIp: row.original.target_ipv4 || '',
+              classification: row.original.classification
+            })
+          }
+        }, row.getValue('classification'))
+      },
     },
     {
       accessorKey: 'source_ipv4',
@@ -58,58 +85,38 @@ export const useAlertTableColumns = () => {
       cell: ({ row }) => h('span', { class: 'font-mono text-sm' }, row.getValue('target_ipv4') || 'Unknown'),
     },
     {
-      id: 'details',
-      accessorKey: 'alerts',
-      header: 'Alert Details',
+      accessorKey: 'analyzer',
+      header: createSortableHeader('Analyzer'),
       cell: ({ row }) => {
-        const alerts = row.original.alerts
-        const totalCount = row.original.total_count
+        const analyzers = row.original.analyzer || []
+        const analyzerStr = analyzers.length === 0 ? 'Unknown' : 
+                           analyzers.length === 1 ? analyzers[0] :
+                           analyzers.length <= 3 ? analyzers.join(', ') :
+                           `${analyzers[0]}, ${analyzers[1]} +${analyzers.length - 2} more`
+        return h('span', { class: 'text-sm' }, analyzerStr)
+      },
+    },
+    {
+      accessorKey: 'detected_at',
+      header: createSortableHeader('Date/Time'),
+      cell: ({ row }) => {
+        const dateStr = row.getValue('detected_at') as string
+        const date = dateStr ? new Date(dateStr) : null
         
-        if (!alerts || alerts.length === 0) {
-          return h('div', { class: 'text-muted-foreground' }, 'No classification data available')
-        }
+        if (!date) return h('span', { class: 'text-muted-foreground' }, 'Unknown')
         
-        // Sort alerts by count descending
-        const sortedAlerts = [...alerts].sort((a, b) => b.count - a.count)
-        
-        // Create a grid/table-like display for the alert details
-        return h('div', { class: 'space-y-2 py-1' }, 
-          sortedAlerts.map(alert => {
-            const date = alert.detected_at ? new Date(alert.detected_at) : null
-            const dateStr = date ? date.toLocaleDateString('de-DE', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false // Ensure 24-hour format
-            }) : 'Unknown'
-            
-            const analyzers = alert.analyzer || []
-            const analyzerStr = analyzers.length === 0 ? 'Unknown' : 
-                               analyzers.length === 1 ? analyzers[0] :
-                               analyzers.length <= 3 ? analyzers.join(', ') :
-                               `${analyzers[0]}, ${analyzers[1]} +${analyzers.length - 2} more`
-            
-            return h('div', { 
-              class: 'grid grid-cols-[auto_1fr_auto] gap-4 items-center p-2 rounded hover:bg-muted/50 transition-colors',
-              key: alert.classification 
-            }, [
-              // Count
-              h('div', { class: 'flex items-center gap-2' }, [
-                h('span', { class: 'font-semibold text-base min-w-[3rem] text-right' }, alert.count.toString()),
-                h('span', { class: 'text-muted-foreground' }, '×')
-              ]),
-              // Classification & Analyzer
-              h('div', { class: 'space-y-1' }, [
-                h('div', { class: 'font-medium' }, alert.classification),
-                h('div', { class: 'text-xs text-muted-foreground' }, `Analyzer: ${analyzerStr}`)
-              ]),
-              // Date
-              h('div', { class: 'text-xs text-muted-foreground text-right' }, dateStr)
-            ])
-          })
-        )
+        return h('div', { class: 'text-sm' }, [
+          h('div', { class: 'font-medium' }, date.toLocaleDateString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          })),
+          h('div', { class: 'text-xs text-muted-foreground' }, date.toLocaleTimeString('de-DE', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          }))
+        ])
       },
     },
     {
