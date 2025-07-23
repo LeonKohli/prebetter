@@ -20,21 +20,18 @@ from app.services.users import UserService
 
 router = APIRouter()
 
+# OAuth2 configuration for Swagger UI "Authorize" button
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
 
 def get_user_service(db: Session = Depends(get_prebetter_db)) -> UserService:
-    """Dependency to get a UserService instance."""
     return UserService(db)
 
 
 def authenticate_user(
     user_service: UserService, username: str, password: str
 ) -> Optional[User]:
-    """
-    Authenticate a user given a username and password.
-    Returns the user if authentication is successful; otherwise, returns None.
-    """
+    """Authenticate a user given username and password."""
     user = user_service.get_by_username(username)
     if not user:
         return None
@@ -47,15 +44,14 @@ async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     user_service: UserService = Depends(get_user_service),
 ) -> User:
-    """
-    Retrieve the current user based on the provided JWT token.
-    """
+    """Retrieve the current user based on JWT token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        # RFC 7519: "sub" claim contains user ID
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         if not user_id:
@@ -75,9 +71,7 @@ async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     user_service: UserService = Depends(get_user_service),
 ) -> Token:
-    """
-    Authenticate the user and return an access token.
-    """
+    """Authenticate user and return access token."""
     user = authenticate_user(user_service, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -96,9 +90,7 @@ async def login_for_access_token(
 async def read_users_me(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-    """
-    Retrieve the profile of the authenticated user.
-    """
+    """Retrieve authenticated user profile."""
     return current_user
 
 
@@ -108,21 +100,13 @@ async def update_profile(
     current_user: Annotated[User, Depends(get_current_user)],
     user_service: UserService = Depends(get_user_service),
 ) -> User:
-    """
-    Update the profile of the authenticated user.
-    Users can update their username, email, and full name.
-    Password updates should use the change-password endpoint.
-    """
-    # Prevent regular users from changing their superuser status
+    """Update authenticated user profile (excluding password and privileges)."""
+    # Prevent privilege escalation
     update_data = profile_update.model_dump(exclude_unset=True)
     if "is_superuser" in update_data:
         del update_data["is_superuser"]
-    
-    # Remove password from profile update (use change-password endpoint instead)
     if "password" in update_data:
         del update_data["password"]
-    
-    # Create a new UserUpdate instance with filtered data
     filtered_update = UserUpdate(**update_data)
     
     return user_service.update_user(str(current_user.id), filtered_update)

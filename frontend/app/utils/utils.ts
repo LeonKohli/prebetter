@@ -6,6 +6,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// TanStack Table updater pattern for Vue refs
 export function valueUpdater<T extends unknown>(
   updaterOrValue: Updater<T> | T, 
   ref: Ref<T>

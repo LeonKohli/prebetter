@@ -43,47 +43,35 @@ async def get_timeline(
     analyzer_name: Optional[str] = None,
     db: Session = Depends(get_prelude_db),
 ) -> TimelineResponse:
-    """
-    Get alert timeline data grouped by the specified time frame.
-    Supports filtering by severity, classification, and analyzer.
-    """
     try:
-        # Set default time range if not provided
         if not end_date:
             end_date = get_current_time()
         if not start_date:
-            # Set default start date based on time frame
             if time_frame == TimeFrame.HOUR:
-                start_date = end_date - timedelta(days=1)  # Last 24 hours
+                start_date = end_date - timedelta(days=1)
             elif time_frame == TimeFrame.DAY:
-                start_date = end_date - timedelta(days=30)  # Last 30 days
+                start_date = end_date - timedelta(days=30)
             elif time_frame == TimeFrame.WEEK:
-                start_date = end_date - timedelta(days=90)  # Last ~3 months
-            else:  # TimeFrame.MONTH
-                start_date = end_date - timedelta(days=365)  # Last year
+                start_date = end_date - timedelta(days=90)
+            else:
+                start_date = end_date - timedelta(days=365)
 
-        # Ensure dates have timezone info
         start_date = ensure_timezone(start_date)
         end_date = ensure_timezone(end_date)
-
-        # Determine the date format based on time frame
         if time_frame == TimeFrame.HOUR:
             date_format = "%Y-%m-%d %H:00:00"
         elif time_frame == TimeFrame.DAY:
             date_format = "%Y-%m-%d 00:00:00"
         elif time_frame == TimeFrame.WEEK:
-            date_format = "%Y-%m-%d 00:00:00"  # We'll handle week grouping in Python
-        else:  # month
+            date_format = "%Y-%m-%d 00:00:00"
+        else:
             date_format = "%Y-%m-01 00:00:00"
 
-        # Use query builder to get the timeline query
         timeline_query = build_alerts_timeline_query(db, date_format)
 
-        # Apply filters and date range
         timeline_query = timeline_query.filter(DetectTime.time >= start_date)
         timeline_query = timeline_query.filter(DetectTime.time <= end_date)
 
-        # Apply standard filters
         timeline_query = apply_standard_alert_filters(
             query=timeline_query,
             severity=severity,
@@ -94,11 +82,9 @@ async def get_timeline(
             DetectTime=DetectTime,
         )
 
-        # Apply analyzer name filter if provided (not part of standard filters)
         if analyzer_name:
             timeline_query = timeline_query.filter(Analyzer.name == analyzer_name)
 
-        # Group by time bucket and get counts
         results = (
             timeline_query.group_by(
                 text("time_bucket"), Impact.severity, Classification.text, Analyzer.name
@@ -107,22 +93,17 @@ async def get_timeline(
             .all()
         )
 
-        # Process results into timeline data points
         timeline_data = {}
         for result in results:
             time_str = result.time_bucket
             if not time_str:
                 continue
 
-            # Parse the timestamp
             timestamp = datetime.strptime(time_str, date_format).replace(tzinfo=UTC)
 
-            # For weekly grouping, adjust timestamp to start of week
             if time_frame == TimeFrame.WEEK:
-                # Adjust to Monday of the week
                 timestamp = timestamp - timedelta(days=timestamp.weekday())
 
-            # Initialize or get the data point
             if timestamp not in timeline_data:
                 timeline_data[timestamp] = {
                     "timestamp": timestamp,
@@ -132,7 +113,6 @@ async def get_timeline(
                     "by_analyzer": {},
                 }
 
-            # Update counts
             data_point = timeline_data[timestamp]
             data_point["total"] += result.total
 
@@ -152,7 +132,6 @@ async def get_timeline(
                     data_point["by_analyzer"].get(result.analyzer, 0) + result.total
                 )
 
-        # Convert to list and sort by timestamp
         timeline_points = [TimelineDataPoint(**data) for data in timeline_data.values()]
         timeline_points.sort(key=lambda x: x.timestamp)
 
@@ -175,27 +154,18 @@ async def get_statistics_summary(
     ),
     db: Session = Depends(get_prelude_db),
 ) -> StatisticsSummary:
-    """
-    Get a statistical summary of alerts for the specified time range.
-    Includes counts by severity, classification, analyzer, and top source/target IPs.
-    """
-    # Get time range using utility function
     start_date, end_date = get_time_range(time_range)
 
-    # Build the query with the time range
     query = build_alerts_statistics_query(db, start_date, end_date)
 
     try:
-        # Get total alerts
         total_alerts = query["base"].distinct().count()
 
-        # Get alerts by severity
         alerts_by_severity = query["severity"].all()
         severity_distribution = {
             severity: count for severity, count in alerts_by_severity if severity
         }
 
-        # Get alerts by classification
         alerts_by_classification = query["classification"].all()
         classification_distribution = {
             classification: count
@@ -203,17 +173,14 @@ async def get_statistics_summary(
             if classification
         }
 
-        # Get alerts by analyzer
         alerts_by_analyzer = query["analyzer"].all()
         analyzer_distribution = {
             analyzer: count for analyzer, count in alerts_by_analyzer if analyzer
         }
 
-        # Get top source IPs
         alerts_by_source_ip = query["source_ip"].all()
         source_ip_distribution = {ip: count for ip, count in alerts_by_source_ip if ip}
 
-        # Get top target IPs
         alerts_by_target_ip = query["target_ip"].all()
         target_ip_distribution = {ip: count for ip, count in alerts_by_target_ip if ip}
 

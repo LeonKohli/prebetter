@@ -43,7 +43,6 @@ PrebetterBase = declarative_base(metadata=prebetter_metadata)
 
 
 def get_prelude_db() -> Generator[Session, None, None]:
-    """Dependency for getting prelude database session"""
     db = PreludeSessionLocal()
     try:
         yield db
@@ -52,7 +51,6 @@ def get_prelude_db() -> Generator[Session, None, None]:
 
 
 def get_prebetter_db() -> Generator[Session, None, None]:
-    """Dependency for getting prebetter database session"""
     db = PrebetterSessionLocal()
     try:
         yield db

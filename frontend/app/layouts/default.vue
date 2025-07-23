@@ -6,7 +6,6 @@
       <slot />
     </main>
 
-    <!-- Minimal footer - only visible on hover -->
     <footer role="contentinfo" class="fixed bottom-0 left-0 right-0 h-6 bg-background/80 backdrop-blur-sm border-t opacity-0 hover:opacity-100 transition-opacity duration-200 z-10">
       <div class="h-full flex items-center justify-center text-[10px] text-muted-foreground">
         <span>Prebetter SIEM &copy; {{ new Date().getFullYear() }}</span>
@@ -23,7 +22,6 @@
 </template>
 
 <script setup lang="ts">
-// Basic SEO meta tags for the layout
 useSeoMeta({
   title: 'Prebetter SIEM Dashboard',
   ogTitle: 'Prebetter SIEM Dashboard',
@@ -31,7 +29,7 @@ useSeoMeta({
   ogDescription: 'A modern Security Information and Event Management dashboard for Prelude IDS',
 })
 
-// Define Schema.org structured data
+// See: https://schema.org/WebSite
 useSchemaOrg([
   defineWebSite({
     name: 'Prebetter SIEM Dashboard',

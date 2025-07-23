@@ -2,12 +2,10 @@
   <div class="h-[calc(100vh-3rem)] p-2 md:p-4">
     <AuthState v-slot="{ loggedIn }">
       <div v-if="loggedIn" class="h-full">
-        <!-- Main alerts table -->
         <AlertsTable />
       </div>
       
       <div v-else>
-        <!-- Welcome message for non-authenticated users -->
         <Card>
           <CardHeader>
             <CardTitle>Welcome to Prebetter SIEM</CardTitle>
@@ -39,7 +37,6 @@ definePageMeta({
   requiresAuth: true,
 })
 
-// SEO
 useSeoMeta({
   title: 'Security Alerts - Prebetter SIEM',
   description: 'Real-time security alert monitoring and analysis dashboard',

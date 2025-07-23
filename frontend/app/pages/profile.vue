@@ -2,7 +2,6 @@
   <div class="container mx-auto py-6 space-y-6">
     <h1 class="text-3xl font-bold">Profile</h1>
     
-    <!-- User Info Card -->
     <Card>
       <CardHeader class="flex flex-row items-center justify-between">
         <CardTitle>Your Information</CardTitle>
@@ -39,7 +38,6 @@
       </CardContent>
     </Card>
 
-    <!-- Admin Section - User Management -->
     <Card v-if="user?.is_superuser">
       <CardHeader>
         <CardTitle>Administration</CardTitle>
@@ -52,7 +50,6 @@
       </CardContent>
     </Card>
 
-    <!-- Success/Error Alerts -->
     <Transition name="fade">
       <Alert v-if="alert" :variant="alert.variant" class="fixed bottom-4 right-4 w-auto max-w-md">
         <Icon :name="alert.icon" class="size-4" />
@@ -67,7 +64,6 @@
 
 <script setup lang="ts">
 
-// Require authentication to view this page
 definePageMeta({
   requiresAuth: true
 })
@@ -75,7 +71,6 @@ definePageMeta({
 const session = useUserSession()
 const { user } = session
 
-// Alert state
 interface AlertState {
   variant: 'default' | 'destructive'
   icon: string
@@ -86,24 +81,20 @@ interface AlertState {
 const alert = ref<AlertState | null>(null)
 let alertTimeout: NodeJS.Timeout | null = null
 
-// Show alert helper
 const showAlert = (alertData: AlertState) => {
   alert.value = alertData
   
-  // Clear existing timeout
   if (alertTimeout) {
     clearTimeout(alertTimeout)
   }
   
-  // Auto-hide after 5 seconds
   alertTimeout = setTimeout(() => {
     alert.value = null
   }, 5000)
 }
 
-// Handlers
 const handleProfileUpdate = async () => {
-  // Refresh session to get updated user data
+  // Critical: Refresh session to sync navbar and permissions
   await session.fetch()
   
   showAlert({
@@ -123,7 +114,6 @@ const handlePasswordChanged = () => {
   })
 }
 
-// Cleanup on unmount
 onUnmounted(() => {
   if (alertTimeout) {
     clearTimeout(alertTimeout)

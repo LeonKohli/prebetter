@@ -8,7 +8,6 @@ export default defineEventHandler(async (event) => {
   const { apiBase } = useRuntimeConfig()
   
   try {
-    // 1. Authenticate with your backend to get the JWT
     const tokens = await $fetch<{ access_token: string }>(`${apiBase}/api/v1/auth/token`, {
       method: 'POST',
       body: new URLSearchParams({ username, password }),
@@ -16,7 +15,6 @@ export default defineEventHandler(async (event) => {
 
     const accessToken = tokens.access_token
 
-    // 2. Fetch user information from the backend using the new token
     const userInfo = await $fetch<{
       id: string
       email: string
@@ -29,7 +27,6 @@ export default defineEventHandler(async (event) => {
       },
     })
 
-    // 3. Set the session using nuxt-auth-utils
     await setUserSession(event, {
       user: {
         id: userInfo.id,
@@ -38,8 +35,7 @@ export default defineEventHandler(async (event) => {
         full_name: userInfo.full_name,
         is_superuser: userInfo.is_superuser,
       },
-      // Store the token in the 'secure' part of the session.
-      // It will only be available on the server, not exposed to the client.
+      // Token stored server-side only for security
       secure: {
         apiToken: accessToken,
       },
@@ -48,10 +44,7 @@ export default defineEventHandler(async (event) => {
 
     return { success: true }
   } catch (error: any) {
-    // Log the error for debugging
     console.error('[Login Error]', error)
-    
-    // Throw a generic, user-friendly error
     throw createError({
       statusCode: 401,
       statusMessage: 'Invalid username or password'

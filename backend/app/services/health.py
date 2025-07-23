@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-# Global health state
 _HEALTH_STATE = {
     "api_start_time": time.time(),
     "prelude_db_available": False,
@@ -18,7 +17,6 @@ _HEALTH_STATE = {
 
 
 class HealthResponse(BaseModel):
-    """Health status response model."""
 
     status: str = Field(
         ..., description="Overall system status: healthy, degraded, or unhealthy"
@@ -38,14 +36,6 @@ def update_health_state(
     prebetter_available: Optional[bool] = None,
     ready: Optional[bool] = None,
 ) -> None:
-    """
-    Update the internal health state.
-
-    Args:
-        prelude_available: Prelude database availability
-        prebetter_available: Prebetter database availability
-        ready: Application readiness status
-    """
     global _HEALTH_STATE
 
     if prelude_available is not None:
@@ -59,35 +49,18 @@ def update_health_state(
 
 
 def get_health_status() -> HealthResponse:
-    """
-    Get health status of the API.
-
-    This function returns the basic health status, including:
-    - Overall status ("healthy", "degraded", "unhealthy")
-    - Database availability
-    - API uptime and server timestamp
-
-    Returns:
-        HealthResponse: Object with health status information
-    """
-    # Determine overall status
     status = "healthy"
 
-    # If Prelude DB is unavailable, we're "unhealthy"
     if not _HEALTH_STATE["prelude_db_available"]:
         status = "unhealthy"
-    # If only Prebetter DB is unavailable, we're "degraded"
     elif not _HEALTH_STATE["prebetter_db_available"]:
         status = "degraded"
 
-    # If not yet ready, show "starting"
     if not _HEALTH_STATE["ready"]:
         status = "starting"
 
-    # Calculate uptime
     uptime = time.time() - _HEALTH_STATE["api_start_time"]
 
-    # Return as HealthResponse object
     return HealthResponse(
         status=status,
         prelude_db=_HEALTH_STATE["prelude_db_available"],
@@ -98,24 +71,9 @@ def get_health_status() -> HealthResponse:
 
 
 def check_database_health(db: Session, db_type: str) -> Dict[str, Any]:
-    """
-    Check the health of a database connection.
-
-    This function is used during application startup and
-    periodic health checks to update the global health state.
-
-    Args:
-        db: SQLAlchemy database session
-        db_type: Type of database ('prelude' or 'prebetter')
-
-    Returns:
-        Dictionary with connection status information
-    """
     try:
-        # Simple query to test connection
         db.execute(text("SELECT 1")).scalar()
 
-        # Update global health state
         if db_type == "prelude":
             update_health_state(prelude_available=True)
         elif db_type == "prebetter":
@@ -125,7 +83,6 @@ def check_database_health(db: Session, db_type: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Database connection check failed for {db_type}: {str(e)}")
 
-        # Update global health state
         if db_type == "prelude":
             update_health_state(prelude_available=False)
         elif db_type == "prebetter":

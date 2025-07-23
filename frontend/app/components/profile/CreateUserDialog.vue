@@ -98,7 +98,6 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const isSubmitting = ref(false)
 
-// Form schema
 const formSchema = toTypedSchema(userCreateSchema)
 
 // Initial form values
@@ -110,20 +109,12 @@ const initialValues = {
   isSuperuser: false,
 }
 
-// Watch for dialog open to reset form
-watch(isOpen, (newValue) => {
-  if (newValue) {
-    // Form will reset automatically with initial values
-  }
-})
 
-// Handle cancel
 const handleCancel = (resetForm: any) => {
   resetForm()
   isOpen.value = false
 }
 
-// Form submission
 const onSubmit = async (values: any, { resetForm, setFieldError }: any) => {
   isSubmitting.value = true
   
