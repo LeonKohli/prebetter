@@ -33,35 +33,9 @@ async def heartbeat_status(
     days: int = Query(1, ge=1, le=30, description="Days of history to look back"),
     db: Session = Depends(get_prelude_db),
 ):
-    """
-    Returns a tree structure of all analyzers grouped by host with their current status (online/offline).
-
-    This endpoint uses an optimized query that:
-    1. Gets the latest heartbeats within the specified time period
-    2. Joins with analyzer and node information
-    3. Calculates the online/offline status based on heartbeat time
-    4. Groups results by host in a hierarchical structure
-
-    The response includes:
-    - A list of nodes (hosts), each containing:
-      - name: The name of the host
-      - os: Operating system of the host
-      - agents: List of analyzers running on the host, each containing:
-        - name: The name of the analyzer
-        - model: The analyzer model
-        - version: The analyzer version
-        - class: Classification of the analyzer
-        - latest_heartbeat: Timestamp of the most recent heartbeat
-        - seconds_ago: Seconds since the last heartbeat
-        - status: "online" or "offline" based on a threshold
-    - total_nodes: Total number of hosts
-    - total_agents: Total number of unique analyzers
-    """
-    # Use the efficient query builder
     query = build_efficient_heartbeats_query(db, days)
     results = query.all()
 
-    # Group by node for tree structure
     nodes_dict: Dict[str, Dict[str, Any]] = defaultdict(
         lambda: {"name": "", "os": None, "agents": {}}
     )
@@ -70,44 +44,37 @@ async def heartbeat_status(
     for row in results:
         node_name = row.host_name or "(no node)"
 
-        # Set the OS info from the query result
         if not nodes_dict[node_name]["os"] and hasattr(row, "os"):
             nodes_dict[node_name]["os"] = row.os.strip() if row.os else None
 
         nodes_dict[node_name]["name"] = node_name
 
-        # Use a dictionary to track unique agents by name
         if row.analyzer_name not in nodes_dict[node_name]["agents"]:
-            # Leverage Pydantic's validation to handle type conversion
             try:
-                # Handle the special case where last_heartbeat might be 'Never'
                 last_heartbeat = (
                     None if row.last_heartbeat == "Never" else row.last_heartbeat
                 )
 
                 agent_info = AgentInfo(
                     name=row.analyzer_name,
-                    model=row.model,  # Pydantic validator handles None -> ""
-                    version=row.version,  # Pydantic validator handles None -> ""
+                    model=row.model,
+                    version=row.version,
                     **{
                         "class": getattr(row, "class")
-                    },  # Use getattr to access reserved keyword
-                    latest_heartbeat_at=last_heartbeat,  # Pydantic validator handles conversion
+                    },
+                    latest_heartbeat_at=last_heartbeat,
                     seconds_ago=row.seconds_ago if row.seconds_ago is not None else -1,
-                    status=row.status,  # Pydantic validator ensures valid status
+                    status=row.status,
                 )
                 nodes_dict[node_name]["agents"][row.analyzer_name] = agent_info
             except ValidationError as e:
-                # Log validation errors for debugging
                 logger.warning(f"Validation error for agent {row.analyzer_name}: {e}")
-                continue  # Skip this agent if validation fails
+                continue
 
             total_agents += 1
 
-    # Convert to list and create tree response
     formatted_nodes = []
     for node_name, node_data in nodes_dict.items():
-        # Filter out potential None values if validation failed
         agents_list = [
             agent for agent in node_data["agents"].values() if agent is not None
         ]
@@ -131,20 +98,12 @@ async def timeline_heartbeats(
     size: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_prelude_db),
 ):
-    """
-    Returns a timeline of heartbeats from analyzers.
-    Useful for monitoring the health of analyzers over time.
-    """
-    # Calculate time range using utility function
     start_time, _ = get_time_range(hours)
 
-    # Use query builder to get the timeline query
     timeline_query = build_heartbeats_timeline_query(db, start_time)
 
-    # Get total count for pagination info
     total_count = timeline_query.count()
 
-    # Apply pagination and ordering
     results = (
         timeline_query.order_by(AnalyzerTime.time.desc())
         .offset((page - 1) * size)
@@ -152,21 +111,18 @@ async def timeline_heartbeats(
         .all()
     )
 
-    # Convert results to response model
     timeline_items = []
     for result in results:
-        # Create item with proper field mapping
         item = {
-            "timestamp": result.timestamp,  # Updated field name, assuming result.timestamp is datetime
+            "timestamp": result.timestamp,
             "host_name": result.host_name or "Unknown host",
             "analyzer_name": result.analyzer_name or "Unknown analyzer",
             "model": result.model or "",
             "version": result.version or "",
-            "class_": result.class_ or "",  # Use alias for class_
+            "class_": result.class_ or "",
         }
         timeline_items.append(HeartbeatTimelineItem(**item))
 
-    # Return with pagination metadata
     return {
         "items": timeline_items,
         "pagination": {
@@ -182,7 +138,7 @@ async def timeline_heartbeats(
 async def cleanup_heartbeats(
     _: Annotated[
         User, Depends(get_current_superuser)
-    ],  # Superuser check (user not used in function)
+    ],
     db: Session = Depends(get_prelude_db),
     retention_days: int = Query(
         30, ge=1, le=90, description="Days of heartbeat data to retain"
@@ -192,32 +148,16 @@ async def cleanup_heartbeats(
         description="If true, only preview what would be deleted without actually deleting",
     ),
 ):
-    """
-    Clean up old heartbeat data and orphaned records.
-    This is an administrative endpoint that requires superuser privileges.
-
-    Args:
-        db: Database session
-        retention_days: Number of days of heartbeat data to retain (1-90 days)
-        dry_run: If true, only preview what would be deleted without actually deleting
-
-    Returns:
-        Dict with cleanup statistics
-    """
     from app.models.prelude import Heartbeat
 
-    # Get current heartbeat count before cleanup
     total_heartbeats_before = db.query(Heartbeat).count()
 
-    # Clean up old heartbeats first
     deleted_heartbeats, deleted_analyzer_times = cleanup_old_heartbeats(
         db, retention_days, dry_run=dry_run
     )
 
-    # Then clean up any orphaned analyzer times
     deleted_orphans = cleanup_orphaned_analyzer_times(db, dry_run=dry_run)
 
-    # Get heartbeat count after cleanup (will be same as before if dry_run)
     total_heartbeats_after = db.query(Heartbeat).count()
 
     return {

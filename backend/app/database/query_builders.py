@@ -40,20 +40,10 @@ logger = logging.getLogger(__name__)
 
 
 def build_alert_base_query(db: Session):
-    """
-    Build a base query for alerts with essential joins.
-
-    Args:
-        db: SQLAlchemy database session
-
-    Returns:
-        SQLAlchemy query object with all standard joins for alert listing
-    """
-    # Create aliases for source and target addresses
+    """Build a base query for alerts with essential joins."""
     source_addr = aliased(Address)
     target_addr = aliased(Address)
 
-    # Base query for alerts with essential joins
     query = (
         db.query(
             Alert._ident,
@@ -79,9 +69,8 @@ def build_alert_base_query(db: Session):
             Node.location.label("node_location"),
             Node.category.label("node_category"),
         )
-        # Join DetectTime which is always required
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        # More selective left join for CreateTime to reduce unnecessary data
+        # parent_type="A" ensures we only get alert creation times
         .outerjoin(
             CreateTime,
             and_(
@@ -89,11 +78,8 @@ def build_alert_base_query(db: Session):
                 CreateTime._parent_type == "A",
             ),
         )
-        # Join Classification which is usually required for filtering
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        # Join Impact which is usually required for severity filtering
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
-        # Use optimized join condition for source addresses
         .outerjoin(
             source_addr,
             and_(
@@ -102,7 +88,6 @@ def build_alert_base_query(db: Session):
                 source_addr.category == "ipv4-addr",
             ),
         )
-        # Use optimized join condition for target addresses
         .outerjoin(
             target_addr,
             and_(
@@ -111,12 +96,10 @@ def build_alert_base_query(db: Session):
                 target_addr.category == "ipv4-addr",
             ),
         )
-        # Selectively join Analyzer using the optimized conditions
         .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
         )
-        # Selectively join Node using the optimized conditions
         .outerjoin(
             Node,
             get_node_join_conditions(Alert._ident),
@@ -127,48 +110,24 @@ def build_alert_base_query(db: Session):
 
 
 def build_alert_count_query(db: Session):
-    """
-    Build an optimized count query for alerts.
-
-    Args:
-        db: SQLAlchemy database session
-
-    Returns:
-        SQLAlchemy query object optimized for counting alerts
-    """
-    # Create aliases for source and target addresses but only when needed for filtering
+    """Build an optimized count query for alerts."""
     source_addr = aliased(Address)
     target_addr = aliased(Address)
 
-    # Highly optimized count query with minimal required joins
-    # Only include joins that are essential for filtering
     count_query = (
         db.query(func.count(Alert._ident))
         .select_from(Alert)
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        # Other joins only added as needed during filter application
-        # Don't join unnecessary tables for simple counting
     )
 
     return count_query, {"source_addr": source_addr, "target_addr": target_addr}
 
 
 def build_grouped_alerts_query(db: Session):
-    """
-    Build a query for alerts grouped by source and target IP.
-
-    Args:
-        db: SQLAlchemy database session
-
-    Returns:
-        SQLAlchemy query object for grouped alerts
-    """
-    # Create aliases for source and target addresses
+    """Build a query for alerts grouped by source and target IP."""
     source_addr = aliased(Address, name="source_addr")
     target_addr = aliased(Address, name="target_addr")
 
-    # Optimized query for getting unique source-target pairs with total counts
-    # Focus on efficient grouping and aggregation
     pairs_query = (
         db.query(
             source_addr.address.label("source_ipv4"),
@@ -176,19 +135,16 @@ def build_grouped_alerts_query(db: Session):
             func.count(func.distinct(Alert._ident)).label("total_count"),
             func.max(DetectTime.time).label("latest_time"),
             func.max(Impact.severity).label("max_severity"),
-            # Use group_concat for these to reduce separate queries
+            # GROUP_CONCAT aggregates string values efficiently
             func.group_concat(func.distinct(Classification.text), ",").label(
                 "latest_classification"
             ),
             func.group_concat(func.distinct(Analyzer.name), ",").label("analyzer_name"),
         )
         .select_from(Alert)
-        # Essential joins first
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        # Only include necessary joins for grouping and aggregation
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        # Efficient joins for source and target address
         .outerjoin(
             source_addr,
             and_(
@@ -205,12 +161,10 @@ def build_grouped_alerts_query(db: Session):
                 target_addr.category == "ipv4-addr",
             ),
         )
-        # Only join analyzer when needed
         .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
         )
-        # Use filtering to improve performance of GROUP BY
         .filter(source_addr.address.isnot(None))
         .filter(target_addr.address.isnot(None))
         .group_by(
@@ -223,25 +177,12 @@ def build_grouped_alerts_query(db: Session):
 
 
 def build_grouped_alerts_detail_query(db: Session, pairs):
-    """
-    Build a query for detailed information about grouped alerts.
-
-    Args:
-        db: SQLAlchemy database session
-        pairs: List of source-target pairs from the grouped_alerts_query
-
-    Returns:
-        SQLAlchemy query object for detailed information about grouped alerts
-    """
-    # Create aliases for source and target addresses
+    """Build a query for detailed information about grouped alerts."""
     source_addr = aliased(Address, name="source_addr")
     target_addr = aliased(Address, name="target_addr")
 
-    # Construct source-target pair list for IN clause
-    # Use all pairs passed in - pagination should already limit this appropriately
     pair_tuples = [(p.source_ipv4, p.target_ipv4) for p in pairs]
 
-    # Optimized alert details query with efficient joins and data retrieval
     alerts_query = (
         db.query(
             source_addr.address.label("source_ipv4"),
@@ -254,10 +195,8 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             func.max(DetectTime.time).label("latest_time"),
         )
         .select_from(Alert)
-        # Essential joins first
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        # Use efficient join conditions for addresses
         .join(
             source_addr,
             and_(
@@ -274,7 +213,6 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
                 target_addr.category == "ipv4-addr",
             ),
         )
-        # Only join analyzer and node when needed
         .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
@@ -283,9 +221,8 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             Node,
             get_node_join_conditions(Alert._ident),
         )
-        # Use efficient IN clause to filter by pairs
+        # tuple_ matches multiple columns efficiently
         .filter(tuple_(source_addr.address, target_addr.address).in_(pair_tuples))
-        # Group by the main columns for aggregation
         .group_by(source_addr.address, target_addr.address, Classification.text)
     )
 
@@ -293,17 +230,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
 
 
 def build_alert_detail_query(db: Session, alert_id: int):
-    """
-    Build a query for detailed alert information.
-
-    Args:
-        db: SQLAlchemy database session
-        alert_id: The ID of the alert to get details for
-
-    Returns:
-        Dict of SQLAlchemy queries for various aspects of the alert
-    """
-    # Get base alert information
+    """Build queries for detailed alert information (avoids cartesian products)."""
     base_query = (
         db.query(Alert, CreateTime, DetectTime, Classification, Impact)
         .outerjoin(
@@ -319,7 +246,6 @@ def build_alert_detail_query(db: Session, alert_id: int):
         .filter(Alert._ident == alert_id)
     )
 
-    # Get source information with complete details
     source_info_query = (
         db.query(Source, Address, Service, Node, Process)
         .outerjoin(
@@ -349,13 +275,12 @@ def build_alert_detail_query(db: Session, alert_id: int):
             Process,
             and_(
                 Process._message_ident == Source._message_ident,
-                Process._parent_type == "H",  # Get heartbeat process info
+                Process._parent_type == "H",  # From heartbeat messages
             ),
         )
         .filter(Source._message_ident == alert_id)
     )
 
-    # Get all source addresses
     source_addresses_query = (
         db.query(Address.address)
         .filter(
@@ -365,7 +290,6 @@ def build_alert_detail_query(db: Session, alert_id: int):
         .distinct()
     )
 
-    # Get target information with complete details
     target_info_query = (
         db.query(Target, Address, Service, Node, Process)
         .outerjoin(
@@ -395,13 +319,12 @@ def build_alert_detail_query(db: Session, alert_id: int):
             Process,
             and_(
                 Process._message_ident == Target._message_ident,
-                Process._parent_type == "H",  # Get heartbeat process info
+                Process._parent_type == "H",  # From heartbeat messages
             ),
         )
         .filter(Target._message_ident == alert_id)
     )
 
-    # Get all target addresses
     target_addresses_query = (
         db.query(Address.address)
         .filter(
@@ -411,7 +334,6 @@ def build_alert_detail_query(db: Session, alert_id: int):
         .distinct()
     )
 
-    # Get all analyzers in the chain with their details
     analyzers_query = (
         db.query(Analyzer, Node, Process, AnalyzerTime)
         .outerjoin(
@@ -441,30 +363,25 @@ def build_alert_detail_query(db: Session, alert_id: int):
             Analyzer._message_ident == alert_id,
             Analyzer._parent_type == "A",
         )
-        .order_by(Analyzer._index)  # Order by chain position
+        .order_by(Analyzer._index)
     )
 
-    # Get references
     references_query = (
         db.query(Reference).filter(Reference._message_ident == alert_id).distinct()
     )
 
-    # Get services
     services_query = (
         db.query(Service).filter(Service._message_ident == alert_id).distinct()
     )
 
-    # Get web services
     web_services_query = (
         db.query(WebService).filter(WebService._message_ident == alert_id).distinct()
     )
 
-    # Get alert idents
     alert_idents_query = (
         db.query(Alertident).filter(Alertident._message_ident == alert_id).distinct()
     )
 
-    # Get additional data
     additional_data_query = db.query(AdditionalData).filter(
         AdditionalData._message_ident == alert_id,
         AdditionalData._parent_type == "A",
@@ -486,17 +403,7 @@ def build_alert_detail_query(db: Session, alert_id: int):
 
 
 def build_alerts_timeline_query(db: Session, date_format: str):
-    """
-    Build a query for timeline of alerts.
-
-    Args:
-        db: SQLAlchemy database session
-        date_format: Format string for date grouping
-
-    Returns:
-        SQLAlchemy query object for alert timeline
-    """
-    # Base query for alerts
+    """Build a query for timeline of alerts."""
     timeline_query = (
         db.query(
             func.date_format(DetectTime.time, date_format).label("time_bucket"),
@@ -521,22 +428,10 @@ def build_alerts_timeline_query(db: Session, date_format: str):
 def build_alerts_statistics_query(
     db: Session, start_time: datetime, end_time: datetime
 ):
-    """
-    Build queries for alert statistics.
-
-    Args:
-        db: SQLAlchemy database session
-        start_time: Start time for statistics
-        end_time: End time for statistics
-
-    Returns:
-        Dict of SQLAlchemy queries for various statistics
-    """
-    # Create aliases for source and target addresses
+    """Build queries for alert statistics."""
     source_addr = aliased(Address)
     target_addr = aliased(Address)
 
-    # Base query for alerts within time range
     base_query = (
         db.query(Alert)
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
@@ -544,14 +439,12 @@ def build_alerts_statistics_query(
         .filter(DetectTime.time <= end_time)
     )
 
-    # Get alerts by severity
     severity_query = (
         base_query.outerjoin(Impact, Impact._message_ident == Alert._ident)
         .group_by(Impact.severity)
         .with_entities(Impact.severity, func.count(Alert._ident.distinct()))
     )
 
-    # Get alerts by classification
     classification_query = (
         base_query.outerjoin(
             Classification, Classification._message_ident == Alert._ident
@@ -560,7 +453,6 @@ def build_alerts_statistics_query(
         .with_entities(Classification.text, func.count(Alert._ident.distinct()))
     )
 
-    # Get alerts by analyzer
     analyzer_query = (
         base_query.outerjoin(
             Analyzer,
@@ -570,7 +462,6 @@ def build_alerts_statistics_query(
         .with_entities(Analyzer.name, func.count(Alert._ident.distinct()))
     )
 
-    # Get top source IPs
     source_ip_query = (
         base_query.outerjoin(
             source_addr,
@@ -586,7 +477,6 @@ def build_alerts_statistics_query(
         .limit(10)
     )
 
-    # Get top target IPs
     target_ip_query = (
         base_query.outerjoin(
             target_addr,
@@ -613,15 +503,7 @@ def build_alerts_statistics_query(
 
 
 def build_heartbeats_tree_query(db: Session):
-    """
-    Build a query for the tree view of heartbeats.
-
-    Args:
-        db: SQLAlchemy database session
-
-    Returns:
-        SQLAlchemy query object for heartbeat tree view
-    """
+    """Build a query for the tree view of heartbeats."""
     tree_query = (
         db.query(
             Analyzer.name.label("name"),
@@ -629,7 +511,6 @@ def build_heartbeats_tree_query(db: Session):
             Analyzer.version.label("version"),
             getattr(Analyzer, "class").label("class_"),
             Node.name.label("node_name"),
-            # Combine ostype and osversion for OS info
             case(
                 (
                     Analyzer.ostype.isnot(None),
@@ -680,16 +561,7 @@ def build_heartbeats_tree_query(db: Session):
 
 
 def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
-    """
-    Build a query for the timeline of heartbeats.
-
-    Args:
-        db: SQLAlchemy database session
-        cutoff_time: Cutoff time for heartbeats (show newer)
-
-    Returns:
-        SQLAlchemy query object for heartbeat timeline
-    """
+    """Build a query for the timeline of heartbeats."""
     timeline_query = (
         db.query(
             AnalyzerTime.time.label("timestamp"),
@@ -739,34 +611,8 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
 
 
 def build_efficient_heartbeats_query(db: Session, days: int = 1):
-    """
-    Build an efficient query for heartbeats showing all analyzers from alerts.
-
-    This production-optimized query:
-    - Discovers all analyzers that have sent alerts (dynamic discovery)
-    - Shows actual heartbeat timestamps when available within the time window
-    - Fast performance by using efficient joins and grouping
-    - Gets analyzer info from alerts table, heartbeat info from heartbeats table
-
-    The query works in two parts:
-    1. Get all unique analyzers from the alerts data
-    2. Left join with recent heartbeats to show online/offline status
-
-    Args:
-        db: SQLAlchemy database session
-        days: Number of days to look back for heartbeats (default: 1)
-
-    Returns:
-        SQLAlchemy ResultProxy with columns:
-        - host_name: Node hostname
-        - analyzer_name: Analyzer name
-        - model: Analyzer model
-        - version: Analyzer version
-        - class: Analyzer class (NIDS, Correlator, Concentrator)
-        - last_heartbeat: Latest heartbeat timestamp formatted or 'Never'
-        - seconds_ago: Seconds since last heartbeat (-1 if none)
-        - status: 'online' if heartbeat within 60000s, else 'offline'
-    """
+    """Build an efficient query for heartbeats showing all analyzers from alerts."""
+    # Raw SQL for performance - complex self-joins are more efficient than ORM
     sql = text("""
     SELECT 
         all_analyzers.host_name,
@@ -778,6 +624,7 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
         COALESCE(DATE_FORMAT(heartbeats.last_heartbeat, '%Y-%m-%d %H:%i:%s'), 'Never') as last_heartbeat,
         COALESCE(TIMESTAMPDIFF(SECOND, heartbeats.last_heartbeat, NOW()), -1) as seconds_ago,
         CASE 
+            # 60000 seconds threshold accounts for network issues
             WHEN heartbeats.last_heartbeat IS NOT NULL 
                 AND TIMESTAMPDIFF(SECOND, heartbeats.last_heartbeat, NOW()) <= 60000 
             THEN 'online'

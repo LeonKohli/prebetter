@@ -8,10 +8,7 @@ from .middleware.setup import setup_middleware
 import logging
 from contextlib import asynccontextmanager
 
-# Get settings
 settings = get_settings()
-
-# Set up logging with settings from config
 setup_logging(log_level=settings.LOG_LEVEL, environment=settings.ENVIRONMENT)
 logger = logging.getLogger(__name__)
 
@@ -25,7 +22,6 @@ async def lifespan(app: FastAPI):
         update_health_state(prebetter_available=True)
         logger.info("Prebetter database initialization complete.")
 
-        # Check Prelude database connection
         logger.info("Checking Prelude database connection...")
         prelude_ok = await check_database_connections(
             check_prelude=True, check_prebetter=False
@@ -39,14 +35,12 @@ async def lifespan(app: FastAPI):
                 "Prelude database connection failed. Some functionality will be limited."
             )
 
-        # Set app as ready
         update_health_state(ready=True)
         logger.info("Application startup complete.")
 
         yield
     except Exception as e:
         logger.error(f"Error during application startup: {str(e)}")
-        # We'll still mark the app as ready, but with limited functionality
         update_health_state(ready=True)
         yield
     finally:
@@ -75,7 +69,6 @@ We connect to:
 See the docs below for detailed API reference.
 """
 
-# Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description=description,
@@ -91,10 +84,7 @@ app = FastAPI(
     redoc_url="/api/v1/redoc",
 )
 
-# Set up middleware
 setup_middleware(app)
-
-# Include API router with v1 prefix
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
@@ -106,7 +96,6 @@ async def root(request: Request):
     Returns:
         dict: API status information and documentation URLs
     """
-    # Generate URLs dynamically
     docs_url = request.url_for("swagger_ui_html")
     redoc_url = request.url_for("redoc_html")
 
@@ -114,12 +103,11 @@ async def root(request: Request):
         "status": "online",
         "message": f"Welcome to {settings.PROJECT_NAME}",
         "version": settings.VERSION,
-        "docs_url": str(docs_url),  # Use dynamic URL
-        "redoc_url": str(redoc_url),  # Use dynamic URL
+        "docs_url": str(docs_url),
+        "redoc_url": str(redoc_url),
     }
 
 
-# Health check endpoint for infrastructure monitoring
 @app.get("/health", tags=["health"], response_model=HealthResponse)
 async def health_check():
     """
