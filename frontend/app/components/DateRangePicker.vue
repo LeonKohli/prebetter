@@ -284,15 +284,14 @@ const value = computed<DateRange>({
         
         if (hasTimeInfo && dateRange.start instanceof CalendarDateTime) {
           // Use the time from the CalendarDateTime (e.g., from hour presets)
-          startHour.value = String(dateRange.start.hour).padStart(2, '0')
-          startMinute.value = String(dateRange.start.minute || 0).padStart(2, '0')
+          from.setHours(dateRange.start.hour, dateRange.start.minute || 0, 0, 0)
         } else if (!props.modelValue?.from || baseDate.toDateString() !== props.modelValue.from.toDateString()) {
           // Only reset to defaults if it's a new date and no time info provided
-          startHour.value = DEFAULT_START_HOUR
-          startMinute.value = DEFAULT_START_MINUTE
+          from.setHours(parseInt(DEFAULT_START_HOUR), parseInt(DEFAULT_START_MINUTE), 0, 0)
+        } else {
+          // Use the current time values from the input fields
+          from.setHours(parseInt(startHour.value), parseInt(startMinute.value), 0, 0)
         }
-        
-        from.setHours(parseInt(startHour.value), parseInt(startMinute.value))
       } else {
         from = baseDate
       }
@@ -308,15 +307,13 @@ const value = computed<DateRange>({
         
         if (hasTimeInfo && dateRange.end instanceof CalendarDateTime) {
           // Use the time from the CalendarDateTime
-          endHour.value = String(dateRange.end.hour).padStart(2, '0')
-          endMinute.value = String(dateRange.end.minute || 0).padStart(2, '0')
+          to.setHours(dateRange.end.hour, dateRange.end.minute || 0, 59, 999)
         } else if (!props.modelValue?.to || baseDate.toDateString() !== props.modelValue.to.toDateString()) {
           // Only reset to defaults if it's a new date and no time info provided
-          endHour.value = DEFAULT_END_HOUR
-          endMinute.value = DEFAULT_END_MINUTE
+          to.setHours(parseInt(DEFAULT_END_HOUR), parseInt(DEFAULT_END_MINUTE), 59, 999)
+        } else {
+          to.setHours(parseInt(endHour.value), parseInt(endMinute.value), 59, 999)
         }
-        
-        to.setHours(parseInt(endHour.value), parseInt(endMinute.value))
       } else {
         to = baseDate
       }
@@ -435,7 +432,7 @@ const quickPresets: QuickPreset[] = [
 function selectPreset(preset: QuickPreset) {
   const dateRange = preset.getValue()
   
-  // Update time refs from the preset's CalendarDateTime objects
+  // Update time refs from the preset's CalendarDateTime objects BEFORE setting value
   if (props.includeTime && dateRange.start && dateRange.start instanceof CalendarDateTime) {
     startHour.value = String(dateRange.start.hour).padStart(2, '0')
     startMinute.value = String(dateRange.start.minute || 0).padStart(2, '0')
@@ -445,8 +442,11 @@ function selectPreset(preset: QuickPreset) {
     endMinute.value = String(dateRange.end.minute || 0).padStart(2, '0')
   }
   
-  value.value = dateRange
-  open.value = false
+  // Use nextTick to ensure the time refs are updated before the computed setter runs
+  nextTick(() => {
+    value.value = dateRange
+    open.value = false
+  })
 }
 
 // No complex watchers needed - the computed property handles everything!
