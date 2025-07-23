@@ -41,12 +41,8 @@ function handleViewAlertDetails(details: { sourceIp: string; targetIp: string; c
   urlState.navigateToDetails(details)
 }
 
-// Get column definitions from composable with event handler
-const { groupedColumns, ungroupedColumns, sortFieldMap, filterFieldMap } = useAlertTableColumns((event, ...args) => {
-  if (event === 'viewAlertDetails') {
-    handleViewAlertDetails(args[0] as { sourceIp: string; targetIp: string; classification: string })
-  }
-})
+// Get column definitions from composable
+const { groupedColumns, ungroupedColumns, sortFieldMap, filterFieldMap } = useAlertTableColumns()
 
 
 // View mode directly from URL state
