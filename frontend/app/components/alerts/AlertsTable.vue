@@ -13,23 +13,39 @@ import {
   getSortedRowModel,
   useVueTable,
 } from '@tanstack/vue-table'
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+// Vue imports are auto-imported by Nuxt
 import { useIntervalFn, useDocumentVisibility, watchDebounced } from '@vueuse/core'
 import { valueUpdater } from '@/utils/utils'
 import { applyDefaultDateFilters } from '@/utils/dateHelpers'
-import type { AlertListItem, GroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
+import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
 
-// Get column definitions from composable
-const { groupedColumns, ungroupedColumns, sortFieldMap, filterFieldMap } = useAlertTableColumns()
-
-// URL state synchronization using VueUse Router
-const urlState = useTableUrlState({
+// URL state synchronization with proper browser navigation
+const urlState = useNavigableUrlState({
   defaultView: 'grouped',
   defaultPageSize: 100,
   defaultSortBy: 'detected_at',
   defaultSortOrder: 'desc',
   defaultGroupedSortBy: 'total_count',
   defaultUngroupedSortBy: 'detected_at'
+})
+
+// Track if we're changing views to show appropriate loading state
+const isChangingView = ref(false)
+
+// Handle navigation to filtered view when clicking on a classification
+function handleViewAlertDetails(details: { sourceIp: string; targetIp: string; classification: string }) {
+  // Mark as changing view
+  isChangingView.value = true
+  
+  // Use navigateToDetails which properly creates a history entry
+  urlState.navigateToDetails(details)
+}
+
+// Get column definitions from composable with event handler
+const { groupedColumns, ungroupedColumns, sortFieldMap, filterFieldMap } = useAlertTableColumns((event, ...args) => {
+  if (event === 'viewAlertDetails') {
+    handleViewAlertDetails(args[0] as { sourceIp: string; targetIp: string; classification: string })
+  }
 })
 
 
@@ -90,15 +106,17 @@ const fetchQuery = computed(() => {
     ])
   )
   
-  // Apply defaults to filters
-  const effectiveFilters = applyDefaultDateFilters(urlFilters)
+  // Apply today's date filter by default if no dates are specified
+  const finalFilters = (!urlFilters.start_date && !urlFilters.end_date) 
+    ? applyDefaultDateFilters(urlFilters)
+    : urlFilters
   
   return {
     page: urlState.page.value,
     size: urlState.pageSize.value,
     sort_by: mappedSortField,
     sort_order: urlState.sortOrder.value,
-    ...effectiveFilters
+    ...finalFilters
   }
 })
 
@@ -135,50 +153,66 @@ const showLoadingOverlay = computed(() =>
   status.value === 'pending' && data.value !== undefined && !isSilentRefresh.value
 )
 
-// Type guards for API response discrimination
-function isGroupedResponse(data: unknown): data is GroupedAlertResponse {
-  return data !== null && 
-         typeof data === 'object' && 
-         'groups' in data
-}
-
-function isAlertListResponse(data: unknown): data is AlertListResponse {
-  return data !== null && 
-         typeof data === 'object' && 
-         'items' in data
-}
+// No need for type guards - we control the response type based on isGrouped
 
 // Current columns based on view mode
 const columns = computed(() => isGrouped.value ? groupedColumns : ungroupedColumns)
-
-// Track if we're changing views to show appropriate loading state
-const isChangingView = ref(false)
 
 // Extract data and pagination from response
 const displayData = computed(() => {
   if (!data.value) return []
   
-  if (isGrouped.value && isGroupedResponse(data.value)) {
-    return data.value.groups || []
-  } else if (!isGrouped.value && isAlertListResponse(data.value)) {
-    return data.value.items || []
+  if (isGrouped.value) {
+    // We know it's GroupedAlertResponse based on the fetch URL
+    const response = data.value as GroupedAlertResponse
+    const flattenedAlerts: FlattenedGroupedAlert[] = []
+    
+    response.groups?.forEach((group, groupIndex) => {
+      if (group.alerts && group.alerts.length > 0) {
+        const sortedAlerts = [...group.alerts].sort((a, b) => b.count - a.count)
+        
+        sortedAlerts.forEach((alert, alertIndex) => {
+          flattenedAlerts.push({
+            source_ipv4: group.source_ipv4,
+            target_ipv4: group.target_ipv4,
+            total_count: group.total_count,
+            classification: alert.classification,
+            count: alert.count,
+            analyzer: alert.analyzer,
+            analyzer_host: alert.analyzer_host,
+            detected_at: alert.detected_at,
+            groupIndex: groupIndex,
+            alertIndex: alertIndex,
+            isFirstInGroup: alertIndex === 0,
+            isLastInGroup: alertIndex === sortedAlerts.length - 1,
+            groupSize: sortedAlerts.length
+          })
+        })
+      }
+    })
+    
+    return flattenedAlerts
+  } else {
+    // We know it's AlertListResponse based on the fetch URL
+    const response = data.value as AlertListResponse
+    return response.items || []
   }
-  return []
 })
 
 const paginationInfo = computed((): PaginatedResponse => {
   if (!data.value) return { total: 0, pages: 0, page: 1, size: 100 }
   
-  if (isGrouped.value && isGroupedResponse(data.value)) {
-    return data.value.pagination || { total: 0, pages: 0, page: 1, size: 100 }
-  } else if (!isGrouped.value && isAlertListResponse(data.value)) {
-    return data.value.pagination || { total: 0, pages: 0, page: 1, size: 100 }
+  if (isGrouped.value) {
+    const response = data.value as GroupedAlertResponse
+    return response.pagination || { total: 0, pages: 0, page: 1, size: 100 }
+  } else {
+    const response = data.value as AlertListResponse
+    return response.pagination || { total: 0, pages: 0, page: 1, size: 100 }
   }
-  return { total: 0, pages: 0, page: 1, size: 100 }
 })
 
-// Define table data type
-type TableDataItem = GroupedAlert | AlertListItem;
+// Define table data type - includes flattened grouped alerts
+type TableDataItem = FlattenedGroupedAlert | AlertListItem;
 
 // Create table instance
 const table = useVueTable({
@@ -206,7 +240,7 @@ const table = useVueTable({
   },
   getRowId: (row) => {
     if (isGrouped.value && 'total_count' in row) {
-      return `${row.source_ipv4 || 'unknown'}-${row.target_ipv4 || 'unknown'}`
+      return `${row.source_ipv4 || 'unknown'}-${row.target_ipv4 || 'unknown'}-${row.classification || 'unknown'}-${row.groupIndex}-${row.alertIndex}`
     } else if ('id' in row) {
       return row.id
     }
@@ -214,7 +248,7 @@ const table = useVueTable({
   },
 })
 
-// Toggle view function - complete state reset as requested
+// Toggle view function - smart state management
 function handleToggleView() {
   // Mark as changing view to show skeleton
   isChangingView.value = true
@@ -222,16 +256,26 @@ function handleToggleView() {
   // Toggle the view
   const newView = urlState.view.value === 'grouped' ? 'ungrouped' : 'grouped'
   
-  // Reset EVERYTHING to defaults for the new view
+  // Preserve existing filters but remove view-specific ones
+  const currentFilters = { ...urlState.filters.value }
+  
+  // When switching FROM ungrouped TO grouped, we might want to keep some filters
+  // but remove very specific ones that don't make sense in grouped view
+  if (newView === 'grouped') {
+    // In grouped view, classification filter doesn't make as much sense
+    // since groups show multiple classifications
+    delete currentFilters.classification_text
+  }
+  
+  // Update state
   urlState.view.value = newView
   urlState.page.value = 1
   urlState.sortBy.value = newView === 'grouped' ? 'total_count' : 'detected_at'
   urlState.sortOrder.value = 'desc'
-  urlState.filters.value = {}
-  urlState.hiddenColumns.value = []
-  rowSelection.value = {}
-  
-  // Key change triggers new fetch without abort
+  urlState.filters.value = currentFilters // Preserve most filters
+  // Keep hidden columns as they are user preference
+  // urlState.hiddenColumns.value = [] // Don't reset
+  rowSelection.value = {} // Clear selection as it doesn't make sense across views
 }
 
 // Auto-refresh functionality using VueUse
@@ -287,18 +331,28 @@ watch(autoRefreshEnabled, (enabled) => {
   }
 })
 
-// Document visibility handling
-const documentVisibility = useDocumentVisibility()
+// Document visibility handling - only on client to avoid SSR issues
+const documentVisibility = process.client ? useDocumentVisibility() : ref('visible')
 
-// Watch document visibility and handle auto-refresh
-watch(documentVisibility, async (visibility) => {
-  if (visibility === 'hidden') {
-    stopAutoRefresh()
-  } else if (visibility === 'visible' && autoRefreshEnabled.value) {
-    startAutoRefresh()
-    // Refresh immediately when coming back to tab
-    await performAutoRefresh()
-  }
+// Watch document visibility and handle auto-refresh - only on client
+if (process.client) {
+  watch(documentVisibility, async (visibility) => {
+    if (visibility === 'hidden') {
+      stopAutoRefresh()
+    } else if (visibility === 'visible' && autoRefreshEnabled.value) {
+      startAutoRefresh()
+      // Refresh immediately when coming back to tab
+      await performAutoRefresh()
+    }
+  })
+}
+
+// Provide context for child components
+provideAlertTableContext({
+  urlState,
+  table,
+  isGrouped,
+  pending
 })
 
 // Start auto-refresh on mount
@@ -318,10 +372,6 @@ onUnmounted(() => {
   <div class="w-full h-full flex flex-col space-y-2">
     <!-- Toolbar -->
     <AlertsToolbar
-      :urlState="urlState"
-      :pending="pending"
-      :isGrouped="isGrouped"
-      :table="table"
       @toggleView="handleToggleView"
       @startAutoRefresh="startAutoRefresh"
       @stopAutoRefresh="stopAutoRefresh"
