@@ -1,7 +1,5 @@
 export default defineNitroPlugin(() => {
-  // Hook to refresh user data when session.fetch() is called
   sessionHooks.hook('fetch', async (session, event) => {
-    // Only refresh if we have a user and API token
     if (!session.user || !session.secure?.apiToken) {
       return
     }
@@ -9,7 +7,6 @@ export default defineNitroPlugin(() => {
     const { apiBase } = useRuntimeConfig()
     
     try {
-      // Fetch fresh user information from the backend
       const userInfo = await $fetch<{
         id: string
         email: string
@@ -22,7 +19,6 @@ export default defineNitroPlugin(() => {
         },
       })
 
-      // Update only the user portion of the session
       session.user = {
         id: userInfo.id,
         email: userInfo.email,
@@ -32,11 +28,9 @@ export default defineNitroPlugin(() => {
       }
     } catch (error) {
       console.error('[Session Fetch Hook Error]', error)
-      // Don't throw here - let the session continue with existing data
     }
   })
 
-  // Hook for when session is cleared
   sessionHooks.hook('clear', async (session, event) => {
     console.log('User session cleared')
   })

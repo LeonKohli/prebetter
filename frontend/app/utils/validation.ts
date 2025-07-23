@@ -1,9 +1,5 @@
-/**
- * Shared validation schemas and rules
- */
 import { z } from 'zod'
 
-// Common field schemas
 export const usernameSchema = z
   .string()
   .min(3, 'Username must be at least 3 characters')
@@ -23,7 +19,6 @@ export const fullNameSchema = z
   .optional()
   .or(z.literal(''))
 
-// User profile schemas
 export const profileEditSchema = z.object({
   username: usernameSchema,
   email: emailSchema,
