@@ -32,6 +32,16 @@ interface NavigableUrlState {
   
   updateFilters: (filters: Record<string, string | number>, isUserAction?: boolean) => void
   updateView: (view: 'grouped' | 'ungrouped', isUserAction?: boolean) => void
+  updateBatch: (updates: Partial<{
+    view: 'grouped' | 'ungrouped'
+    page: number
+    pageSize: number
+    sortBy: string
+    sortOrder: 'asc' | 'desc'
+    filters: Record<string, string | number>
+    hiddenColumns: string[]
+    autoRefresh: number
+  }>, isUserAction?: boolean) => void
   navigateToDetails: (details: { sourceIp: string; targetIp: string; classification: string }) => void
   resetToDefaults: () => void
 }
@@ -254,6 +264,70 @@ export function useNavigableUrlState(options: NavigableUrlStateOptions = {}): Na
     updateUrl({ view: newView }, isUserAction)
   }
 
+  // Batch update multiple URL parameters at once to avoid race conditions
+  const updateBatch = async (updates: Partial<{
+    view: 'grouped' | 'ungrouped'
+    page: number
+    pageSize: number
+    sortBy: string
+    sortOrder: 'asc' | 'desc'
+    filters: Record<string, string | number>
+    hiddenColumns: string[]
+    autoRefresh: number
+  }>, isUserAction = true): Promise<void> => {
+    const newQuery: LocationQuery = { ...route.query }
+    
+    // Handle each update type
+    if (updates.view !== undefined) {
+      newQuery.view = updates.view
+    }
+    
+    if (updates.page !== undefined) {
+      newQuery.page = String(updates.page)
+    }
+    
+    if (updates.pageSize !== undefined) {
+      newQuery.size = String(updates.pageSize)
+    }
+    
+    if (updates.sortBy !== undefined || updates.sortOrder !== undefined) {
+      const currentSort = route.query.sort as string || `${defaults.sortBy}:${defaults.sortOrder}`
+      const [currentBy, currentOrder] = currentSort.split(':')
+      const newBy = updates.sortBy ?? currentBy
+      const newOrder = updates.sortOrder ?? currentOrder
+      newQuery.sort = `${newBy}:${newOrder}`
+    }
+    
+    if (updates.filters !== undefined) {
+      const filterString = serializeFilters(updates.filters)
+      if (filterString) {
+        newQuery.filter = filterString
+      } else {
+        delete newQuery.filter
+      }
+    }
+    
+    if (updates.hiddenColumns !== undefined) {
+      const colString = updates.hiddenColumns.join(',')
+      if (colString) {
+        newQuery.cols = colString
+      } else {
+        delete newQuery.cols
+      }
+    }
+    
+    if (updates.autoRefresh !== undefined) {
+      newQuery.refresh = String(updates.autoRefresh)
+    }
+    
+    // Use router directly for batch updates
+    if (isUserAction) {
+      await router.push({ query: newQuery })
+    } else {
+      await router.replace({ query: newQuery })
+    }
+  }
+
   // Navigate to alert details (always a user action)
   const navigateToDetails = async (details: { sourceIp: string; targetIp: string; classification: string }) => {
     const currentFilters = filters.value
@@ -299,6 +373,7 @@ export function useNavigableUrlState(options: NavigableUrlStateOptions = {}): Na
     
     updateFilters,
     updateView,
+    updateBatch,
     navigateToDetails,
     resetToDefaults
   }

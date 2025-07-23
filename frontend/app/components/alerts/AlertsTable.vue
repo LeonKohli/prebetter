@@ -245,7 +245,7 @@ const table = useVueTable({
 })
 
 // Toggle view function - smart state management
-function handleToggleView() {
+async function handleToggleView() {
   // Mark as changing view to show skeleton
   isChangingView.value = true
   
@@ -263,15 +263,17 @@ function handleToggleView() {
     delete currentFilters.classification_text
   }
   
-  // Update state
-  urlState.view.value = newView
-  urlState.page.value = 1
-  urlState.sortBy.value = newView === 'grouped' ? 'total_count' : 'detected_at'
-  urlState.sortOrder.value = 'desc'
-  urlState.filters.value = currentFilters // Preserve most filters
-  // Keep hidden columns as they are user preference
-  // urlState.hiddenColumns.value = [] // Don't reset
-  rowSelection.value = {} // Clear selection as it doesn't make sense across views
+  // Clear selection as it doesn't make sense across views
+  rowSelection.value = {}
+  
+  // Use batch update to avoid race conditions with multiple URL parameter changes
+  await urlState.updateBatch({
+    view: newView,
+    page: 1,
+    sortBy: newView === 'grouped' ? 'total_count' : 'detected_at',
+    sortOrder: 'desc',
+    filters: currentFilters
+  }, true) // true = user action
 }
 
 // Auto-refresh functionality using VueUse
