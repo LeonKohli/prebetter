@@ -20,6 +20,8 @@ import { applyDefaultDateFilters } from '@/utils/dateHelpers'
 import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
 
 // URL state synchronization with proper browser navigation
+const router = useRouter()
+const route = useRoute()
 const urlState = useNavigableUrlState({
   defaultView: 'grouped',
   defaultPageSize: 100,
@@ -244,36 +246,37 @@ const table = useVueTable({
   },
 })
 
-// Toggle view function - smart state management
-async function handleToggleView() {
-  // Mark as changing view to show skeleton
-  isChangingView.value = true
-  
-  // Toggle the view
+// Toggle view function
+const handleToggleView = () => {
   const newView = urlState.view.value === 'grouped' ? 'ungrouped' : 'grouped'
   
-  // Preserve existing filters but remove view-specific ones
-  const currentFilters = { ...urlState.filters.value }
+  // Set flag to show skeleton
+  isChangingView.value = true
   
-  // When switching FROM ungrouped TO grouped, we might want to keep some filters
-  // but remove very specific ones that don't make sense in grouped view
-  if (newView === 'grouped') {
-    // In grouped view, classification filter doesn't make as much sense
-    // since groups show multiple classifications
-    delete currentFilters.classification_text
-  }
-  
-  // Clear selection as it doesn't make sense across views
+  // Clear selection
   rowSelection.value = {}
   
-  // Use batch update to avoid race conditions with multiple URL parameter changes
-  await urlState.updateBatch({
-    view: newView,
-    page: 1,
-    sortBy: newView === 'grouped' ? 'total_count' : 'detected_at',
-    sortOrder: 'desc',
-    filters: currentFilters
-  }, true) // true = user action
+  const newQuery: Record<string, any> = {
+    ...route.query,
+    view: newView
+  }
+  
+  // Remove sort to use view-specific defaults
+  delete newQuery.sort
+  
+  // Reset to page 1 when switching views
+  if (urlState.page.value !== 1) {
+    newQuery.page = '1'
+  }
+  
+  // Remove classification filter when switching to grouped
+  if (newView === 'grouped' && urlState.filters.value.classification_text) {
+    const currentFilters = { ...urlState.filters.value }
+    delete currentFilters.classification_text
+    newQuery.filter = Object.keys(currentFilters).length > 0 ? JSON.stringify(currentFilters) : undefined
+  }
+  
+  router.push({ query: newQuery })
 }
 
 // Auto-refresh functionality using VueUse
