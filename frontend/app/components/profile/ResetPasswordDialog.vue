@@ -77,7 +77,6 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const isSubmitting = ref(false)
 
-// Form schema
 const formSchema = toTypedSchema(resetPasswordSchema)
 
 // Initial form values
@@ -95,12 +94,10 @@ const generatePassword = (setFieldValue: any) => {
   setFieldValue('newPassword', password)
 }
 
-// Handle cancel
 const handleCancel = () => {
   isOpen.value = false
 }
 
-// Form submission
 const onSubmit = async (values: any) => {
   if (!props.user) return
   

@@ -89,7 +89,6 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const isSubmitting = ref(false)
 
-// Form schema
 const formSchema = toTypedSchema(userEditSchema)
 
 // Initial values
@@ -100,12 +99,10 @@ const initialValues = computed(() => ({
   isSuperuser: props.user?.is_superuser || false,
 }))
 
-// Handle cancel
 const handleCancel = () => {
   isOpen.value = false
 }
 
-// Form submission
 const onSubmit = async (values: any, { setFieldError }: any) => {
   if (!props.user) return
   

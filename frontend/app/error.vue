@@ -83,7 +83,6 @@ function selectCode() {
 <template>
   <div class="min-h-screen flex items-center justify-center bg-background px-4">
     <div class="w-full max-w-md space-y-6 text-center">
-      <!-- Error status code -->
       <div class="space-y-2">
         <h1
           class="text-7xl font-bold tracking-tighter text-muted-foreground/20"
@@ -95,12 +94,10 @@ function selectCode() {
         </h2>
       </div>
 
-      <!-- Error message -->
       <p class="whitespace-pre-line text-muted-foreground text-lg">
         {{ errorMessage }}
       </p>
 
-      <!-- Action buttons -->
       <div class="flex flex-col gap-4 justify-center pt-4 sm:flex-row">
         <Button @click="handleError" size="lg" class="min-w-[140px]">
           <Icon name="lucide:home" class="mr-2 h-4 w-4" />
@@ -117,7 +114,6 @@ function selectCode() {
         </Button>
       </div>
 
-      <!-- Dev info -->
       <div v-if="isDev" class="pt-8 w-full">
         <p class="font-bold text-left">
           Developer Information

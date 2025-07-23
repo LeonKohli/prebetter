@@ -52,6 +52,5 @@ defineEmits<{
   'reset-password': [user: User]
 }>()
 
-// Check if this is the last superuser (simplified - in production you'd check the actual count)
 const isLastSuperuser = computed(() => false)
 </script>

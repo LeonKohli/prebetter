@@ -1,13 +1,11 @@
 export default defineNuxtRouteMiddleware((to) => {
   const { loggedIn, ready } = useUserSession()
   
-  // Skip middleware during SSR or if session is not ready yet
-  // The session will be properly hydrated during client-side initialization
+  // Skip during SSR to avoid hydration mismatches
   if (!ready.value) {
     return
   }
 
-  // Flags come from definePageMeta()
   const needsAuth = to.meta.requiresAuth === true
   const guestOnly = to.meta.guestOnly === true
 
@@ -15,6 +13,6 @@ export default defineNuxtRouteMiddleware((to) => {
     return navigateTo(`/login?redirect=${encodeURIComponent(to.fullPath)}`)
   }
   if (guestOnly && loggedIn.value) {
-    return navigateTo('/') // redirect to dashboard
+    return navigateTo('/')
   }
 })
