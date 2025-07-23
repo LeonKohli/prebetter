@@ -240,6 +240,7 @@ export const useAlertTableColumns = () => {
     'analyzer': 'analyzer',
     'severity': 'severity',
     'total_count': 'total_count', // Backend now supports this!
+    'count': 'total_count', // Map count to total_count for backward compat
   } as const satisfies Record<string, string>
 
   const filterFieldMap = {
