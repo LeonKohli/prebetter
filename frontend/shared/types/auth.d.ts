@@ -1,5 +1,4 @@
-import type { UserSession } from '#auth-utils'
-
+// Shared auth types - auto-imported in both client and server contexts
 declare module '#auth-utils' {
   interface User {
     // Backend API format - no conversion
