@@ -263,13 +263,16 @@ NUXT_SESSION_PASSWORD=your-very-secure-password-here-minimum-32-chars
 
 **Example:**
 ```typescript
-// ❌ Don't use VueUse for simple v-model
+// ❌ Don't use VueUse for simple v-model (even VueUse docs recommend against it)
 import { useVModel } from '@vueuse/core'
 const model = useVModel(props, 'modelValue', emit)
 
-// ✅ Use native Vue computed
+// ✅ Best: Use native Vue defineModel (Vue 3.4+) for simple cases
+const model = defineModel<string>()
+
+// ✅ Good: Use computed when you need more control (fallbacks, transformations)
 const model = computed({
-  get: () => props.modelValue,
+  get: () => props.modelValue ?? props.defaultValue ?? '',
   set: (value) => emit('updateModelValue', value)
 })
 ```
