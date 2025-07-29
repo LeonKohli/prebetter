@@ -82,7 +82,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  'update:success': [user: User]
+  updateSuccess: [user: User]
 }>()
 
 // Dialog state
@@ -127,7 +127,7 @@ const onSubmit = async (values: any, { setFieldError }: any) => {
     })
 
     // Emit success event
-    emit('update:success', data as User)
+    emit('updateSuccess', data as User)
     isOpen.value = false
   } catch (error) {
     console.error('Update user error:', error)
