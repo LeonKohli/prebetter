@@ -12,6 +12,12 @@ export function getTodayRange(): DateRange {
   return { from: startOfDay, to: endOfDay }
 }
 
+export function getLast24HoursRange(): DateRange {
+  const now = new Date()
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  return { from: twentyFourHoursAgo, to: now }
+}
+
 // Reactive date range that updates at midnight
 export function useReactiveTodayRange() {
   const now = useNow()
@@ -37,7 +43,7 @@ export function isToday(from: Date, to: Date): boolean {
 
 export function applyDefaultDateFilters(filters: Record<string, string | number>): Record<string, string | number> {
   if (!filters.start_date && !filters.end_date) {
-    const { from, to } = getTodayRange()
+    const { from, to } = getLast24HoursRange()
     return {
       ...filters,
       start_date: from!.toISOString(),
