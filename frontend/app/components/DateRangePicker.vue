@@ -383,6 +383,10 @@ function createDayRangePreset(label: string, subtract: any): QuickPreset {
 const quickPresets: QuickPreset[] = [
   // Most common presets first
   {
+    label: 'Last 24 Hours',
+    getValue: createHourPreset(24)
+  },
+  {
     label: 'Today',
     getValue: () => ({
       start: toCalendarDateTime(todayDate),
