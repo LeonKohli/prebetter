@@ -91,7 +91,7 @@ import type { User } from '#auth-utils'
 import { Form } from '@/components/ui/form'
 
 const emit = defineEmits<{
-  'create:success': [user: User]
+  createSuccess: [user: User]
 }>()
 
 // Dialog state
@@ -131,7 +131,7 @@ const onSubmit = async (values: any, { resetForm, setFieldError }: any) => {
     })
 
     // Emit success event
-    emit('create:success', data as User)
+    emit('createSuccess', data as User)
     
     // Reset form and close dialog
     resetForm()
