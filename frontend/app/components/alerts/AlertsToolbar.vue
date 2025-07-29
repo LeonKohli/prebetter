@@ -126,7 +126,7 @@
 import { Users, List } from 'lucide-vue-next'
 import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
 import { useDebounceFn } from '@vueuse/core'
-import { getTodayRange, isToday } from '@/utils/dateHelpers'
+import { getTodayRange, getLast24HoursRange, isToday } from '@/utils/dateHelpers'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import { useAlertTableContext } from '@/composables/useAlertTableContext'
 
@@ -155,9 +155,9 @@ const dateRange = computed<DateRangeValue>({
     const from = filters.start_date ? new Date(filters.start_date as string) : undefined
     const to = filters.end_date ? new Date(filters.end_date as string) : undefined
     
-    // If no dates are in URL, show today in the picker UI only
+    // If no dates are in URL, show last 24 hours in the picker UI only
     if (!from && !to) {
-      return getTodayRange()
+      return getLast24HoursRange()
     }
     
     return { from, to }
