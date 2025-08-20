@@ -67,24 +67,24 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
 
     # Write data rows one by one
     for row in results:
-        # In SQLAlchemy 2.0, results come as Row objects with named attributes
-        # Access by index or attribute name
-        detect_time_str = format_iso_datetime(row[2] if len(row) > 2 else None)  # detect_time
-        create_time_str = format_iso_datetime(row[3] if len(row) > 3 else None)  # create_time
+        # In SQLAlchemy 2.0 with labeled columns, we can access by attribute name
+        # The labels we set in the query: detect_time, create_time, classification_text, etc.
+        detect_time_str = format_iso_datetime(getattr(row, 'detect_time', None))
+        create_time_str = format_iso_datetime(getattr(row, 'create_time', None))
 
         writer.writerow(
             [
-                row[0],  # _ident
-                row[1],  # messageid
+                row[0],  # _ident (first column)
+                row[1],  # messageid (second column)
                 detect_time_str,
                 create_time_str,
-                row[4] or "" if len(row) > 4 else "",  # classification_text
-                row[5] or "" if len(row) > 5 else "",  # severity
-                row[6] or "" if len(row) > 6 else "",  # source_ipv4
-                row[7] or "" if len(row) > 7 else "",  # target_ipv4
-                row[8] or "" if len(row) > 8 else "",  # analyzer_name
-                row[9] or "" if len(row) > 9 else "",  # analyzer_host
-                row[10] or "" if len(row) > 10 else "",  # analyzer_model
+                getattr(row, 'classification_text', "") or "",
+                getattr(row, 'severity', "") or "",
+                getattr(row, 'source_ipv4', "") or "",
+                getattr(row, 'target_ipv4', "") or "",
+                getattr(row, 'analyzer_name', "") or "",
+                getattr(row, 'analyzer_host', "") or "",
+                getattr(row, 'analyzer_model', "") or "",
             ]
         )
         yield output.getvalue()
@@ -196,7 +196,7 @@ async def export_alerts(
                 Node._parent0_index == -1,
             )
         )
-        # Removed group_by as it's not needed for export - we want all data
+        # Removed GROUP BY - not needed for export, we want raw data
         # .group_by(Alert._ident)
     )
 
@@ -233,15 +233,15 @@ async def export_alerts(
         if alert_id_ints:
             query = query.where(Alert._ident.in_(alert_id_ints))
 
-    # Order by detect time descending
-    query = query.order_by(DetectTime.time.desc())
+    # Order by detect time descending and add limit for safety
+    query = query.order_by(DetectTime.time.desc()).limit(50000)
     
-    # Add a reasonable limit to prevent memory issues
-    # This can be made configurable later
-    query = query.limit(10000)
+    # Use SQLAlchemy 2.0 execution options for streaming
+    # yield_per enables server-side cursors and limits buffer size
+    query = query.execution_options(yield_per=1000)
 
-    # Execute the query and fetch results
-    results = db.execute(query).all()
+    # Execute the query - returns a Result object that can be iterated
+    results = db.execute(query)
 
     # Define CSV header row - match the exact order expected by tests
     header = [
