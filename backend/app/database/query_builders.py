@@ -456,24 +456,37 @@ def build_alerts_statistics_query(
     )
 
     classification_query = (
-        base_query.outerjoin(
+        select(Classification.text, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(
             Classification, Classification._message_ident == Alert._ident
         )
         .group_by(Classification.text)
-        .with_entities(Classification.text, func.count(Alert._ident.distinct()))
     )
 
     analyzer_query = (
-        base_query.outerjoin(
+        select(Analyzer.name, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
         )
         .group_by(Analyzer.name)
-        .with_entities(Analyzer.name, func.count(Alert._ident.distinct()))
     )
 
     source_ip_query = (
-        base_query.outerjoin(
+        select(source_addr.address, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(
             source_addr,
             and_(
                 source_addr._message_ident == Alert._ident,
@@ -482,13 +495,17 @@ def build_alerts_statistics_query(
             ),
         )
         .group_by(source_addr.address)
-        .with_entities(source_addr.address, func.count(Alert._ident.distinct()))
         .order_by(func.count(Alert._ident.distinct()).desc())
         .limit(10)
     )
 
     target_ip_query = (
-        base_query.outerjoin(
+        select(target_addr.address, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(
             target_addr,
             and_(
                 target_addr._message_ident == Alert._ident,
@@ -497,7 +514,6 @@ def build_alerts_statistics_query(
             ),
         )
         .group_by(target_addr.address)
-        .with_entities(target_addr.address, func.count(Alert._ident.distinct()))
         .order_by(func.count(Alert._ident.distinct()).desc())
         .limit(10)
     )
@@ -515,7 +531,7 @@ def build_alerts_statistics_query(
 def build_heartbeats_tree_query(db: Session):
     """Build a query for the tree view of heartbeats."""
     tree_query = (
-        db.query(
+        select(
             Analyzer.name.label("name"),
             Analyzer.model.label("model"),
             Analyzer.version.label("version"),
@@ -554,7 +570,7 @@ def build_heartbeats_tree_query(db: Session):
                 AnalyzerTime._parent_type == "H",
             ),
         )
-        .filter(Analyzer._parent_type == "H")
+        .where(Analyzer._parent_type == "H")
         .group_by(
             Analyzer.name,
             Analyzer.model,
@@ -573,7 +589,7 @@ def build_heartbeats_tree_query(db: Session):
 def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
     """Build a query for the timeline of heartbeats."""
     timeline_query = (
-        db.query(
+        select(
             AnalyzerTime.time.label("timestamp"),
             Analyzer.name.label("analyzer_name"),
             Node.name.label("host_name"),
@@ -582,6 +598,7 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
             Analyzer.version.label("version"),
             getattr(Analyzer, "class").label("class_"),
         )
+        .select_from(AnalyzerTime)
         .join(
             Heartbeat,
             and_(
@@ -614,7 +631,7 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
                 Address._index == 0,
             ),
         )
-        .filter(AnalyzerTime.time >= cutoff_time)
+        .where(AnalyzerTime.time >= cutoff_time)
     )
 
     return timeline_query
@@ -678,8 +695,5 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
     ORDER BY all_analyzers.host_name, all_analyzers.analyzer_name
     """)
 
-    try:
-        return db.execute(sql, {"days": days})
-    except SQLAlchemyError as e:
-        logger.error(f"Error executing heartbeats query: {str(e)}")
-        raise
+    # Return the text query with parameters bound
+    return sql.bindparams(days=days)

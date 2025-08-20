@@ -1,13 +1,21 @@
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from typing import Optional, Iterator
 from datetime import datetime, timedelta
 import csv
 from io import StringIO
 from enum import Enum
 
-from app.database.config import get_prelude_db, apply_standard_alert_filters
+from app.database.config import (
+    get_prelude_db, 
+    apply_standard_alert_filters,
+    get_source_address_join_conditions,
+    get_target_address_join_conditions,
+    get_node_join_conditions,
+    get_analyzer_join_conditions,
+)
 from app.database.query_builders import build_alert_base_query
 from app.core.datetime_utils import ensure_timezone, get_current_time
 from app.models.prelude import (
@@ -129,22 +137,66 @@ async def export_alerts(
         )
 
     # Get base query from query builder
-    query, models = build_alert_base_query(db)
+    _, models = build_alert_base_query(db)
 
-    # Modify the query to select only the fields we need for export
-    query = query.with_entities(
-        Alert._ident,
-        Alert.messageid,
-        DetectTime.time.label("detect_time"),
-        CreateTime.time.label("create_time"),
-        Classification.text.label("classification_text"),
-        Impact.severity,
-        models["source_addr"].address.label("source_ipv4"),
-        models["target_addr"].address.label("target_ipv4"),
-        Analyzer.name.label("analyzer_name"),
-        Node.name.label("analyzer_host"),
-        Analyzer.model.label("analyzer_model"),
-    ).group_by(Alert._ident)
+    # Build a new select query with only the fields we need for export
+    from sqlalchemy import and_
+    
+    query = (
+        select(
+            Alert._ident,
+            Alert.messageid,
+            DetectTime.time.label("detect_time"),
+            CreateTime.time.label("create_time"),
+            Classification.text.label("classification_text"),
+            Impact.severity,
+            models["source_addr"].address.label("source_ipv4"),
+            models["target_addr"].address.label("target_ipv4"),
+            Analyzer.name.label("analyzer_name"),
+            Node.name.label("analyzer_host"),
+            Analyzer.model.label("analyzer_model"),
+        )
+        .select_from(Alert)
+        .outerjoin(DetectTime, DetectTime._message_ident == Alert._ident)
+        .outerjoin(CreateTime, CreateTime._message_ident == Alert._ident)
+        .outerjoin(Classification, Classification._message_ident == Alert._ident)
+        .outerjoin(Impact, Impact._message_ident == Alert._ident)
+        .outerjoin(
+            models["source_addr"], 
+            and_(
+                models["source_addr"]._message_ident == Alert._ident,
+                models["source_addr"]._parent_type == "S",
+                models["source_addr"]._parent0_index == -1,
+                models["source_addr"].category == "ipv4-addr",
+            )
+        )
+        .outerjoin(
+            models["target_addr"], 
+            and_(
+                models["target_addr"]._message_ident == Alert._ident,
+                models["target_addr"]._parent_type == "T",
+                models["target_addr"]._parent0_index == -1,
+                models["target_addr"].category == "ipv4-addr",
+            )
+        )
+        .outerjoin(
+            Analyzer, 
+            and_(
+                Analyzer._message_ident == Alert._ident,
+                Analyzer._parent_type == "A",
+                Analyzer._index == -1,
+            )
+        )
+        .outerjoin(
+            Node, 
+            and_(
+                Node._message_ident == Alert._ident,
+                Node._parent_type == "A",
+                Node._parent0_index == -1,
+            )
+        )
+        .group_by(Alert._ident)
+    )
 
     # Apply standard filters - explicitly pass model classes for filtering
     query = apply_standard_alert_filters(
@@ -177,13 +229,13 @@ async def export_alerts(
                 # Skip invalid IDs
                 continue
         if alert_id_ints:
-            query = query.filter(Alert._ident.in_(alert_id_ints))
+            query = query.where(Alert._ident.in_(alert_id_ints))
 
     # Order by detect time descending
     query = query.order_by(DetectTime.time.desc())
 
-    # Use yield_per to fetch rows in batches instead of loading all at once
-    results = query.yield_per(1000)
+    # Execute the query and fetch results
+    results = db.execute(query).yield_per(1000)
 
     # Define CSV header row - match the exact order expected by tests
     header = [
