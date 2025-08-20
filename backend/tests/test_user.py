@@ -1,5 +1,6 @@
 import uuid
 import pytest
+from sqlalchemy import select
 
 from app.models.users import User
 from app.core.security import get_password_hash
@@ -27,9 +28,9 @@ def superuser(test_db):
     Create (or retrieve if already exists) a superuser in the test database.
     """
     db = test_db
-    existing = (
-        db.query(User).filter(User.username == TEST_SUPERUSER["username"]).first()
-    )
+    existing = db.execute(
+        select(User).where(User.username == TEST_SUPERUSER["username"])
+    ).scalar_one_or_none()
     if existing:
         # Update password hash to ensure it matches test password
         existing.hashed_password = get_password_hash(TEST_SUPERUSER["password"])
