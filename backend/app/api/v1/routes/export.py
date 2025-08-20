@@ -67,23 +67,24 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
 
     # Write data rows one by one
     for row in results:
-        # Format datetime values using the helper function
-        detect_time_str = format_iso_datetime(row.detect_time)
-        create_time_str = format_iso_datetime(row.create_time)
+        # In SQLAlchemy 2.0, results come as Row objects with named attributes
+        # Access by index or attribute name
+        detect_time_str = format_iso_datetime(row[2] if len(row) > 2 else None)  # detect_time
+        create_time_str = format_iso_datetime(row[3] if len(row) > 3 else None)  # create_time
 
         writer.writerow(
             [
-                row._ident,
-                row.messageid,
+                row[0],  # _ident
+                row[1],  # messageid
                 detect_time_str,
                 create_time_str,
-                row.classification_text or "",
-                row.severity or "",
-                row.source_ipv4 or "",
-                row.target_ipv4 or "",
-                row.analyzer_name or "",
-                row.analyzer_host or "",
-                row.analyzer_model or "",
+                row[4] or "" if len(row) > 4 else "",  # classification_text
+                row[5] or "" if len(row) > 5 else "",  # severity
+                row[6] or "" if len(row) > 6 else "",  # source_ipv4
+                row[7] or "" if len(row) > 7 else "",  # target_ipv4
+                row[8] or "" if len(row) > 8 else "",  # analyzer_name
+                row[9] or "" if len(row) > 9 else "",  # analyzer_host
+                row[10] or "" if len(row) > 10 else "",  # analyzer_model
             ]
         )
         yield output.getvalue()
@@ -195,7 +196,8 @@ async def export_alerts(
                 Node._parent0_index == -1,
             )
         )
-        .group_by(Alert._ident)
+        # Removed group_by as it's not needed for export - we want all data
+        # .group_by(Alert._ident)
     )
 
     # Apply standard filters - explicitly pass model classes for filtering
@@ -233,9 +235,13 @@ async def export_alerts(
 
     # Order by detect time descending
     query = query.order_by(DetectTime.time.desc())
+    
+    # Add a reasonable limit to prevent memory issues
+    # This can be made configurable later
+    query = query.limit(10000)
 
     # Execute the query and fetch results
-    results = db.execute(query).yield_per(1000)
+    results = db.execute(query).all()
 
     # Define CSV header row - match the exact order expected by tests
     header = [
