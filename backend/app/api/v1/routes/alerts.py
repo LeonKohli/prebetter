@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import select, func, and_
 from sqlalchemy.sql import distinct
 from typing import Optional
 from datetime import datetime
@@ -142,15 +142,17 @@ async def list_alerts(
     query = apply_sorting(query, sort_by, sort_order, sort_options, DetectTime.time)
 
     # BUG FIX: Count must use filtered query to include IP filters
-    count_query = query.with_entities(func.count(distinct(Alert._ident)))
-    total = count_query.scalar()
+    # Create a subquery for counting
+    count_subquery = query.subquery()
+    count_stmt = select(func.count()).select_from(count_subquery)
+    total = db.scalar(count_stmt)
 
     total_pages = (total + size - 1) // size
 
     offset = (page - 1) * size
 
     # distinct() prevents duplicates from joins, _ident ensures stable pagination
-    alerts = query.distinct().order_by(Alert._ident).offset(offset).limit(size).all()
+    alerts = db.execute(query.distinct().order_by(Alert._ident).offset(offset).limit(size)).all()
 
     alert_items = [alert_result_to_list_item(alert) for alert in alerts]
 
