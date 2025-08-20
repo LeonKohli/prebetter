@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import text, select
 from app.database.config import prebetter_engine, prelude_engine, PrebetterBase
 from app.models.users import User
 from app.core.security import get_password_hash, create_user_id
@@ -60,7 +60,7 @@ async def ensure_database() -> None:
 
         db = Session(prebetter_engine)
         try:
-            superuser = db.query(User).filter(User.is_superuser).first()
+            superuser = db.execute(select(User).where(User.is_superuser)).scalar_one_or_none()
             if not superuser:
                 superuser = User(
                     id=create_user_id(),

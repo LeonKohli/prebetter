@@ -1,4 +1,5 @@
 from typing import Optional, List
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models.users import User
@@ -18,23 +19,23 @@ class UserService:
 
     def get_by_id(self, user_id: str) -> Optional[User]:
         """Retrieve a user by their ID."""
-        return self.db.query(User).filter(User.id == user_id).first()
+        return self.db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
 
     def get_by_username(self, username: str) -> Optional[User]:
         """Retrieve a user by their username."""
-        return self.db.query(User).filter(User.username == username).first()
+        return self.db.execute(select(User).where(User.username == username)).scalar_one_or_none()
 
     def get_by_email(self, email: str) -> Optional[User]:
         """Retrieve a user by their email."""
-        return self.db.query(User).filter(User.email == email).first()
+        return self.db.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
     def list_users(self, skip: int = 0, limit: int = 100) -> List[User]:
         """List users with pagination."""
-        return self.db.query(User).offset(skip).limit(limit).all()
+        return list(self.db.scalars(select(User).offset(skip).limit(limit)).all())
 
     def count_users(self) -> int:
         """Count the total number of users."""
-        return self.db.query(User).count()
+        return self.db.scalar(select(func.count(User.id)))
 
     def create_user(self, user_data: UserCreate) -> User:
         """Create a new user."""
@@ -109,8 +110,8 @@ class UserService:
 
         # Prevent deleting last superuser (administrative lockout)
         if db_user.is_superuser is True:
-            superuser_count = (
-                self.db.query(User).filter(User.is_superuser == True).count()  # noqa: E712
+            superuser_count = self.db.scalar(
+                select(func.count(User.id)).where(User.is_superuser == True)  # noqa: E712
             )
             if superuser_count <= 1:
                 raise HTTPException(
