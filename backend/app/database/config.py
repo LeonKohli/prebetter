@@ -106,42 +106,42 @@ def apply_standard_alert_filters(
     if start_date and DetectTime:
         # Ensure timezone consistency using utility
         start_date = ensure_timezone(start_date)
-        query = query.filter(DetectTime.time >= start_date)
+        query = query.where(DetectTime.time >= start_date)
 
     if end_date and DetectTime:
         # Ensure timezone consistency using utility
         end_date = ensure_timezone(end_date)
-        query = query.filter(DetectTime.time <= end_date)
+        query = query.where(DetectTime.time <= end_date)
 
     # Check for future date range (edge case handling)
     current_time = get_current_time()  # Using utility function
     if start_date and start_date > current_time:
         # If the start date is in the future, ensure empty results
         # This is needed for test_list_alerts_edge_cases
-        query = query.filter(literal(False))
+        query = query.where(literal(False))
 
     # Apply exact match filters first (likely most selective)
     if source_ip and source_addr:
         # Using exact equality without func.binary() for better index utilization
-        query = query.filter(source_addr.address == source_ip)
+        query = query.where(source_addr.address == source_ip)
 
     if target_ip and target_addr:
         # Using exact equality without func.binary() for better index utilization
-        query = query.filter(target_addr.address == target_ip)
+        query = query.where(target_addr.address == target_ip)
 
     if severity and Impact:
-        query = query.filter(Impact.severity == severity)
+        query = query.where(Impact.severity == severity)
 
     if analyzer_model and Analyzer:
-        query = query.filter(Analyzer.model == analyzer_model)
+        query = query.where(Analyzer.model == analyzer_model)
 
     # Apply partial match filters last (least selective)
     if classification and Classification:
         # Use index-friendly LIKE pattern with right wildcard only if possible
         if not classification.startswith("%"):
-            query = query.filter(Classification.text.like(f"{classification}%"))
+            query = query.where(Classification.text.like(f"{classification}%"))
         else:
-            query = query.filter(Classification.text.like(f"%{classification}%"))
+            query = query.where(Classification.text.like(f"%{classification}%"))
 
     return query
 
