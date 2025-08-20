@@ -74,7 +74,7 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
 
         writer.writerow(
             [
-                row[0],  # _ident (first column)
+                str(row[0]),  # _ident (first column) - ensure it's a string
                 row[1],  # messageid (second column)
                 detect_time_str,
                 create_time_str,
@@ -137,87 +137,10 @@ async def export_alerts(
             status_code=501, detail=f"Export format '{format}' is not yet supported"
         )
 
-    # Get base query from query builder
-    _, models = build_alert_base_query(db)
+    # Get base query from query builder - this already has all the fields we need!
+    query, models = build_alert_base_query(db)
 
-    # Build a new select query with only the fields we need for export
-    from sqlalchemy import and_
-    
-    query = (
-        select(
-            Alert._ident,
-            Alert.messageid,
-            DetectTime.time.label("detect_time"),
-            CreateTime.time.label("create_time"),
-            Classification.text.label("classification_text"),
-            Impact.severity,
-            models["source_addr"].address.label("source_ipv4"),
-            models["target_addr"].address.label("target_ipv4"),
-            Analyzer.name.label("analyzer_name"),
-            Node.name.label("analyzer_host"),
-            Analyzer.model.label("analyzer_model"),
-        )
-        .select_from(Alert)
-        .outerjoin(DetectTime, DetectTime._message_ident == Alert._ident)
-        .outerjoin(CreateTime, CreateTime._message_ident == Alert._ident)
-        .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        .outerjoin(Impact, Impact._message_ident == Alert._ident)
-        .outerjoin(
-            models["source_addr"], 
-            and_(
-                models["source_addr"]._message_ident == Alert._ident,
-                models["source_addr"]._parent_type == "S",
-                models["source_addr"]._parent0_index == -1,
-                models["source_addr"].category == "ipv4-addr",
-            )
-        )
-        .outerjoin(
-            models["target_addr"], 
-            and_(
-                models["target_addr"]._message_ident == Alert._ident,
-                models["target_addr"]._parent_type == "T",
-                models["target_addr"]._parent0_index == -1,
-                models["target_addr"].category == "ipv4-addr",
-            )
-        )
-        .outerjoin(
-            Analyzer, 
-            and_(
-                Analyzer._message_ident == Alert._ident,
-                Analyzer._parent_type == "A",
-                Analyzer._index == -1,
-            )
-        )
-        .outerjoin(
-            Node, 
-            and_(
-                Node._message_ident == Alert._ident,
-                Node._parent_type == "A",
-                Node._parent0_index == -1,
-            )
-        )
-        # Removed GROUP BY - not needed for export, we want raw data
-        # .group_by(Alert._ident)
-    )
-
-    # Apply standard filters - explicitly pass model classes for filtering
-    query = apply_standard_alert_filters(
-        query=query,
-        severity=severity,
-        classification=classification,
-        start_date=start_date,
-        end_date=end_date,
-        source_ip=source_ip,
-        target_ip=target_ip,
-        analyzer_model=analyzer_model,
-        **models,
-        Impact=Impact,
-        Classification=Classification,
-        DetectTime=DetectTime,
-        Analyzer=Analyzer,
-    )
-
-    # Apply additional filter for alert IDs
+    # Apply additional filter for alert IDs FIRST (before other filters)
     if alert_ids:
         # Convert to list if it's not already
         if not isinstance(alert_ids, list):
@@ -232,14 +155,36 @@ async def export_alerts(
                 continue
         if alert_id_ints:
             query = query.where(Alert._ident.in_(alert_id_ints))
+    
+    # Only apply other filters if we're not filtering by specific alert IDs
+    # This ensures we get all requested alerts even if they lack some joined data
+    if not alert_ids:
+        # Apply standard filters - explicitly pass model classes for filtering
+        query = apply_standard_alert_filters(
+            query=query,
+            severity=severity,
+            classification=classification,
+            start_date=start_date,
+            end_date=end_date,
+            source_ip=source_ip,
+            target_ip=target_ip,
+            analyzer_model=analyzer_model,
+            **models,
+            Impact=Impact,
+            Classification=Classification,
+            DetectTime=DetectTime,
+            Analyzer=Analyzer,
+        )
 
-    # Order by detect time descending and add limit for safety
-    query = query.order_by(DetectTime.time.desc()).limit(50000)
+    # Order by alert ID descending and add limit for safety
+    # We can't reliably order by DetectTime.time since it might be NULL for some alerts
+    query = query.order_by(Alert._ident.desc()).limit(50000)
     
     # Use SQLAlchemy 2.0 execution options for streaming
     # yield_per enables server-side cursors and limits buffer size
+    # We use partitions() to ensure the cursor is properly managed
     query = query.execution_options(yield_per=1000)
-
+    
     # Execute the query - returns a Result object that can be iterated
     results = db.execute(query)
 
