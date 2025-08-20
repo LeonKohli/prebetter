@@ -69,8 +69,9 @@ def build_alert_base_query(db: Session):
             Node.location.label("node_location"),
             Node.category.label("node_category"),
         )
+        .distinct()
         .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .outerjoin(DetectTime, Alert._ident == DetectTime._message_ident)
         # parent_type="A" ensures we only get alert creation times
         .outerjoin(
             CreateTime,
