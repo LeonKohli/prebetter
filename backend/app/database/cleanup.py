@@ -1,5 +1,5 @@
 from datetime import timedelta
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, delete
 from sqlalchemy.orm import Session
 
 from app.models.prelude import Heartbeat, AnalyzerTime
@@ -46,37 +46,36 @@ def cleanup_old_heartbeats(
         return 0, 0
 
     if dry_run:
-        analyzer_times_count = (
-            db.query(AnalyzerTime)
-            .filter(
+        analyzer_times_count = db.scalar(
+            select(func.count(AnalyzerTime._message_ident))
+            .where(
                 and_(
                     AnalyzerTime._message_ident.in_(all_heartbeat_ids),
                     AnalyzerTime._parent_type == "H",
                 )
             )
-            .count()
         )
 
         heartbeats_count = len(all_heartbeat_ids)
 
         return heartbeats_count, analyzer_times_count
 
-    deleted_analyzer_times = (
-        db.query(AnalyzerTime)
-        .filter(
+    result = db.execute(
+        delete(AnalyzerTime)
+        .where(
             and_(
                 AnalyzerTime._message_ident.in_(all_heartbeat_ids),
                 AnalyzerTime._parent_type == "H",
             )
         )
-        .delete(synchronize_session=False)
     )
+    deleted_analyzer_times = result.rowcount
 
-    deleted_heartbeats = (
-        db.query(Heartbeat)
-        .filter(Heartbeat._ident.in_(all_heartbeat_ids))
-        .delete(synchronize_session=False)
+    result = db.execute(
+        delete(Heartbeat)
+        .where(Heartbeat._ident.in_(all_heartbeat_ids))
     )
+    deleted_heartbeats = result.rowcount
 
     db.commit()
 
@@ -87,28 +86,27 @@ def cleanup_orphaned_analyzer_times(db: Session, dry_run: bool = False) -> int:
     existing_heartbeats = select(Heartbeat._ident)
 
     if dry_run:
-        orphaned_count = (
-            db.query(AnalyzerTime)
-            .filter(
+        orphaned_count = db.scalar(
+            select(func.count(AnalyzerTime._message_ident))
+            .where(
                 and_(
                     AnalyzerTime._parent_type == "H",
                     ~AnalyzerTime._message_ident.in_(existing_heartbeats),
                 )
             )
-            .count()
         )
         return orphaned_count
 
-    deleted_count = (
-        db.query(AnalyzerTime)
-        .filter(
+    result = db.execute(
+        delete(AnalyzerTime)
+        .where(
             and_(
                 AnalyzerTime._parent_type == "H",
                 ~AnalyzerTime._message_ident.in_(existing_heartbeats),
             )
         )
-        .delete(synchronize_session=False)
     )
+    deleted_count = result.rowcount
 
     db.commit()
 
