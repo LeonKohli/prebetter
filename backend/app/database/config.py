@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, MetaData, and_, literal
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
 from typing import Generator, Optional
 from datetime import datetime
 from ..core.config import get_settings
@@ -37,9 +37,12 @@ PrebetterSessionLocal = sessionmaker(
     autocommit=False, autoflush=False, bind=prebetter_engine
 )
 
-# Create base classes for declarative models
-PreludeBase = declarative_base(metadata=prelude_metadata)
-PrebetterBase = declarative_base(metadata=prebetter_metadata)
+# Create base classes for declarative models using v2 syntax
+class PreludeBase(DeclarativeBase):
+    metadata = prelude_metadata
+
+class PrebetterBase(DeclarativeBase):
+    metadata = prebetter_metadata
 
 
 def get_prelude_db() -> Generator[Session, None, None]:
