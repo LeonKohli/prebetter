@@ -6,8 +6,7 @@ the application to reduce code duplication and maintain consistent query pattern
 """
 
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import func, and_, literal_column, tuple_, text, case, literal
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import select, func, and_, literal_column, tuple_, text, case, literal
 from datetime import datetime
 import logging
 
@@ -45,7 +44,7 @@ def build_alert_base_query(db: Session):
     target_addr = aliased(Address)
 
     query = (
-        db.query(
+        select(
             Alert._ident,
             Alert.messageid,
             DetectTime.time.label("detect_time"),
@@ -69,7 +68,9 @@ def build_alert_base_query(db: Session):
             Node.location.label("node_location"),
             Node.category.label("node_category"),
         )
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .distinct()
+        .select_from(Alert)
+        .outerjoin(DetectTime, Alert._ident == DetectTime._message_ident)
         # parent_type="A" ensures we only get alert creation times
         .outerjoin(
             CreateTime,
@@ -115,7 +116,7 @@ def build_alert_count_query(db: Session):
     target_addr = aliased(Address)
 
     count_query = (
-        db.query(func.count(Alert._ident))
+        select(func.count(Alert._ident))
         .select_from(Alert)
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
     )
@@ -129,7 +130,7 @@ def build_grouped_alerts_query(db: Session):
     target_addr = aliased(Address, name="target_addr")
 
     pairs_query = (
-        db.query(
+        select(
             source_addr.address.label("source_ipv4"),
             target_addr.address.label("target_ipv4"),
             func.count(func.distinct(Alert._ident)).label("total_count"),
@@ -165,8 +166,8 @@ def build_grouped_alerts_query(db: Session):
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
         )
-        .filter(source_addr.address.isnot(None))
-        .filter(target_addr.address.isnot(None))
+        .where(source_addr.address.isnot(None))
+        .where(target_addr.address.isnot(None))
         .group_by(
             source_addr.address,
             target_addr.address,
@@ -184,7 +185,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
     pair_tuples = [(p.source_ipv4, p.target_ipv4) for p in pairs]
 
     alerts_query = (
-        db.query(
+        select(
             source_addr.address.label("source_ipv4"),
             target_addr.address.label("target_ipv4"),
             Classification.text.label("classification"),
@@ -222,7 +223,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             get_node_join_conditions(Alert._ident),
         )
         # tuple_ matches multiple columns efficiently
-        .filter(tuple_(source_addr.address, target_addr.address).in_(pair_tuples))
+        .where(tuple_(source_addr.address, target_addr.address).in_(pair_tuples))
         .group_by(source_addr.address, target_addr.address, Classification.text)
     )
 
@@ -232,7 +233,8 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
 def build_alert_detail_query(db: Session, alert_id: int):
     """Build queries for detailed alert information (avoids cartesian products)."""
     base_query = (
-        db.query(Alert, CreateTime, DetectTime, Classification, Impact)
+        select(Alert, CreateTime, DetectTime, Classification, Impact)
+        .select_from(Alert)
         .outerjoin(
             CreateTime,
             and_(
@@ -243,11 +245,12 @@ def build_alert_detail_query(db: Session, alert_id: int):
         .outerjoin(DetectTime, DetectTime._message_ident == Alert._ident)
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
-        .filter(Alert._ident == alert_id)
+        .where(Alert._ident == alert_id)
     )
 
     source_info_query = (
-        db.query(Source, Address, Service, Node, Process)
+        select(Source, Address, Service, Node, Process)
+        .select_from(Source)
         .outerjoin(
             Address,
             and_(
@@ -278,12 +281,12 @@ def build_alert_detail_query(db: Session, alert_id: int):
                 Process._parent_type == "H",  # From heartbeat messages
             ),
         )
-        .filter(Source._message_ident == alert_id)
+        .where(Source._message_ident == alert_id)
     )
 
     source_addresses_query = (
-        db.query(Address.address)
-        .filter(
+        select(Address.address)
+        .where(
             Address._message_ident == alert_id,
             Address._parent_type == "S",
         )
@@ -291,7 +294,8 @@ def build_alert_detail_query(db: Session, alert_id: int):
     )
 
     target_info_query = (
-        db.query(Target, Address, Service, Node, Process)
+        select(Target, Address, Service, Node, Process)
+        .select_from(Target)
         .outerjoin(
             Address,
             and_(
@@ -322,12 +326,12 @@ def build_alert_detail_query(db: Session, alert_id: int):
                 Process._parent_type == "H",  # From heartbeat messages
             ),
         )
-        .filter(Target._message_ident == alert_id)
+        .where(Target._message_ident == alert_id)
     )
 
     target_addresses_query = (
-        db.query(Address.address)
-        .filter(
+        select(Address.address)
+        .where(
             Address._message_ident == alert_id,
             Address._parent_type == "T",
         )
@@ -335,7 +339,8 @@ def build_alert_detail_query(db: Session, alert_id: int):
     )
 
     analyzers_query = (
-        db.query(Analyzer, Node, Process, AnalyzerTime)
+        select(Analyzer, Node, Process, AnalyzerTime)
+        .select_from(Analyzer)
         .outerjoin(
             Node,
             and_(
@@ -359,7 +364,7 @@ def build_alert_detail_query(db: Session, alert_id: int):
                 AnalyzerTime._parent_type == "A",
             ),
         )
-        .filter(
+        .where(
             Analyzer._message_ident == alert_id,
             Analyzer._parent_type == "A",
         )
@@ -367,22 +372,22 @@ def build_alert_detail_query(db: Session, alert_id: int):
     )
 
     references_query = (
-        db.query(Reference).filter(Reference._message_ident == alert_id).distinct()
+        select(Reference).where(Reference._message_ident == alert_id).distinct()
     )
 
     services_query = (
-        db.query(Service).filter(Service._message_ident == alert_id).distinct()
+        select(Service).where(Service._message_ident == alert_id).distinct()
     )
 
     web_services_query = (
-        db.query(WebService).filter(WebService._message_ident == alert_id).distinct()
+        select(WebService).where(WebService._message_ident == alert_id).distinct()
     )
 
     alert_idents_query = (
-        db.query(Alertident).filter(Alertident._message_ident == alert_id).distinct()
+        select(Alertident).where(Alertident._message_ident == alert_id).distinct()
     )
 
-    additional_data_query = db.query(AdditionalData).filter(
+    additional_data_query = select(AdditionalData).where(
         AdditionalData._message_ident == alert_id,
         AdditionalData._parent_type == "A",
     )
@@ -405,7 +410,7 @@ def build_alert_detail_query(db: Session, alert_id: int):
 def build_alerts_timeline_query(db: Session, date_format: str):
     """Build a query for timeline of alerts."""
     timeline_query = (
-        db.query(
+        select(
             func.date_format(DetectTime.time, date_format).label("time_bucket"),
             func.count(Alert._ident.distinct()).label("total"),
             Impact.severity,
@@ -433,37 +438,55 @@ def build_alerts_statistics_query(
     target_addr = aliased(Address)
 
     base_query = (
-        db.query(Alert)
+        select(Alert)
+        .select_from(Alert)
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .filter(DetectTime.time >= start_time)
-        .filter(DetectTime.time <= end_time)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
     )
 
     severity_query = (
-        base_query.outerjoin(Impact, Impact._message_ident == Alert._ident)
+        select(Impact.severity, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(Impact, Impact._message_ident == Alert._ident)
         .group_by(Impact.severity)
-        .with_entities(Impact.severity, func.count(Alert._ident.distinct()))
     )
 
     classification_query = (
-        base_query.outerjoin(
+        select(Classification.text, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(
             Classification, Classification._message_ident == Alert._ident
         )
         .group_by(Classification.text)
-        .with_entities(Classification.text, func.count(Alert._ident.distinct()))
     )
 
     analyzer_query = (
-        base_query.outerjoin(
+        select(Analyzer.name, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(
             Analyzer,
             get_analyzer_join_conditions(Alert._ident),
         )
         .group_by(Analyzer.name)
-        .with_entities(Analyzer.name, func.count(Alert._ident.distinct()))
     )
 
     source_ip_query = (
-        base_query.outerjoin(
+        select(source_addr.address, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(
             source_addr,
             and_(
                 source_addr._message_ident == Alert._ident,
@@ -472,13 +495,17 @@ def build_alerts_statistics_query(
             ),
         )
         .group_by(source_addr.address)
-        .with_entities(source_addr.address, func.count(Alert._ident.distinct()))
         .order_by(func.count(Alert._ident.distinct()).desc())
         .limit(10)
     )
 
     target_ip_query = (
-        base_query.outerjoin(
+        select(target_addr.address, func.count(Alert._ident.distinct()))
+        .select_from(Alert)
+        .join(DetectTime, Alert._ident == DetectTime._message_ident)
+        .where(DetectTime.time >= start_time)
+        .where(DetectTime.time <= end_time)
+        .outerjoin(
             target_addr,
             and_(
                 target_addr._message_ident == Alert._ident,
@@ -487,7 +514,6 @@ def build_alerts_statistics_query(
             ),
         )
         .group_by(target_addr.address)
-        .with_entities(target_addr.address, func.count(Alert._ident.distinct()))
         .order_by(func.count(Alert._ident.distinct()).desc())
         .limit(10)
     )
@@ -505,7 +531,7 @@ def build_alerts_statistics_query(
 def build_heartbeats_tree_query(db: Session):
     """Build a query for the tree view of heartbeats."""
     tree_query = (
-        db.query(
+        select(
             Analyzer.name.label("name"),
             Analyzer.model.label("model"),
             Analyzer.version.label("version"),
@@ -544,7 +570,7 @@ def build_heartbeats_tree_query(db: Session):
                 AnalyzerTime._parent_type == "H",
             ),
         )
-        .filter(Analyzer._parent_type == "H")
+        .where(Analyzer._parent_type == "H")
         .group_by(
             Analyzer.name,
             Analyzer.model,
@@ -563,7 +589,7 @@ def build_heartbeats_tree_query(db: Session):
 def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
     """Build a query for the timeline of heartbeats."""
     timeline_query = (
-        db.query(
+        select(
             AnalyzerTime.time.label("timestamp"),
             Analyzer.name.label("analyzer_name"),
             Node.name.label("host_name"),
@@ -572,6 +598,7 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
             Analyzer.version.label("version"),
             getattr(Analyzer, "class").label("class_"),
         )
+        .select_from(AnalyzerTime)
         .join(
             Heartbeat,
             and_(
@@ -604,7 +631,7 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
                 Address._index == 0,
             ),
         )
-        .filter(AnalyzerTime.time >= cutoff_time)
+        .where(AnalyzerTime.time >= cutoff_time)
     )
 
     return timeline_query
@@ -668,8 +695,5 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
     ORDER BY all_analyzers.host_name, all_analyzers.analyzer_name
     """)
 
-    try:
-        return db.execute(sql, {"days": days})
-    except SQLAlchemyError as e:
-        logger.error(f"Error executing heartbeats query: {str(e)}")
-        raise
+    # Return the text query with parameters bound
+    return sql.bindparams(days=days)

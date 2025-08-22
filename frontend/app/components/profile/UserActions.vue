@@ -11,7 +11,7 @@
         <Icon name="lucide:edit" class="mr-2 size-4" />
         Edit
       </DropdownMenuItem>
-      <DropdownMenuItem @click="$emit('reset-password', user)">
+      <DropdownMenuItem @click="$emit('resetPassword', user)">
         <Icon name="lucide:key" class="mr-2 size-4" />
         Reset Password
       </DropdownMenuItem>
@@ -49,7 +49,7 @@ const props = defineProps<Props>()
 defineEmits<{
   edit: [user: User]
   delete: [user: User]
-  'reset-password': [user: User]
+  resetPassword: [user: User]
 }>()
 
 const isLastSuperuser = computed(() => false)

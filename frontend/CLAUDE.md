@@ -209,6 +209,74 @@ NUXT_SESSION_PASSWORD=your-very-secure-password-here-minimum-32-chars
 6. **Minimize Side Effects** - Keep components predictable and testable
 7. **Think in Terms of Data Flow** - Let data drive the UI, not manual DOM updates
 
+### Event Naming Conventions
+
+**Follow Vue 3 best practices for consistent event naming:**
+
+1. **In emit definitions** - Use camelCase:
+   ```typescript
+   const emit = defineEmits<{
+     updateSuccess: [user: User]
+     resetPassword: []
+     deleteItem: [id: string]
+   }>()
+   ```
+
+2. **In templates** - Use kebab-case:
+   ```vue
+   <Component 
+     @update-success="handleUpdate"
+     @reset-password="handleReset"
+     @delete-item="handleDelete"
+   />
+   ```
+
+3. **When emitting** - Use camelCase (matches definition):
+   ```typescript
+   emit('updateSuccess', userData)
+   emit('resetPassword')
+   ```
+
+**Note**: Vue automatically converts between camelCase (in code) and kebab-case (in templates).
+
+### Vue > Nuxt > VueUse Usage Hierarchy
+
+**Follow this principle when choosing solutions:**
+
+1. **Vue Native First** - Use Vue's built-in features:
+   - `ref`, `reactive`, `computed` for reactivity
+   - `watch`, `watchEffect` for side effects
+   - `provide`/`inject` for dependency injection
+   - Native `v-model` with computed getters/setters
+
+2. **Nuxt Features Second** - For framework-specific needs:
+   - `useFetch`, `useAsyncData` for data fetching
+   - `useState` for SSR-friendly global state
+   - `navigateTo` for navigation
+   - Auto-imports and file-based routing
+
+3. **VueUse Last** - Only when it adds significant value:
+   - ✅ Complex utilities: `useIntervalFn`, `useDebounceFn`
+   - ✅ Browser APIs: `useDocumentVisibility`, `useLocalStorage`
+   - ✅ Performance helpers: `useThrottleFn`, `useRefHistory`
+   - ❌ Avoid for simple reactivity that Vue handles natively
+
+**Example:**
+```typescript
+// ❌ Don't use VueUse for simple v-model (even VueUse docs recommend against it)
+import { useVModel } from '@vueuse/core'
+const model = useVModel(props, 'modelValue', emit)
+
+// ✅ Best: Use native Vue defineModel (Vue 3.4+) for simple cases
+const model = defineModel<string>()
+
+// ✅ Good: Use computed when you need more control (fallbacks, transformations)
+const model = computed({
+  get: () => props.modelValue ?? props.defaultValue ?? '',
+  set: (value) => emit('updateModelValue', value)
+})
+```
+
 ### Essential Resources to Use
 
 **Always consult these resources when developing:**
