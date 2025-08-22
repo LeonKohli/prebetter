@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from collections import defaultdict
 from typing import Annotated, Dict, Any
@@ -34,7 +35,7 @@ async def heartbeat_status(
     db: Session = Depends(get_prelude_db),
 ):
     query = build_efficient_heartbeats_query(db, days)
-    results = query.all()
+    results = db.execute(query).all()
 
     nodes_dict: Dict[str, Dict[str, Any]] = defaultdict(
         lambda: {"name": "", "os": None, "agents": {}}
@@ -102,14 +103,14 @@ async def timeline_heartbeats(
 
     timeline_query = build_heartbeats_timeline_query(db, start_time)
 
-    total_count = timeline_query.count()
+    count_subquery = timeline_query.subquery()
+    total_count = db.scalar(select(func.count()).select_from(count_subquery)) or 0
 
-    results = (
+    results = db.execute(
         timeline_query.order_by(AnalyzerTime.time.desc())
         .offset((page - 1) * size)
         .limit(size)
-        .all()
-    )
+    ).all()
 
     timeline_items = []
     for result in results:
@@ -150,7 +151,7 @@ async def cleanup_heartbeats(
 ):
     from app.models.prelude import Heartbeat
 
-    total_heartbeats_before = db.query(Heartbeat).count()
+    total_heartbeats_before = db.scalar(select(func.count(Heartbeat._ident)))
 
     deleted_heartbeats, deleted_analyzer_times = cleanup_old_heartbeats(
         db, retention_days, dry_run=dry_run
@@ -158,7 +159,7 @@ async def cleanup_heartbeats(
 
     deleted_orphans = cleanup_orphaned_analyzer_times(db, dry_run=dry_run)
 
-    total_heartbeats_after = db.query(Heartbeat).count()
+    total_heartbeats_after = db.scalar(select(func.count(Heartbeat._ident)))
 
     return {
         "deleted_heartbeats": deleted_heartbeats,

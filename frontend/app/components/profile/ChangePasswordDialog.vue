@@ -67,7 +67,7 @@ import { Form } from '@/components/ui/form'
 
 // Emits
 const emit = defineEmits<{
-  'update:success': []
+  updateSuccess: []
 }>()
 
 // State
@@ -103,7 +103,7 @@ const onSubmit = async (values: any, { setFieldError }: any) => {
     })
 
     // Emit success event
-    emit('update:success')
+    emit('updateSuccess')
     
     // Close dialog
     isOpen.value = false

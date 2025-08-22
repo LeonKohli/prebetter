@@ -3,6 +3,7 @@ import uuid
 from typing import Generator
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from sqlalchemy import select, delete
 from app.main import app
 from app.models.users import User
 from app.core.security import get_password_hash
@@ -39,11 +40,11 @@ def test_db() -> Generator[Session, None, None]:
     db = next(get_prebetter_db())
 
     # Clean up: Remove all users except admin before test
-    db.query(User).filter(User.username != "admin").delete(synchronize_session=False)
+    db.execute(delete(User).where(User.username != "admin"))
     db.commit()
 
     # Ensure admin exists with correct password and superuser status
-    admin = db.query(User).filter(User.username == "admin").first()
+    admin = db.execute(select(User).where(User.username == "admin")).scalar_one_or_none()
     if admin:
         admin.hashed_password = get_password_hash("admin")  # type: ignore[assignment]
         admin.is_superuser = True  # type: ignore[assignment]
@@ -77,11 +78,11 @@ def test_db() -> Generator[Session, None, None]:
     yield db
 
     # Clean up after tests: Remove all non-admin users
-    db.query(User).filter(User.username != "admin").delete(synchronize_session=False)
+    db.execute(delete(User).where(User.username != "admin"))
     db.commit()
 
     # Reset admin to original state
-    admin = db.query(User).filter(User.username == "admin").first()
+    admin = db.execute(select(User).where(User.username == "admin")).scalar_one_or_none()
     if admin:
         admin.hashed_password = get_password_hash("admin")  # type: ignore[assignment]
         admin.is_superuser = True  # type: ignore[assignment]
@@ -113,9 +114,9 @@ def superuser(test_db: Session) -> User:
     If the superuser already exists, update its password hash.
     """
     db = test_db
-    existing = (
-        db.query(User).filter(User.username == TEST_SUPERUSER["username"]).first()
-    )
+    existing = db.execute(
+        select(User).where(User.username == TEST_SUPERUSER["username"])
+    ).scalar_one_or_none()
     if existing:
         existing.hashed_password = get_password_hash(TEST_SUPERUSER["password"])  # type: ignore[assignment]
         db.commit()
