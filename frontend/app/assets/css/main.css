@@ -152,6 +152,35 @@
   --shadow-2xl: var(--shadow-2xl);
 }
 
+@layer components {
+  /* Inner gridlines only (no outer border) */
+  .table-inner-borders {
+    border-collapse: separate; /* we control cell borders individually */
+    border-spacing: 0;         /* remove gaps */
+  }
+
+  /* Draw gridlines on cells, not on the table element */
+  .table-inner-borders :is(th, td) {
+    border-right: 1px solid oklch(from var(--foreground) l c h / 0.15);
+    border-bottom: 1px solid oklch(from var(--foreground) l c h / 0.15);
+  }
+
+  /* Kill the outer right edge */
+  .table-inner-borders tr > :last-child {
+    border-right: 0;
+  }
+
+  /* Kill the outer bottom edge */
+  .table-inner-borders tr:last-child > :is(th, td) {
+    border-bottom: 0;
+  }
+
+  /* Subtle zebra striping for body rows only */
+  .table-zebra tbody tr:nth-child(even) {
+    background-color: oklch(from var(--muted) l c h / 0.4);
+  }
+}
+
 @layer base {
   * {
     border-color: var(--border);

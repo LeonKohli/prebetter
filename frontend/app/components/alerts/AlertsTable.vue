@@ -380,10 +380,10 @@ onUnmounted(() => {
 
     <!-- Table with Brandenburg-style design -->
     <div 
-      class="flex-1 min-h-0 rounded-lg border-2 border-border bg-card shadow-sm table-scroll-container relative"
+      class="flex-1 min-h-0 rounded-lg bg-card shadow-sm table-scroll-container relative overflow-hidden"
     >
-      <Table class="table-compact" role="table" aria-label="Security alerts table">
-        <TableHeader class="sticky top-0 z-10 bg-muted/50 backdrop-blur-sm border-b-2 border-border">
+      <Table class="table-compact table-inner-borders table-zebra" role="table" aria-label="Security alerts table">
+        <TableHeader class="sticky top-0 z-10 bg-muted">
           <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id" class="h-10">
             <TableHead v-for="header in headerGroup.headers" :key="header.id" class="py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header" :props="header.getContext()" />
@@ -405,7 +405,7 @@ onUnmounted(() => {
           
           <!-- Show skeleton on initial load or when changing views -->
           <template v-if="status === 'idle' || (status === 'pending' && !data) || isChangingView">
-            <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-b border-border">
+            <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-0">
               <TableCell v-for="j in columns.length" :key="`skeleton-${i}-${j}`" class="py-2 px-4">
                 <div class="h-4 bg-muted animate-pulse rounded" />
               </TableCell>
@@ -414,7 +414,7 @@ onUnmounted(() => {
           <!-- Show data when available -->
           <template v-else-if="table.getRowModel().rows?.length">
             <template v-for="row in table.getRowModel().rows" :key="row.id">
-              <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-b border-border hover:bg-muted/30 transition-colors duration-150">
+              <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-0 hover:bg-muted/30 transition-colors duration-150">
                 <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="py-2 px-4 text-sm font-normal">
                   <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
                 </TableCell>
