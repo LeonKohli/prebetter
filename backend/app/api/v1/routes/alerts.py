@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, and_
-from sqlalchemy.sql import distinct
+from sqlalchemy import select, func
 from typing import Optional
 from datetime import datetime
 from enum import Enum
@@ -145,7 +144,7 @@ async def list_alerts(
     # Create a subquery for counting
     count_subquery = query.subquery()
     count_stmt = select(func.count()).select_from(count_subquery)
-    total = db.scalar(count_stmt)
+    total = db.scalar(count_stmt) or 0
 
     total_pages = (total + size - 1) // size
 
@@ -221,7 +220,7 @@ async def get_grouped_alerts(
 
         # count() returns number of groups for pagination
         count_subquery = pairs_query.subquery()
-        total_pairs = db.scalar(select(func.count()).select_from(count_subquery))
+        total_pairs = db.scalar(select(func.count()).select_from(count_subquery)) or 0
 
         pairs_query = pairs_query.offset((page - 1) * size).limit(size)
         pairs = db.execute(pairs_query).all()

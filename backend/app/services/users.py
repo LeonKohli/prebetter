@@ -35,7 +35,7 @@ class UserService:
 
     def count_users(self) -> int:
         """Count the total number of users."""
-        return self.db.scalar(select(func.count(User.id)))
+        return self.db.scalar(select(func.count(User.id))) or 0
 
     def create_user(self, user_data: UserCreate) -> User:
         """Create a new user."""
@@ -112,7 +112,7 @@ class UserService:
         if db_user.is_superuser is True:
             superuser_count = self.db.scalar(
                 select(func.count(User.id)).where(User.is_superuser == True)  # noqa: E712
-            )
+            ) or 0
             if superuser_count <= 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

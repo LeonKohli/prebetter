@@ -54,7 +54,7 @@ def cleanup_old_heartbeats(
                     AnalyzerTime._parent_type == "H",
                 )
             )
-        )
+        ) or 0
 
         heartbeats_count = len(all_heartbeat_ids)
 
@@ -95,7 +95,7 @@ def cleanup_orphaned_analyzer_times(db: Session, dry_run: bool = False) -> int:
                 )
             )
         )
-        return orphaned_count
+        return orphaned_count or 0
 
     result = db.execute(
         delete(AnalyzerTime)

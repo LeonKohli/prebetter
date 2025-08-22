@@ -162,7 +162,7 @@ async def get_statistics_summary(
         
         # Count total alerts
         base_subquery = query["base"].distinct().subquery()
-        total_alerts = db.scalar(select(func.count()).select_from(base_subquery))
+        total_alerts = db.scalar(select(func.count()).select_from(base_subquery)) or 0
 
         alerts_by_severity = db.execute(query["severity"]).all()
         severity_distribution = {
