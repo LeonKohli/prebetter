@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
-from sqlalchemy.sql import distinct
+from sqlalchemy import select, func
 from typing import Optional
 from datetime import datetime
 from enum import Enum
@@ -142,15 +141,17 @@ async def list_alerts(
     query = apply_sorting(query, sort_by, sort_order, sort_options, DetectTime.time)
 
     # BUG FIX: Count must use filtered query to include IP filters
-    count_query = query.with_entities(func.count(distinct(Alert._ident)))
-    total = count_query.scalar()
+    # Create a subquery for counting
+    count_subquery = query.subquery()
+    count_stmt = select(func.count()).select_from(count_subquery)
+    total = db.scalar(count_stmt) or 0
 
     total_pages = (total + size - 1) // size
 
     offset = (page - 1) * size
 
     # distinct() prevents duplicates from joins, _ident ensures stable pagination
-    alerts = query.distinct().order_by(Alert._ident).offset(offset).limit(size).all()
+    alerts = db.execute(query.distinct().order_by(Alert._ident).offset(offset).limit(size)).all()
 
     alert_items = [alert_result_to_list_item(alert) for alert in alerts]
 
@@ -218,10 +219,11 @@ async def get_grouped_alerts(
             pairs_query = pairs_query.order_by(order_by_clause)
 
         # count() returns number of groups for pagination
-        total_pairs = pairs_query.count()
+        count_subquery = pairs_query.subquery()
+        total_pairs = db.scalar(select(func.count()).select_from(count_subquery)) or 0
 
         pairs_query = pairs_query.offset((page - 1) * size).limit(size)
-        pairs = pairs_query.all()
+        pairs = db.execute(pairs_query).all()
 
         alerts_query, alert_models = build_grouped_alerts_detail_query(db, pairs)
 
@@ -251,7 +253,7 @@ async def get_grouped_alerts(
             Classification.text,
         )
 
-        alerts = alerts_query.all()
+        alerts = db.execute(alerts_query).all()
 
         alerts_map = process_grouped_alerts_details(alerts)
 
@@ -283,49 +285,47 @@ async def get_alert_detail(
 ) -> AlertDetail:
     """Get detailed information about a specific alert."""
     try:
-        alert_exists = db.query(Alert._ident).filter(Alert._ident == alert_id).first()
+        alert_exists = db.execute(select(Alert._ident).where(Alert._ident == alert_id)).scalar_one_or_none()
         if not alert_exists:
             raise HTTPException(status_code=404, detail="Alert not found")
 
         queries = build_alert_detail_query(db, alert_id)
 
-        alert = queries["base"].first()
-        source_info = queries["source_info"].first()
-        source_addresses = queries["source_addresses"].all()
-        target_info = queries["target_info"].first()
-        target_addresses = queries["target_addresses"].all()
-        analyzers_query = queries["analyzers"].all()
-        references = queries["references"].all()
-        services = queries["services"].all()
-        web_services = queries["web_services"].all()
-        alert_idents = queries["alert_idents"].all()
-        add_data_rows = queries["additional_data"].all()
+        alert = db.execute(queries["base"]).first()
+        source_info = db.execute(queries["source_info"]).first()
+        source_addresses = db.execute(queries["source_addresses"]).scalars().all()
+        target_info = db.execute(queries["target_info"]).first()
+        target_addresses = db.execute(queries["target_addresses"]).scalars().all()
+        analyzers_query = db.execute(queries["analyzers"]).all()
+        references = db.execute(queries["references"]).scalars().all()
+        services = db.execute(queries["services"]).scalars().all()
+        web_services = db.execute(queries["web_services"]).scalars().all()
+        alert_idents = db.execute(queries["alert_idents"]).scalars().all()
+        add_data_rows = db.execute(queries["additional_data"]).scalars().all()
 
         additional_data = process_additional_data(add_data_rows, truncate_payload)
 
         analyzers_info = []
         for analyzer in analyzers_query:
-            process_args = (
-                db.query(ProcessArg.arg)
-                .filter(
+            process_args = db.execute(
+                select(ProcessArg.arg)
+                .where(
                     ProcessArg._message_ident == alert_id,
                     ProcessArg._parent_type == "A",
                     ProcessArg._parent0_index == analyzer[0]._index,
                 )
                 .order_by(ProcessArg._index)
-                .all()
-            )
+            ).scalars().all()
 
-            process_env = (
-                db.query(ProcessEnv.env)
-                .filter(
+            process_env = db.execute(
+                select(ProcessEnv.env)
+                .where(
                     ProcessEnv._message_ident == alert_id,
                     ProcessEnv._parent_type == "A",
                     ProcessEnv._parent0_index == analyzer[0]._index,
                 )
                 .order_by(ProcessEnv._index)
-                .all()
-            )
+            ).scalars().all()
 
             node_info = build_node_info(analyzer[1]) if analyzer[1] else None
 
@@ -514,7 +514,7 @@ async def delete_alert(
 ) -> dict:
     """Delete a specific alert and all its related data."""
     try:
-        alert = db.query(Alert).filter(Alert._ident == alert_id).first()
+        alert = db.execute(select(Alert).where(Alert._ident == alert_id)).scalar_one_or_none()
         if not alert:
             raise HTTPException(status_code=404, detail="Alert not found")
 
@@ -541,15 +541,15 @@ async def delete_alert(
             Assessment,
         ]
 
-        # synchronize_session=False improves delete performance
+        # Use SQLAlchemy v2 delete syntax
+        from sqlalchemy import delete
+        
         for table in related_tables:
-            db.query(table).filter(table._message_ident == alert_id).delete(
-                synchronize_session=False
-            )
+            stmt = delete(table).where(table._message_ident == alert_id)
+            db.execute(stmt)
 
-        db.query(Alert).filter(Alert._ident == alert_id).delete(
-            synchronize_session=False
-        )
+        stmt = delete(Alert).where(Alert._ident == alert_id)
+        db.execute(stmt)
 
         db.commit()
 

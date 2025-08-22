@@ -7,7 +7,10 @@ import csv
 from io import StringIO
 from enum import Enum
 
-from app.database.config import get_prelude_db, apply_standard_alert_filters
+from app.database.config import (
+    get_prelude_db, 
+    apply_standard_alert_filters,
+)
 from app.database.query_builders import build_alert_base_query
 from app.core.datetime_utils import ensure_timezone, get_current_time
 from app.models.prelude import (
@@ -16,8 +19,6 @@ from app.models.prelude import (
     Classification,
     DetectTime,
     Analyzer,
-    Node,
-    CreateTime,
 )
 from ..routes.auth import get_current_user
 
@@ -59,23 +60,24 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
 
     # Write data rows one by one
     for row in results:
-        # Format datetime values using the helper function
-        detect_time_str = format_iso_datetime(row.detect_time)
-        create_time_str = format_iso_datetime(row.create_time)
+        # In SQLAlchemy 2.0 with labeled columns, we can access by attribute name
+        # The labels we set in the query: detect_time, create_time, classification_text, etc.
+        detect_time_str = format_iso_datetime(getattr(row, 'detect_time', None))
+        create_time_str = format_iso_datetime(getattr(row, 'create_time', None))
 
         writer.writerow(
             [
-                row._ident,
-                row.messageid,
+                str(row[0]),  # _ident (first column) - ensure it's a string
+                row[1],  # messageid (second column)
                 detect_time_str,
                 create_time_str,
-                row.classification_text or "",
-                row.severity or "",
-                row.source_ipv4 or "",
-                row.target_ipv4 or "",
-                row.analyzer_name or "",
-                row.analyzer_host or "",
-                row.analyzer_model or "",
+                getattr(row, 'classification_text', "") or "",
+                getattr(row, 'severity', "") or "",
+                getattr(row, 'source_ipv4', "") or "",
+                getattr(row, 'target_ipv4', "") or "",
+                getattr(row, 'analyzer_name', "") or "",
+                getattr(row, 'analyzer_host', "") or "",
+                getattr(row, 'analyzer_model', "") or "",
             ]
         )
         yield output.getvalue()
@@ -128,42 +130,10 @@ async def export_alerts(
             status_code=501, detail=f"Export format '{format}' is not yet supported"
         )
 
-    # Get base query from query builder
+    # Get base query from query builder - this already has all the fields we need!
     query, models = build_alert_base_query(db)
 
-    # Modify the query to select only the fields we need for export
-    query = query.with_entities(
-        Alert._ident,
-        Alert.messageid,
-        DetectTime.time.label("detect_time"),
-        CreateTime.time.label("create_time"),
-        Classification.text.label("classification_text"),
-        Impact.severity,
-        models["source_addr"].address.label("source_ipv4"),
-        models["target_addr"].address.label("target_ipv4"),
-        Analyzer.name.label("analyzer_name"),
-        Node.name.label("analyzer_host"),
-        Analyzer.model.label("analyzer_model"),
-    ).group_by(Alert._ident)
-
-    # Apply standard filters - explicitly pass model classes for filtering
-    query = apply_standard_alert_filters(
-        query=query,
-        severity=severity,
-        classification=classification,
-        start_date=start_date,
-        end_date=end_date,
-        source_ip=source_ip,
-        target_ip=target_ip,
-        analyzer_model=analyzer_model,
-        **models,
-        Impact=Impact,
-        Classification=Classification,
-        DetectTime=DetectTime,
-        Analyzer=Analyzer,
-    )
-
-    # Apply additional filter for alert IDs
+    # Apply additional filter for alert IDs FIRST (before other filters)
     if alert_ids:
         # Convert to list if it's not already
         if not isinstance(alert_ids, list):
@@ -177,13 +147,39 @@ async def export_alerts(
                 # Skip invalid IDs
                 continue
         if alert_id_ints:
-            query = query.filter(Alert._ident.in_(alert_id_ints))
+            query = query.where(Alert._ident.in_(alert_id_ints))
+    
+    # Only apply other filters if we're not filtering by specific alert IDs
+    # This ensures we get all requested alerts even if they lack some joined data
+    if not alert_ids:
+        # Apply standard filters - explicitly pass model classes for filtering
+        query = apply_standard_alert_filters(
+            query=query,
+            severity=severity,
+            classification=classification,
+            start_date=start_date,
+            end_date=end_date,
+            source_ip=source_ip,
+            target_ip=target_ip,
+            analyzer_model=analyzer_model,
+            **models,
+            Impact=Impact,
+            Classification=Classification,
+            DetectTime=DetectTime,
+            Analyzer=Analyzer,
+        )
 
-    # Order by detect time descending
-    query = query.order_by(DetectTime.time.desc())
-
-    # Use yield_per to fetch rows in batches instead of loading all at once
-    results = query.yield_per(1000)
+    # Order by alert ID descending and add limit for safety
+    # We can't reliably order by DetectTime.time since it might be NULL for some alerts
+    query = query.order_by(Alert._ident.desc()).limit(50000)
+    
+    # Use SQLAlchemy 2.0 execution options for streaming
+    # yield_per enables server-side cursors and limits buffer size
+    # We use partitions() to ensure the cursor is properly managed
+    query = query.execution_options(yield_per=1000)
+    
+    # Execute the query - returns a Result object that can be iterated
+    results = db.execute(query)
 
     # Define CSV header row - match the exact order expected by tests
     header = [

@@ -72,7 +72,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
-  'update:success': []
+  updateSuccess: []
 }>()
 
 // Dialog state
@@ -111,7 +111,7 @@ const onSubmit = async (values: any, { setFieldError }: any) => {
     })
 
     // Emit success event (parent will handle session refresh)
-    emit('update:success')
+    emit('updateSuccess')
     
     // Close dialog
     isOpen.value = false

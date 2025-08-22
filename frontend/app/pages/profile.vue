@@ -9,9 +9,9 @@
           <ProfileEditDialog 
             v-if="user" 
             :user="user" 
-            @update:success="handleProfileUpdate"
+            @update-success="handleProfileUpdate"
           />
-          <ProfileChangePasswordDialog @update:success="handlePasswordChanged" />
+          <ProfileChangePasswordDialog @update-success="handlePasswordChanged" />
         </div>
       </CardHeader>
       <CardContent>
