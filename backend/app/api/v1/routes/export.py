@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 from typing import Optional, Iterator
 from datetime import datetime, timedelta
 import csv
@@ -11,10 +10,6 @@ from enum import Enum
 from app.database.config import (
     get_prelude_db, 
     apply_standard_alert_filters,
-    get_source_address_join_conditions,
-    get_target_address_join_conditions,
-    get_node_join_conditions,
-    get_analyzer_join_conditions,
 )
 from app.database.query_builders import build_alert_base_query
 from app.core.datetime_utils import ensure_timezone, get_current_time
@@ -24,8 +19,6 @@ from app.models.prelude import (
     Classification,
     DetectTime,
     Analyzer,
-    Node,
-    CreateTime,
 )
 from ..routes.auth import get_current_user
 

@@ -104,7 +104,7 @@ async def timeline_heartbeats(
     timeline_query = build_heartbeats_timeline_query(db, start_time)
 
     count_subquery = timeline_query.subquery()
-    total_count = db.scalar(select(func.count()).select_from(count_subquery))
+    total_count = db.scalar(select(func.count()).select_from(count_subquery)) or 0
 
     results = db.execute(
         timeline_query.order_by(AnalyzerTime.time.desc())

@@ -7,7 +7,6 @@ the application to reduce code duplication and maintain consistent query pattern
 
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import select, func, and_, literal_column, tuple_, text, case, literal
-from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 import logging
 
