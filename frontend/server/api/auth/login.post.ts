@@ -10,7 +10,10 @@ export default defineEventHandler(async (event) => {
   try {
     const tokens = await $fetch<{ access_token: string }>(`${apiBase}/api/v1/auth/token`, {
       method: 'POST',
-      body: new URLSearchParams({ username, password }),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ username, password }).toString(),
     })
 
     const accessToken = tokens.access_token
