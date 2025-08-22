@@ -69,8 +69,8 @@ async def get_timeline(
 
         timeline_query = build_alerts_timeline_query(db, date_format)
 
-        timeline_query = timeline_query.filter(DetectTime.time >= start_date)
-        timeline_query = timeline_query.filter(DetectTime.time <= end_date)
+        timeline_query = timeline_query.where(DetectTime.time >= start_date)
+        timeline_query = timeline_query.where(DetectTime.time <= end_date)
 
         timeline_query = apply_standard_alert_filters(
             query=timeline_query,
@@ -83,15 +83,14 @@ async def get_timeline(
         )
 
         if analyzer_name:
-            timeline_query = timeline_query.filter(Analyzer.name == analyzer_name)
+            timeline_query = timeline_query.where(Analyzer.name == analyzer_name)
 
-        results = (
+        results = db.execute(
             timeline_query.group_by(
                 text("time_bucket"), Impact.severity, Classification.text, Analyzer.name
             )
             .order_by(text("time_bucket"))
-            .all()
-        )
+        ).all()
 
         timeline_data = {}
         for result in results:
@@ -159,29 +158,33 @@ async def get_statistics_summary(
     query = build_alerts_statistics_query(db, start_date, end_date)
 
     try:
-        total_alerts = query["base"].distinct().count()
+        from sqlalchemy import func, select
+        
+        # Count total alerts
+        base_subquery = query["base"].distinct().subquery()
+        total_alerts = db.scalar(select(func.count()).select_from(base_subquery)) or 0
 
-        alerts_by_severity = query["severity"].all()
+        alerts_by_severity = db.execute(query["severity"]).all()
         severity_distribution = {
             severity: count for severity, count in alerts_by_severity if severity
         }
 
-        alerts_by_classification = query["classification"].all()
+        alerts_by_classification = db.execute(query["classification"]).all()
         classification_distribution = {
             classification: count
             for classification, count in alerts_by_classification
             if classification
         }
 
-        alerts_by_analyzer = query["analyzer"].all()
+        alerts_by_analyzer = db.execute(query["analyzer"]).all()
         analyzer_distribution = {
             analyzer: count for analyzer, count in alerts_by_analyzer if analyzer
         }
 
-        alerts_by_source_ip = query["source_ip"].all()
+        alerts_by_source_ip = db.execute(query["source_ip"]).all()
         source_ip_distribution = {ip: count for ip, count in alerts_by_source_ip if ip}
 
-        alerts_by_target_ip = query["target_ip"].all()
+        alerts_by_target_ip = db.execute(query["target_ip"]).all()
         target_ip_distribution = {ip: count for ip, count in alerts_by_target_ip if ip}
 
         return StatisticsSummary(
