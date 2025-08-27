@@ -1,6 +1,6 @@
-# Prelude SIEM API
+# Prelude IDS API
 
-A FastAPI-based REST API for accessing Prelude IDS/SIEM data with user management and authentication. This API provides comprehensive access to security alerts and related information from your Prelude SIEM system.
+A FastAPI-based REST API for accessing Prelude IDS data with user management and authentication. This API provides comprehensive access to security alerts and related information from your Prelude IDS.
 
 ## Features
 
@@ -125,10 +125,10 @@ app/
 │   ├── request_tracking.py # Request ID and logging middleware
 │   └── setup.py           # Centralized middleware configuration
 ├── models/               
-│   ├── prelude.py         # SQLAlchemy models for SIEM (reflected via automap)
+│   ├── prelude.py         # SQLAlchemy models for IDS (reflected via automap)
 │   └── users.py           # User models
 ├── schemas/              
-│   ├── prelude.py         # SIEM Pydantic models
+│   ├── prelude.py         # IDS Pydantic models
 │   └── users.py           # User Pydantic models
 ├── services/             
 │   ├── users.py           # Business logic for user operations
@@ -140,7 +140,7 @@ app/
 
 The application uses two separate MySQL databases:
 
-1. **Prelude Database**: Contains all SIEM/IDS data including alerts, heartbeats, and analyzer information. This database is treated as read-only by the API.
+1. **Prelude Database**: Contains all IDS data including alerts, heartbeats, and analyzer information. This database is treated as read-only by the API.
 
 2. **Prebetter Database**: Contains user management data. This database is managed by the API for user authentication and authorization.
 

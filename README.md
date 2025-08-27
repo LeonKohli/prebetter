@@ -1,6 +1,6 @@
-# Prebetter - SIEM Dashboard
+# Prebetter - IDS Dashboard
 
-A modern Security Information and Event Management (SIEM) dashboard that provides a comprehensive interface for monitoring and analyzing security alerts from Prelude IDS/SIEM systems.
+A modern Intrusion Detection System (IDS) dashboard that provides a comprehensive interface for monitoring and analyzing security alerts from Prelude IDS.
 
 ## Overview
 

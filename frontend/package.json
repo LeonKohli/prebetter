@@ -2,7 +2,7 @@
   "name": "prebetter-frontend",
   "private": true,
   "type": "module",
-  "description": "Frontend for Prebetter SIEM Dashboard - A modern Security Information and Event Management system",
+  "description": "Frontend for Prebetter IDS Dashboard - A modern Intrusion Detection System dashboard",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",

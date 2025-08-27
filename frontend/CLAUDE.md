@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Prebetter Frontend Overview
 
-Nuxt 4 SSR application providing a modern SIEM dashboard with secure session-based authentication.
+Nuxt 4 SSR application providing a modern IDS dashboard with secure session-based authentication.
 
 ## Quick Reference
 

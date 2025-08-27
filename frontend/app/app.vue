@@ -11,7 +11,7 @@ const { ready } = useUserSession()
 // Global app configuration with reactive HTML attributes
 useHead({
   titleTemplate: (titleChunk) => {
-    return titleChunk ? `${titleChunk} - Prebetter SIEM` : 'Prebetter SIEM';
+    return titleChunk ? `${titleChunk} - Prebetter IDS` : 'Prebetter IDS';
   },
   htmlAttrs: {
     lang: 'de-DE',

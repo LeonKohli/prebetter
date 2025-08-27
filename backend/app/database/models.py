@@ -1,5 +1,5 @@
 """
-Model conversion utilities for the Prelude SIEM API.
+Model conversion utilities for the Prelude IDS API.
 
 These utilities handle the conversion between database result objects and
 API schema models, providing consistent transformation logic across the application.
