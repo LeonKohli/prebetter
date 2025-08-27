@@ -8,7 +8,7 @@
         <Icon name="lucide:shield-alert" class="h-5 w-5 text-primary" />
         <div class="flex items-baseline space-x-1">
           <span class="font-semibold text-sm tracking-tight">Prebetter</span>
-          <span class="text-xs text-muted-foreground hidden lg:inline">SIEM</span>
+          <span class="text-xs text-muted-foreground hidden lg:inline">IDS</span>
         </div>
       </NuxtLink>
 

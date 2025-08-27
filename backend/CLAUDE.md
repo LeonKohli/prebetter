@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Prebetter Backend Overview
 
-FastAPI-based REST API serving Prelude IDS/SIEM data with JWT authentication and user management.
+FastAPI-based REST API serving Prelude IDS data with JWT authentication and user management.
 
 ## Quick Reference
 
@@ -27,7 +27,7 @@ open http://localhost:8000/api/v1/docs
 ## Architecture Overview
 
 ### Dual Database System
-- **Prelude DB**: Read-only SIEM/IDS data (alerts, analyzers, heartbeats) - contains the security event data
+- **Prelude DB**: Read-only IDS data (alerts, analyzers, heartbeats) - contains the security event data
 - **Prebetter DB**: User management and authentication data - managed by the API
 - Both use MySQL with SQLAlchemy ORM and connection pooling (pool_size=5, max_overflow=10)
 

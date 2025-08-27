@@ -13,16 +13,21 @@ export default defineNuxtConfig({
     'nuxt-auth-utils',
   ],
   runtimeConfig: {
-    apiBase: 'http://10.129.9.60:8000',
+    apiBase: process.env.API_BASE_URL || 'http://localhost:8000',
     session: {
       maxAge: 60 * 60, // 60 minutes
       password: process.env.NUXT_SESSION_PASSWORD || '',
+      cookie: {
+        secure: process.env.NODE_ENV === 'production' && !process.env.DISABLE_SECURE_COOKIES,
+        httpOnly: true,
+        sameSite: 'lax'
+      }
     },
   },
   // Basic SEO site configuration
   site: {
-    name: 'Prebetter SIEM Dashboard',
-    description: 'A modern Security Information and Event Management dashboard for Prelude IDS',
+    name: 'Prebetter IDS Dashboard',
+    description: 'A modern Intrusion Detection System dashboard for Prelude IDS',
     defaultLocale: 'de',
   },
   css: ['~/assets/css/main.css'],
