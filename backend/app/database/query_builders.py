@@ -1,5 +1,5 @@
 """
-Query builder functions for the Prelude SIEM API.
+Query builder functions for the Prelude IDS API.
 
 These functions build reusable SQLAlchemy queries that can be used throughout
 the application to reduce code duplication and maintain consistent query patterns.
