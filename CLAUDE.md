@@ -10,13 +10,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Prebetter** is a modern Security Information and Event Management (SIEM) dashboard that provides real-time security alert monitoring and analysis through a web-based interface.
+**Prebetter** is a modern Intrusion Detection System (IDS) dashboard that provides real-time security alert monitoring and analysis through a web-based interface for Prelude IDS.
 
 ## Architecture Overview
 
-- **Backend**: FastAPI REST API serving Prelude IDS/SIEM data with JWT authentication
+- **Backend**: FastAPI REST API serving Prelude IDS data with JWT authentication
 - **Frontend**: Nuxt 3 SPA with server-side rendering and session-based authentication
-- **Database**: Dual MySQL system (Prelude DB for SIEM data, Prebetter DB for users)
+- **Database**: Dual MySQL system (Prelude DB for IDS data, Prebetter DB for users)
 - **Authentication**: JWT tokens stored in secure server-side sessions
 
 ## Project Structure

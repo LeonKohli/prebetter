@@ -8,9 +8,9 @@
       <div v-else>
         <Card>
           <CardHeader>
-            <CardTitle>Welcome to Prebetter SIEM</CardTitle>
+            <CardTitle>Welcome to Prebetter IDS</CardTitle>
             <CardDescription>
-              Security Information and Event Management Dashboard
+              Intrusion Detection System Dashboard
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -38,7 +38,7 @@ definePageMeta({
 })
 
 useSeoMeta({
-  title: 'Security Alerts - Prebetter SIEM',
+  title: 'Security Alerts - Prebetter IDS',
   description: 'Real-time security alert monitoring and analysis dashboard',
 })
 </script>

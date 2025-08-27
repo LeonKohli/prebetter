@@ -1,7 +1,7 @@
 # Nuxt Frontend Codebase Discovery Report
 
 ## Executive Summary
-This report analyzes the Prebetter SIEM dashboard frontend, built with Nuxt 4.0.2 and Vue 3.5.18. The codebase demonstrates modern Vue 3 patterns with extensive use of Composition API, TypeScript, and a well-structured component architecture based on shadcn-vue UI components.
+This report analyzes the Prebetter IDS dashboard frontend, built with Nuxt 4.0.2 and Vue 3.5.18. The codebase demonstrates modern Vue 3 patterns with extensive use of Composition API, TypeScript, and a well-structured component architecture based on shadcn-vue UI components.
 
 ## Vue 3 Usage Patterns
 
@@ -209,4 +209,4 @@ The codebase shows some deviations from the recommended import order:
 
 ## Conclusion
 
-The Prebetter frontend demonstrates solid modern Vue 3 and Nuxt 4 practices with room for organizational improvements. The codebase is well-structured for a SIEM dashboard with good security practices and performance considerations. The main opportunities lie in better import organization, increased composable usage, and testing implementation.
+The Prebetter frontend demonstrates solid modern Vue 3 and Nuxt 4 practices with room for organizational improvements. The codebase is well-structured for an IDS dashboard with good security practices and performance considerations. The main opportunities lie in better import organization, increased composable usage, and testing implementation.

@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 description = """
-API for accessing and managing Prelude SIEM/IDS data with comprehensive security alert management. 🚀
+API for accessing and managing Prelude IDS data with comprehensive security alert management. 🚀
 
 ## Key Features
 
@@ -63,7 +63,7 @@ You can:
 ## Databases
 
 We connect to:
-* **Prelude DB** - For SIEM/IDS data
+* **Prelude DB** - For IDS data
 * **Prebetter DB** - For auth and users
 
 See the docs below for detailed API reference.
@@ -72,7 +72,7 @@ See the docs below for detailed API reference.
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description=description,
-    summary="Comprehensive SIEM/IDS data management API",
+    summary="Comprehensive IDS data management API",
     version=settings.VERSION,
     lifespan=lifespan,
     license_info={

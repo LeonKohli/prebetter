@@ -4,7 +4,7 @@
       <CardHeader>
         <CardTitle>Login to Prebetter</CardTitle>
         <CardDescription>
-          Enter your credentials to access the SIEM dashboard
+          Enter your credentials to access the IDS dashboard
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -59,7 +59,7 @@ async function handleLogin() {
   loading.value = true
   
   try {
-    await $fetch('/api/auth/login', {
+    const result = await $fetch('/api/auth/login', {
       method: 'POST',
       body: {
         username: username.value,
@@ -67,12 +67,21 @@ async function handleLogin() {
       },
     })
     
+    console.log('Login successful:', result)
+    
     // Refetch the session to update the UI
     await session.fetch()
+    
+    console.log('Session fetched, redirecting...')
 
     // Redirect to original page or dashboard
     const redirect = route.query.redirect as string || '/'
-    await navigateTo(redirect)
+    console.log('Redirecting to:', redirect)
+    
+    // Use window.location as fallback if navigateTo fails
+    await navigateTo(redirect).catch(() => {
+      window.location.href = redirect
+    })
   } catch (error: any) {
     console.error('Login error:', error)
   } finally {
