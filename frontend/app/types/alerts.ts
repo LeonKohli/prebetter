@@ -95,3 +95,73 @@ export interface FlattenedGroupedAlert extends GroupedAlertDetail {
   isLastInGroup: boolean
   groupSize: number
 }
+
+// Additional types for alert details
+export interface WebServiceInfo {
+  url?: string
+  cgi?: string
+  http_method?: string
+}
+
+export interface AlertIdentInfo {
+  alertident?: string
+  analyzerid?: string
+}
+
+export interface ReferenceInfo {
+  origin?: string
+  name?: string
+  url?: string
+  meaning?: string
+}
+
+export interface ServiceInfo {
+  port?: number
+  protocol?: string
+  direction: string
+  ip_version?: number
+  name?: string
+  iana_protocol_number?: number
+  iana_protocol_name?: string
+  portlist?: string
+  ident?: string
+}
+
+export interface NetworkInfo {
+  interface?: string
+  category?: string
+  address?: string
+  netmask?: string
+  vlan_name?: string
+  vlan_num?: number
+  ident?: string
+  ip_version?: number
+  ip_hlen?: number
+  protocol?: string
+  protocol_number?: number
+  node?: NodeInfo
+  heartbeat_process?: ProcessInfo
+  addresses: string[]
+}
+
+// Comprehensive alert detail from backend
+export interface AlertDetail {
+  id: string
+  message_id: string
+  created_at?: TimeInfo
+  detected_at: TimeInfo
+  classification_text?: string
+  classification_ident?: string
+  severity?: string
+  description?: string
+  completion?: string
+  impact_type?: string
+  source?: NetworkInfo
+  target?: NetworkInfo
+  analyzers: AnalyzerInfo[]
+  references: ReferenceInfo[]
+  services: ServiceInfo[]
+  web_services: WebServiceInfo[]
+  alert_idents: AlertIdentInfo[]
+  additional_data: Record<string, any>
+}

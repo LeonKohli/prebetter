@@ -41,6 +41,13 @@ export const useAlertTableColumns = () => {
     }, () => [label, h(SortIcon, { class: iconClass })])
   }
 
+  // Helper to handle view details action
+  const handleViewDetails = (alertId: string) => {
+    // This will be handled by the parent component
+    const event = new CustomEvent('viewAlertDetails', { detail: { alertId } })
+    window.dispatchEvent(event)
+  }
+
   const groupedColumns: ColumnDef<FlattenedGroupedAlert>[] = [
     {
       accessorKey: 'count',
@@ -125,6 +132,7 @@ export const useAlertTableColumns = () => {
       cell: ({ row }) => h(AlertActions, {
         alert: row.original,
         isGrouped: true,
+        onViewDetails: handleViewDetails
       }),
     },
   ]
@@ -227,6 +235,7 @@ export const useAlertTableColumns = () => {
       cell: ({ row }) => h(AlertActions, {
         alert: row.original,
         isGrouped: false,
+        onViewDetails: handleViewDetails
       }),
     },
   ]

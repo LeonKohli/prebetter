@@ -97,11 +97,16 @@ def grouped_alert_to_response(
     )
 
 
-def process_grouped_alerts_details(alerts):
-    """Process alert results into a grouped alerts map."""
+def process_grouped_alerts_details(alerts, max_limit=1000):
+    """Process alert results into a grouped alerts map with a maximum limit."""
     alerts_map = {}
+    processed_count = 0
 
     for a in alerts:
+        # Stop processing if we've reached the limit
+        if processed_count >= max_limit:
+            break
+            
         key = (a.source_ipv4, a.target_ipv4)
         if key not in alerts_map:
             alerts_map[key] = []
@@ -127,6 +132,7 @@ def process_grouped_alerts_details(alerts):
                     detected_at=a.latest_time,
                 )
             )
+            processed_count += 1
 
     return alerts_map
 

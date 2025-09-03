@@ -18,6 +18,7 @@ import { useIntervalFn, useDocumentVisibility, watchDebounced } from '@vueuse/co
 import { valueUpdater } from '@/utils/utils'
 import { applyDefaultDateFilters } from '@/utils/dateHelpers'
 import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
+import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
 
 // URL state synchronization with proper browser navigation
 const router = useRouter()
@@ -33,6 +34,10 @@ const urlState = useNavigableUrlState({
 
 // Track if we're changing views to show appropriate loading state
 const isChangingView = ref(false)
+
+// Alert details dialog state
+const detailsDialogOpen = ref(false)
+const selectedAlertId = ref<string | null>(null)
 
 // Handle navigation to filtered view when clicking on a classification
 function handleViewAlertDetails(details: { sourceIp: string; targetIp: string; classification: string }) {
@@ -356,16 +361,28 @@ provideAlertTableContext({
   pending
 })
 
+// Handle view details event from AlertActions
+function handleViewDetailsEvent(event: CustomEvent) {
+  selectedAlertId.value = event.detail.alertId
+  detailsDialogOpen.value = true
+}
+
 // Start auto-refresh on mount
 onMounted(() => {
   if (autoRefreshEnabled.value) {
     startAutoRefresh()
   }
+  
+  // Listen for view details events
+  window.addEventListener('viewAlertDetails', handleViewDetailsEvent as EventListener)
 })
 
 // Cleanup on unmount
 onUnmounted(() => {
   stopAutoRefresh()
+  
+  // Remove event listener
+  window.removeEventListener('viewAlertDetails', handleViewDetailsEvent as EventListener)
 })
 </script>
 
@@ -500,6 +517,12 @@ onUnmounted(() => {
         </Button>
       </div>
     </div>
+    
+    <!-- Alert Details Dialog -->
+    <AlertDetailsDialog 
+      v-model:open="detailsDialogOpen"
+      :alert-id="selectedAlertId"
+    />
   </div>
 </template>
 
