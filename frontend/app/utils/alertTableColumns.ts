@@ -1,5 +1,5 @@
 import type { ColumnDef, Column } from '@tanstack/vue-table'
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
+import { Icon } from '#components'
 import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert } from '@/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
 import { Button } from '@/components/ui/button'
@@ -16,11 +16,11 @@ export const useAlertTableColumns = () => {
     const isDescending = sortState === 'desc'
     
     // Determine which icon to show based on state
-    const SortIcon = isAscending 
-      ? ArrowUp 
-      : isDescending 
-        ? ArrowDown 
-        : ArrowUpDown
+    const iconName = isAscending
+      ? 'lucide:arrow-up'
+      : isDescending
+        ? 'lucide:arrow-down'
+        : 'lucide:arrow-up-down'
     
     // Computed styling based on sort state
     const iconClass = isActive 
@@ -38,7 +38,7 @@ export const useAlertTableColumns = () => {
       class: buttonClass,
       'aria-label': `Sort by ${label} ${isAscending ? 'descending' : 'ascending'}`,
       'aria-sort': isAscending ? 'ascending' : isDescending ? 'descending' : 'none'
-    }, () => [label, h(SortIcon, { class: iconClass })])
+    }, () => [label, h(Icon, { name: iconName, class: iconClass })])
   }
 
   // Helper to handle view details action
