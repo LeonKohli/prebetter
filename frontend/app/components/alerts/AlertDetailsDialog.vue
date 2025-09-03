@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { AlertDetail } from '@/types/alerts'
-import { Copy, ExternalLink, Shield, Network, Server, Clock, AlertTriangle, FileText, Globe } from 'lucide-vue-next'
 
 const props = defineProps<{
   alertId?: string | null
@@ -53,8 +52,14 @@ async function fetchAlertDetails(id: string) {
 }
 
 // Helper functions
-function copyToClipboard(text: string) {
+const copied = reactive<Record<string, boolean>>({})
+
+function copyWithFeedback(key: string, text: string) {
   navigator.clipboard.writeText(text)
+  copied[key] = true
+  window.setTimeout(() => {
+    copied[key] = false
+  }, 1500)
 }
 
 function formatTimestamp(timestamp: string | Date): string {
@@ -89,6 +94,26 @@ function getSeverityPillClass(severity?: string): string {
   }
   return map[s ?? ''] || map.low
 }
+
+function isHttpLikePayload(key: string, value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  const k = key.toLowerCase()
+  if (k.includes('payload') || k.includes('headers')) return true
+  return /HTTP\/\d\.\d|\b(GET|POST|PUT|DELETE|HEAD|PATCH)\s+\S+\s+HTTP\/\d\.\d|\bUser-Agent:|\bHost:|\bAccept:/i.test(value)
+}
+
+function formatHttpLikePayload(raw: string): string {
+  let str = String(raw).trim()
+  // Ensure a line break after the request line if present
+  str = str.replace(/(HTTP\/\d\.\d)(\s+)/, '$1\n')
+  // Insert a newline before HTTP method tokens if glued to a prefix (e.g., "payloadGET")
+  str = str.replace(/(\w)(\b(GET|POST|PUT|DELETE|HEAD|PATCH)\s+)/g, '$1\n$2')
+  // Start new lines before headers like "Key: value"
+  str = str.replace(/\s([A-Za-z0-9_-]+):\s/g, '\n$1: ')
+  // Normalize multiple spaces
+  str = str.replace(/\n\s+/g, '\n')
+  return str
+}
 </script>
 
 <template>
@@ -96,7 +121,7 @@ function getSeverityPillClass(severity?: string): string {
     <DialogContent class="w-[min(100vw-2rem,1200px)] sm:max-w-5xl md:max-w-6xl max-h-[85vh] overflow-hidden flex flex-col">
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
-          <Shield class="h-5 w-5 text-primary" />
+          <Icon name="lucide:shield" class="h-5 w-5 text-primary" />
           Alert Details
           <span v-if="alertData" class="text-sm text-muted-foreground ml-2">
             #{{ alertData.id }}
@@ -109,44 +134,48 @@ function getSeverityPillClass(severity?: string): string {
 
       <div class="flex-1 overflow-y-auto">
         <!-- Compact summary bar -->
-        <div v-if="alertData" class="rounded-md border bg-muted/30 px-4 py-3 mb-4">
+        <div v-if="alertData" class="rounded-md border px-4 py-3 mb-4">
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div class="flex items-center gap-2 min-w-0">
               <span class="text-xs text-muted-foreground">Severity</span>
               <span :class="getSeverityPillClass(alertData.severity)">{{ alertData.severity?.toUpperCase() || 'UNKNOWN' }}</span>
             </div>
             <div class="flex items-center gap-2 min-w-0">
-              <Clock class="h-4 w-4 text-muted-foreground" />
+              <Icon name="lucide:clock" class="h-4 w-4 text-muted-foreground" />
               <span class="truncate text-sm" :title="formatTimestamp(alertData.detected_at.timestamp)">
                 {{ formatTimestamp(alertData.detected_at.timestamp) }}
               </span>
             </div>
             <div class="flex items-center gap-2 min-w-0">
-              <Network class="h-4 w-4 text-muted-foreground" />
-              <span class="text-xs text-muted-foreground">Src</span>
-              <span class="font-mono text-sm truncate" :title="alertData.source?.address || 'Unknown'">
+              <Icon name="lucide:globe" class="h-4 w-4 text-muted-foreground" />
+              <span class="text-xs text-muted-foreground">Path</span>
+              <span class="font-mono text-sm truncate" :title="`${alertData.source?.address || 'Unknown'} -> ${alertData.target?.address || 'Unknown'}`">
                 {{ alertData.source?.address || 'Unknown' }}
               </span>
-            </div>
-            <div class="flex items-center gap-2 min-w-0">
-              <Network class="h-4 w-4 text-muted-foreground" />
-              <span class="text-xs text-muted-foreground">Dst</span>
+              <Icon name="lucide:arrow-right" class="h-4 w-4 text-muted-foreground shrink-0" />
               <span class="font-mono text-sm truncate" :title="alertData.target?.address || 'Unknown'">
                 {{ alertData.target?.address || 'Unknown' }}
               </span>
             </div>
             <div class="flex items-center gap-2 min-w-0 sm:col-span-2 lg:col-span-1">
               <span class="text-xs text-muted-foreground">Message</span>
-              <span class="font-mono text-sm break-all">{{ alertData.message_id }}</span>
+              <span class="font-mono text-sm truncate" :title="alertData.message_id">{{ alertData.message_id }}</span>
               <Button
                 variant="ghost"
                 size="sm"
                 class="h-6 w-6 p-0 shrink-0"
-                @click="copyToClipboard(alertData.message_id)"
-                :title="'Copy message id'"
+                aria-label="Copy message id"
+                @click="copyWithFeedback('msg-summary', alertData.message_id)"
               >
-                <Copy class="h-3 w-3" />
+                <Icon v-if="copied['msg-summary']" name="lucide:check" class="h-3 w-3 text-primary" />
+                <Icon v-else name="lucide:copy" class="h-3 w-3" />
               </Button>
+            </div>
+            <div class="flex items-center gap-2 min-w-0 sm:col-span-2 lg:col-span-3">
+              <span class="text-xs text-muted-foreground">Classification</span>
+              <span class="text-sm font-medium truncate" :title="alertData.classification_text || 'N/A'">
+                {{ alertData.classification_text || 'N/A' }}
+              </span>
             </div>
           </div>
         </div>
@@ -161,7 +190,7 @@ function getSeverityPillClass(severity?: string): string {
         <!-- Error state -->
         <div v-else-if="error" class="flex items-center justify-center py-8">
           <div class="text-center space-y-4">
-            <AlertTriangle class="h-12 w-12 text-destructive mx-auto" />
+            <Icon name="lucide:alert-triangle" class="h-12 w-12 text-destructive mx-auto" />
             <p class="text-sm text-destructive">{{ error }}</p>
           </div>
         </div>
@@ -170,7 +199,7 @@ function getSeverityPillClass(severity?: string): string {
         <div v-else-if="alertData" class="space-y-6">
           <!-- Tabs for different sections -->
           <Tabs v-model:model-value="activeTab" class="w-full">
-            <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+            <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 sticky top-0 z-10 bg-background border-b">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="network">Network</TabsTrigger>
               <TabsTrigger value="analyzers">Analyzers</TabsTrigger>
@@ -198,16 +227,17 @@ function getSeverityPillClass(severity?: string): string {
 
                       <span class="text-muted-foreground">Message ID</span>
                       <span class="flex items-center gap-1 min-w-0">
-                        <span class="font-mono break-all">{{ alertData.message_id }}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          class="h-6 w-6 p-0 shrink-0"
-                          @click="copyToClipboard(alertData.message_id)"
-                          :title="'Copy message id'"
-                        >
-                          <Copy class="h-3 w-3" />
-                        </Button>
+                      <span class="font-mono break-all">{{ alertData.message_id }}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-6 w-6 p-0 shrink-0"
+                        aria-label="Copy message id"
+                        @click="copyWithFeedback('msg-basic', alertData.message_id)"
+                      >
+                        <Icon v-if="copied['msg-basic']" name="lucide:check" class="h-3 w-3 text-primary" />
+                        <Icon v-else name="lucide:copy" class="h-3 w-3" />
+                      </Button>
                       </span>
                     </div>
                   </CardContent>
@@ -217,7 +247,7 @@ function getSeverityPillClass(severity?: string): string {
                 <Card>
                   <CardHeader class="pb-3">
                     <CardTitle class="text-sm font-medium flex items-center gap-2">
-                      <Clock class="h-4 w-4" />
+                      <Icon name="lucide:clock" class="h-4 w-4" />
                       Timestamps
                     </CardTitle>
                   </CardHeader>
@@ -264,7 +294,7 @@ function getSeverityPillClass(severity?: string): string {
                 <Card>
                   <CardHeader class="pb-3">
                     <CardTitle class="text-sm font-medium flex items-center gap-2">
-                      <Network class="h-4 w-4" />
+                      <Icon name="lucide:globe" class="h-4 w-4" />
                       Source
                     </CardTitle>
                   </CardHeader>
@@ -279,10 +309,11 @@ function getSeverityPillClass(severity?: string): string {
                             variant="ghost"
                             size="sm"
                             class="h-6 w-6 p-0 shrink-0"
-                            @click="copyToClipboard(alertData.source.address)"
-                            :title="'Copy source IP'"
+                            aria-label="Copy source IP"
+                            @click="copyWithFeedback('src-ip', alertData.source.address)"
                           >
-                            <Copy class="h-3 w-3" />
+                            <Icon v-if="copied['src-ip']" name="lucide:check" class="h-3 w-3 text-primary" />
+                            <Icon v-else name="lucide:copy" class="h-3 w-3" />
                           </Button>
                         </span>
 
@@ -310,7 +341,7 @@ function getSeverityPillClass(severity?: string): string {
                 <Card>
                   <CardHeader class="pb-3">
                     <CardTitle class="text-sm font-medium flex items-center gap-2">
-                      <Network class="h-4 w-4" />
+                      <Icon name="lucide:globe" class="h-4 w-4" />
                       Target
                     </CardTitle>
                   </CardHeader>
@@ -325,10 +356,11 @@ function getSeverityPillClass(severity?: string): string {
                             variant="ghost"
                             size="sm"
                             class="h-6 w-6 p-0 shrink-0"
-                            @click="copyToClipboard(alertData.target.address)"
-                            :title="'Copy target IP'"
+                            aria-label="Copy target IP"
+                            @click="copyWithFeedback('tgt-ip', alertData.target.address)"
                           >
-                            <Copy class="h-3 w-3" />
+                            <Icon v-if="copied['tgt-ip']" name="lucide:check" class="h-3 w-3 text-primary" />
+                            <Icon v-else name="lucide:copy" class="h-3 w-3" />
                           </Button>
                         </span>
 
@@ -372,11 +404,12 @@ function getSeverityPillClass(severity?: string): string {
             </TabsContent>
 
             <!-- Analyzers Tab -->
-            <TabsContent value="analyzers" class="space-y-4 mt-4">
+            <TabsContent value="analyzers" class="mt-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card v-for="(analyzer, idx) in alertData.analyzers" :key="idx">
                 <CardHeader class="pb-3">
                   <CardTitle class="text-sm font-medium flex items-center gap-2">
-                    <Server class="h-4 w-4" />
+                    <Icon name="lucide:server" class="h-4 w-4" />
                     {{ analyzer.name }}
                   </CardTitle>
                 </CardHeader>
@@ -418,6 +451,7 @@ function getSeverityPillClass(severity?: string): string {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             </TabsContent>
 
             <!-- References Tab -->
@@ -425,14 +459,14 @@ function getSeverityPillClass(severity?: string): string {
               <Card v-if="alertData.references.length > 0">
                 <CardHeader class="pb-3">
                   <CardTitle class="text-sm font-medium flex items-center gap-2">
-                    <FileText class="h-4 w-4" />
+                    <Icon name="lucide:file-text" class="h-4 w-4" />
                     References
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div class="space-y-2">
                     <div v-for="(ref, idx) in alertData.references" :key="idx" class="flex items-start gap-2">
-                      <ExternalLink class="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <Icon name="lucide:external-link" class="h-4 w-4 mt-0.5 text-muted-foreground" />
                       <div class="flex-1">
                         <a 
                           v-if="ref.url"
@@ -443,15 +477,13 @@ function getSeverityPillClass(severity?: string): string {
                         >
                           {{ ref.name || ref.url }}
                         </a>
-                        <span v-else class="text-sm">{{ ref.name || 'Unknown reference' }}</span>
-                        <span v-if="ref.origin" class="text-sm text-muted-foreground ml-2">
-                          ({{ ref.origin }})
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                         <span v-else class="text-sm">{{ ref.name || 'Unknown reference' }}</span>
+                         <Badge v-if="ref.origin" variant="outline" class="ml-2">{{ ref.origin }}</Badge>
+                       </div>
+                     </div>
+                   </div>
+                 </CardContent>
+               </Card>
               <div v-else class="text-center py-8 text-sm text-muted-foreground">
                 No references available for this alert
               </div>
@@ -460,7 +492,7 @@ function getSeverityPillClass(severity?: string): string {
               <Card v-if="alertData.web_services.length > 0">
                 <CardHeader class="pb-3">
                   <CardTitle class="text-sm font-medium flex items-center gap-2">
-                    <Globe class="h-4 w-4" />
+                    <Icon name="lucide:globe" class="h-4 w-4" />
                     Web Services
                   </CardTitle>
                 </CardHeader>
@@ -496,7 +528,33 @@ function getSeverityPillClass(severity?: string): string {
                   <div v-if="Object.keys(alertData.additional_data).length > 0" class="space-y-2">
                     <div v-for="(value, key) in alertData.additional_data" :key="key" class="grid grid-cols-[180px_1fr] gap-x-4 gap-y-2 text-sm">
                       <span class="font-mono text-muted-foreground break-all">{{ key }}</span>
-                      <span class="break-words">{{ value }}</span>
+                      
+                      <!-- HTTP-like payloads nicely formatted -->
+                      <div v-if="typeof value === 'string' && isHttpLikePayload(key, value)" class="relative">
+                        <pre class="rounded border p-3 text-xs overflow-auto max-h-64 leading-relaxed whitespace-pre-wrap pr-10"><code>{{ formatHttpLikePayload(value) }}</code></pre>
+                        <div class="absolute top-2 right-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            class="h-7 px-2"
+                            aria-label="Copy payload"
+                            @click="copyWithFeedback(`payload-${String(key)}`, formatHttpLikePayload(value))"
+                          >
+                            <Icon v-if="copied[`payload-${String(key)}`]" name="lucide:check" class="h-3.5 w-3.5 text-primary" />
+                            <Icon v-else name="lucide:copy" class="h-3.5 w-3.5" />
+                            <span class="sr-only">Copy payload</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      <!-- Plain strings -->
+                      <span v-else-if="typeof value === 'string'" class="break-words whitespace-pre-wrap">{{ value }}</span>
+
+                      <!-- Objects pretty-printed -->
+                      <pre v-else-if="typeof value === 'object'" class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ JSON.stringify(value, null, 2) }}</code></pre>
+
+                      <!-- Fallback for other primitive types -->
+                      <span v-else class="break-words">{{ String(value) }}</span>
                     </div>
                   </div>
                   <div v-else class="text-sm text-muted-foreground">
@@ -527,7 +585,7 @@ function getSeverityPillClass(severity?: string): string {
         </div>
       </div>
 
-      <DialogFooter class="mt-4">
+      <DialogFooter class="mt-4 border-t pt-4">
         <Button variant="outline" @click="dialogOpen = false">
           Close
         </Button>
