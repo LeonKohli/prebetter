@@ -79,9 +79,11 @@ async function handleLogin() {
     console.log('Redirecting to:', redirect)
     
     // Use window.location as fallback if navigateTo fails
-    await navigateTo(redirect).catch(() => {
+    try {
+      await navigateTo(redirect)
+    } catch {
       window.location.href = redirect
-    })
+    }
   } catch (error: any) {
     console.error('Login error:', error)
   } finally {
