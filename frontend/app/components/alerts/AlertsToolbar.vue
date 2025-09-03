@@ -82,8 +82,8 @@
           class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
           :disabled="pending"
         >
-          <Users v-if="!isGrouped" class="mr-2 h-3.5 w-3.5" />
-          <List v-else class="mr-2 h-3.5 w-3.5" />
+          <Icon v-if="!isGrouped" name="lucide:users" class="mr-2 h-3.5 w-3.5" />
+          <Icon v-else name="lucide:list" class="mr-2 h-3.5 w-3.5" />
           {{ isGrouped ? 'Show Individual' : 'Group by IP' }}
         </Button>
         <template #fallback>
@@ -92,8 +92,8 @@
             size="sm"
             class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
           >
-            <Users v-if="!isGrouped" class="mr-2 h-3.5 w-3.5" />
-            <List v-else class="mr-2 h-3.5 w-3.5" />
+            <Icon v-if="!isGrouped" name="lucide:users" class="mr-2 h-3.5 w-3.5" />
+            <Icon v-else name="lucide:list" class="mr-2 h-3.5 w-3.5" />
             {{ isGrouped ? 'Show Individual' : 'Group by IP' }}
           </Button>
         </template>
@@ -123,7 +123,6 @@
 </template>
 
 <script setup lang="ts">
-import { Users, List } from 'lucide-vue-next'
 import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
 import { useDebounceFn } from '@vueuse/core'
 import { getTodayRange, getLast24HoursRange, isToday } from '@/utils/dateHelpers'
