@@ -157,20 +157,7 @@ function formatHttpLikePayload(raw: string): string {
                 {{ alertData.target?.address || 'Unknown' }}
               </span>
             </div>
-            <div class="flex items-center gap-2 min-w-0 sm:col-span-2 lg:col-span-1">
-              <span class="text-xs text-muted-foreground">Message</span>
-              <span class="font-mono text-sm truncate" :title="alertData.message_id">{{ alertData.message_id }}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-6 w-6 p-0 shrink-0"
-                aria-label="Copy message id"
-                @click="copyWithFeedback('msg-summary', alertData.message_id)"
-              >
-                <Icon v-if="copied['msg-summary']" name="lucide:check" class="h-3 w-3 text-primary" />
-                <Icon v-else name="lucide:copy" class="h-3 w-3" />
-              </Button>
-            </div>
+            
             <div class="flex items-center gap-2 min-w-0 sm:col-span-2 lg:col-span-3">
               <span class="text-xs text-muted-foreground">Classification</span>
               <span class="text-sm font-medium truncate" :title="alertData.classification_text || 'N/A'">
