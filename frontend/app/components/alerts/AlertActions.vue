@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { MoreHorizontal } from 'lucide-vue-next'
 import type { AlertListItem, FlattenedGroupedAlert } from '@/types/alerts'
 
 const props = defineProps<{
@@ -31,7 +30,7 @@ function handleViewDetails() {
     <DropdownMenuTrigger as-child>
       <Button variant="ghost" class="h-8 w-8 p-0">
         <span class="sr-only">Open menu</span>
-        <MoreHorizontal class="h-4 w-4" />
+        <Icon name="lucide:more-horizontal" class="h-4 w-4" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end">
