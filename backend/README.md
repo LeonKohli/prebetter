@@ -20,7 +20,7 @@ A FastAPI-based REST API for accessing Prelude IDS data with user management and
 - **Paginated Alerts Listing:** Browse alerts with rich filtering options.
 - **Detailed Alert Information:** Retrieve comprehensive details including source, target, and analyzer information.
 - **Alert Grouping:** Group alerts by source and target IP addresses.
-- **Payload Access:** View full payload data with an option to truncate for efficiency.
+- **Payload Access:** View full payload data in two representations: readable `readable` and original `original` (base64), without truncation.
 - **Multi-Format Support:** Handles multiple alert formats and protocols.
 
 ### Export Functionality
@@ -258,9 +258,10 @@ The API implements a structured lifecycle management approach:
   - Groups alerts by source and target IP addresses and provides a classification breakdown per group.
 
 - **Alert Detail:** `GET /api/v1/alerts/{alert_id}`
-  - **Query Parameter:**
-    - `truncate_payload`: Boolean flag to truncate the payload data (default: false).
-  - Returns: Detailed alert information including network, analyzer, and (optionally truncated) payload data. Fields include `id`, `message_id`, `created_at`, `detected_at`, etc.
+  - Returns: Detailed alert information including network, analyzer, and full payload data. Fields include `id`, `message_id`, `created_at`, `detected_at`, etc.
+  - Byte-string entries in `additional_data` preserve fidelity with a simple structure:
+    - `readable`: UTF-8 decoded (with replacement for undecodable bytes)
+    - `original`: Base64-encoded original bytes (JSON-safe)
 
 ### Export Alerts
 
@@ -408,7 +409,7 @@ The test suite includes:
 ## Performance Features
 
 - **Optimized Database Queries:** Uses efficient joins with aliases, separate count queries, distinct selections, and proper indexing on key fields.
-- **Efficient Payload Handling:** Supports optional payload truncation.
+- **Efficient Payload Handling:** Preserves raw payload data and provides two representations (readable and original) for analysis.
 - **Error Handling:** Provides specific error messages and robust exception handling.
 - **Database Connection Pooling:** Managed via SQLAlchemy's connection pooling.
 - **Asynchronous Request Handling:** Endpoints are defined as asynchronous functions for improved performance.
@@ -458,7 +459,7 @@ The API implements a layered middleware architecture:
   - Provides aggregated counts, analyzer info, and latest detection time (`detected_at`).
 - **Alert Detail:**
   - Full metadata including network, protocol, analyzer, process, references, services, and payload data. Fields include `id`, `created_at`, `detected_at`.
-  - Optional truncation for large payloads.
+  - Byte-string payloads use a minimal structure in `additional_data` with two fields: `readable` (UTF-8 text) and `original` (base64 bytes).
 
 ### Export & Heartbeat Models
 
