@@ -8,12 +8,15 @@ from ..core.datetime_utils import get_current_time, ensure_timezone
 settings = get_settings()
 
 # Create SQLAlchemy engines for both databases
+# Using SQLAlchemy 2.0 best practices with future=True for forward compatibility
 prelude_engine = create_engine(
     settings.PRELUDE_DATABASE_URL,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
+    echo=settings.ENVIRONMENT == "development" and settings.LOG_LEVEL == "DEBUG",
+    future=True,  # Enable 2.0 style behaviors
 )
 
 prebetter_engine = create_engine(
@@ -22,6 +25,8 @@ prebetter_engine = create_engine(
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
+    echo=settings.ENVIRONMENT == "development" and settings.LOG_LEVEL == "DEBUG",
+    future=True,  # Enable 2.0 style behaviors
 )
 
 # Create metadata objects
@@ -29,12 +34,21 @@ prelude_metadata = MetaData()
 
 prebetter_metadata = MetaData()
 
-# Create session factories
+# Create session factories with SQLAlchemy 2.0 configuration
+# autocommit=False is the default in 2.0, explicitly set for clarity
+# expire_on_commit=False can improve performance in read-heavy scenarios
 PreludeSessionLocal = sessionmaker(
-    autocommit=False, autoflush=False, bind=prelude_engine
+    autocommit=False, 
+    autoflush=False, 
+    bind=prelude_engine,
+    expire_on_commit=False,  # Prevents unnecessary refreshes for read-only data
+    future=True,  # Enable 2.0 style session behaviors
 )
 PrebetterSessionLocal = sessionmaker(
-    autocommit=False, autoflush=False, bind=prebetter_engine
+    autocommit=False, 
+    autoflush=False, 
+    bind=prebetter_engine,
+    future=True,  # Enable 2.0 style session behaviors
 )
 
 # Create base classes for declarative models using v2 syntax
