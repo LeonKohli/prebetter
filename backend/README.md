@@ -347,10 +347,10 @@ The API implements a structured lifecycle management approach:
 - `MYSQL_PRELUDE_DB`: Name of the Prelude database (default: prelude).
 - `MYSQL_PREBETTER_DB`: Name of the Prebetter database (default: prebetter).
 - `SECRET_KEY`: Secret key for JWT token generation (required).
-- `JWT_SECRET_KEY`: Secret key specifically for JWT. Must be set in your environment or `.env` file.
-- `JWT_ALGORITHM`: Algorithm used for JWT (default: HS256).
+- `ALGORITHM`: Algorithm used for JWT (default: HS256).
 - `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT token expiration time in minutes (default: 30).
-- `BACKEND_CORS_ORIGINS`: Allowed origins for CORS (default: ["*"]).
+- `BCRYPT_ROUNDS`: BCrypt cost factor/rounds for password hashing (default: 14).
+- `BACKEND_CORS_ORIGINS`: Allowed origins for CORS (default: ["http://localhost:3000"]).
 - `ENVIRONMENT`: Sets the environment mode (`production` or `development`), affecting logging format (default: development).
   - `development`: Human-readable logs for easier debugging
   - `production`: JSON-structured logs for machine parsing and log aggregation systems

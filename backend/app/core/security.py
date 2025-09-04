@@ -12,8 +12,12 @@ SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
-# Bcrypt with automatic algorithm upgrades
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Bcrypt with configured rounds (default 14) and automatic algorithm upgrades
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__rounds=settings.BCRYPT_ROUNDS,
+)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
