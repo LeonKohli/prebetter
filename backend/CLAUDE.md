@@ -47,15 +47,14 @@ app/
 
 **Current Implementation:**
 - JWT tokens with HS256 algorithm (30-minute expiration)
-- Bcrypt password hashing (default 12 rounds)
+- Bcrypt password hashing (configurable rounds, default 14)
 - Role-based access: superuser and regular user
 - Request tracking via `X-Request-ID` header
 
 **Known Limitations:**
 - No token revocation/blacklist mechanism
-- No refresh token support
 - No logout endpoint (tokens valid until expiration)
-- Conflicting secret key configuration (JWT_SECRET_KEY vs SECRET_KEY)
+- No refresh token support
 
 ## Common Commands
 
@@ -403,9 +402,9 @@ if hasattr(sort_by, "value"):
 - **Batch Processing**: Use `yield_per(1000)` for exports
 
 ### Security Considerations
-- **Password Hashing**: Bcrypt with 12 rounds (consider increasing to 14+)
+- **Password Hashing**: Bcrypt with configurable rounds (default 14)
 - **JWT Claims**: Currently only `sub`, `exp`, `iat`, `jti`
-- **CORS**: Currently allows all origins - MUST restrict in production
+- **CORS**: Restricted by default via `BACKEND_CORS_ORIGINS`
 - **No Rate Limiting**: Consider implementing for login endpoints
 
 ### Operational Details
