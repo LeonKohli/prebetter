@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from typing import Optional
@@ -278,9 +278,6 @@ async def get_grouped_alerts(
 @router.get("/{alert_id}", response_model=AlertDetail)
 async def get_alert_detail(
     alert_id: int,
-    truncate_payload: bool = Query(
-        False, description="Whether to truncate the payload data"
-    ),
     db: Session = Depends(get_prelude_db),
 ) -> AlertDetail:
     """Get detailed information about a specific alert."""
@@ -303,7 +300,8 @@ async def get_alert_detail(
         alert_idents = db.execute(queries["alert_idents"]).scalars().all()
         add_data_rows = db.execute(queries["additional_data"]).scalars().all()
 
-        additional_data = process_additional_data(add_data_rows, truncate_payload)
+        # Always return full, non-truncated data in multiple formats
+        additional_data = process_additional_data(add_data_rows)
 
         analyzers_info = []
         for analyzer in analyzers_query:
