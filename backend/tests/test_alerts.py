@@ -146,11 +146,7 @@ def test_alert_detail(auth_client):
         assert "name" in data["analyzer"]
         assert isinstance(data["analyzer"]["name"], str)
 
-    # Test with payload truncation
-    truncated_response = auth_client.get(
-        f"/api/v1/alerts/{alert_id_value}?truncate_payload=true"
-    )
-    assert truncated_response.status_code == 200
+    # Payload is always returned in full; no truncate parameter supported anymore
 
     # Test invalid alert ID
     invalid_response = auth_client.get("/api/v1/alerts/999999999")
@@ -267,26 +263,7 @@ def test_alert_detail_edge_cases(auth_client):
     response = auth_client.get("/api/v1/alerts/999999999999999")
     assert response.status_code == 404
 
-    # Test truncate_payload parameter variations
-    list_response = auth_client.get("/api/v1/alerts/?page=1&size=1")
-    if list_response.json()["items"]:
-        alert_id_value = list_response.json()["items"][0]["id"]
-
-        # Test explicit true/false values
-        response = auth_client.get(
-            f"/api/v1/alerts/{alert_id_value}?truncate_payload=true"
-        )
-        assert response.status_code == 200
-        response = auth_client.get(
-            f"/api/v1/alerts/{alert_id_value}?truncate_payload=false"
-        )
-        assert response.status_code == 200
-
-        # Test invalid boolean value
-        response = auth_client.get(
-            f"/api/v1/alerts/{alert_id_value}?truncate_payload=maybe"
-        )
-        assert response.status_code in [400, 422]
+    # Truncate parameter has been removed; ensure endpoint works without it
 
 
 def test_delete_alert(auth_client):

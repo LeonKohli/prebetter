@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AlertDetail } from '@/types/alerts'
+import HexAsciiPayload from '@/components/alerts/HexAsciiPayload.vue'
 
 const props = defineProps<{
   alertId?: string | null
@@ -514,10 +515,18 @@ function formatHttpLikePayload(raw: string): string {
                 <CardContent>
                   <div v-if="Object.keys(alertData.additional_data).length > 0" class="space-y-2">
                     <div v-for="(value, key) in alertData.additional_data" :key="key" class="grid grid-cols-[180px_1fr] gap-x-4 gap-y-2 text-sm">
-                      <span class="font-mono text-muted-foreground break-all">{{ key }}</span>
+                      <span class="font-mono text-muted-foreground break-words">{{ key }}</span>
                       
+                      <!-- Dual-format payload (readable + original base64) -->
+                      <HexAsciiPayload
+                        v-if="value && typeof value === 'object' && ('readable' in (value as any) || 'original' in (value as any))"
+                        :readable="(value as any).readable"
+                        :original="(value as any).original"
+                        :name="`${String(key)}.bin`"
+                      />
+
                       <!-- HTTP-like payloads nicely formatted -->
-                      <div v-if="typeof value === 'string' && isHttpLikePayload(key, value)" class="relative">
+                      <div v-else-if="typeof value === 'string' && isHttpLikePayload(key, value)" class="relative">
                         <pre class="rounded border p-3 text-xs overflow-auto max-h-64 leading-relaxed whitespace-pre-wrap pr-10"><code>{{ formatHttpLikePayload(value) }}</code></pre>
                         <div class="absolute top-2 right-2">
                           <Button
