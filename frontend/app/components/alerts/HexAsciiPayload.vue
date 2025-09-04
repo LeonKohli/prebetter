@@ -6,12 +6,34 @@ const props = defineProps<{
 }>()
 
 const copied = reactive<Record<string, boolean>>({})
+const hexPre = ref<HTMLElement | null>(null)
+const asciiPre = ref<HTMLElement | null>(null)
 
 function copyWithFeedback(key: string, text: string) {
   if (!text) return
   navigator.clipboard.writeText(text)
   copied[key] = true
   setTimeout(() => (copied[key] = false), 1500)
+}
+
+function getSelectionWithin(el: HTMLElement | null): string | null {
+  if (!el || typeof window === 'undefined') return null
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return null
+  const range = sel.getRangeAt(0)
+  if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return null
+  const text = sel.toString()
+  return text && text.trim() ? text : null
+}
+
+function copyHex() {
+  const selected = getSelectionWithin(hexPre.value)
+  copyWithFeedback('copy-hex', selected || hexDump.value)
+}
+
+function copyAscii() {
+  const selected = getSelectionWithin(asciiPre.value)
+  copyWithFeedback('copy-readable', selected || (props.readable || ''))
 }
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -97,7 +119,7 @@ const hexDump = computed(() => {
           Payload <span v-if="byteLen !== null">({{ formatBytesCount(byteLen as number) }} bytes)</span>
         </div>
         <div class="flex items-center gap-2">
-          <Button variant="outline" size="sm" class="h-7 px-2" @click="copyWithFeedback('copy-hex', hexDump)">
+          <Button variant="outline" size="sm" class="h-7 px-2" @click="copyHex">
             <Icon v-if="copied['copy-hex']" name="lucide:check" class="h-3.5 w-3.5 text-primary" />
             <Icon v-else name="lucide:copy" class="h-3.5 w-3.5" />
             <span class="ml-1">Copy Hex</span>
@@ -113,20 +135,20 @@ const hexDump = computed(() => {
           </Button>
         </div>
       </div>
-      <pre class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ hexDump }}</code></pre>
+      <pre ref="hexPre" class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ hexDump }}</code></pre>
     </div>
 
     <!-- ASCII / readable view with header toolbar -->
     <div>
       <div class="flex items-center justify-between mb-1">
         <div class="text-xs text-muted-foreground">ASCII Payload</div>
-        <Button variant="outline" size="sm" class="h-7 px-2" @click="copyWithFeedback('copy-readable', readable || '')">
+        <Button variant="outline" size="sm" class="h-7 px-2" @click="copyAscii">
           <Icon v-if="copied['copy-readable']" name="lucide:check" class="h-3.5 w-3.5 text-primary" />
           <Icon v-else name="lucide:copy" class="h-3.5 w-3.5" />
           <span class="ml-1">Copy ASCII</span>
         </Button>
       </div>
-      <pre class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre-wrap"><code>{{ readable || '' }}</code></pre>
+      <pre ref="asciiPre" class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ readable || '' }}</code></pre>
     </div>
   </div>
 </template>
