@@ -6,6 +6,7 @@ API schema models, providing consistent transformation logic across the applicat
 """
 
 from typing import Optional, List, Any, Dict, Union
+import base64
 from sqlalchemy.engine.row import Row
 
 from ..schemas.prelude import (
@@ -230,8 +231,16 @@ def clean_byte_string(value: Optional[str]) -> Optional[str]:
     return cleaned_value
 
 
-def process_additional_data(add_data_rows, truncate_payload=False):
-    """Process AdditionalData rows into a dictionary with type conversion."""
+def process_additional_data(add_data_rows):
+    """Process AdditionalData rows into a dictionary with type conversion.
+
+    Changes:
+    - For values with type == "byte-string", return exactly two representations:
+        { "readable": <utf-8 decoded with replacement>,
+          "original": <base64 string> }
+      This preserves the original bytes (JSON-safe base64) and a readable form — no extra fields.
+    - Always return full payloads (no truncation controlled by query params).
+    """
     additional_data = {}
     if not add_data_rows:
         return additional_data
@@ -249,21 +258,19 @@ def process_additional_data(add_data_rows, truncate_payload=False):
         try:
             if data_type == "byte-string":
                 if isinstance(raw_data, bytes):
-                    decoded_str = raw_data.decode("utf-8", errors="ignore")
-                    # Payload truncation for UI performance
-                    if (
-                        meaning.lower() == "payload"
-                        and truncate_payload
-                        and len(decoded_str) > 100
-                    ):
-                        current_value = decoded_str[:100] + "... (truncated)"
-                    else:
-                        current_value = clean_byte_string(decoded_str)
+                    # Preserve original bytes (base64) and a readable text view
+                    try:
+                        b64 = base64.b64encode(raw_data).decode("ascii")
+                    except Exception:
+                        b64 = ""
+                    text_value = raw_data.decode("utf-8", errors="replace")
+                    current_value = {"readable": text_value, "original": b64}
                 elif isinstance(raw_data, str):
-                    # Handle strings that look like byte strings
-                    current_value = clean_byte_string(raw_data)
+                    # We only have a string; provide readable text and no raw
+                    current_value = {"readable": clean_byte_string(raw_data), "original": None}
                 else:
-                    current_value = str(raw_data)
+                    # Fallback to string representation
+                    current_value = {"readable": str(raw_data), "original": None}
 
             else:
                 str_value = str(raw_data)
