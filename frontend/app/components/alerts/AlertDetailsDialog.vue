@@ -77,9 +77,9 @@ function getSeverityClass(severity?: string): string {
     case 'high':
       return 'text-destructive font-semibold'
     case 'medium':
-      return 'text-orange-500 font-semibold'
+      return 'text-accent font-semibold'
     case 'low':
-      return 'text-blue-500 font-semibold'
+      return 'text-muted-foreground font-semibold'
     default:
       return 'text-muted-foreground'
   }
