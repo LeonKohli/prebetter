@@ -48,41 +48,48 @@ def format_iso_datetime(dt):
 def generate_csv(results: Iterator, header: list) -> Iterator[str]:
     """
     A generator that yields CSV lines.
+    Properly closes the result set to avoid unbuffered result warnings.
     """
     output = StringIO()
     writer = csv.writer(output)
 
-    # Write header row and yield it
-    writer.writerow(header)
-    yield output.getvalue()
-    output.seek(0)
-    output.truncate(0)
-
-    # Write data rows one by one
-    for row in results:
-        # In SQLAlchemy 2.0 with labeled columns, we can access by attribute name
-        # The labels we set in the query: detect_time, create_time, classification_text, etc.
-        detect_time_str = format_iso_datetime(getattr(row, 'detect_time', None))
-        create_time_str = format_iso_datetime(getattr(row, 'create_time', None))
-
-        writer.writerow(
-            [
-                str(row[0]),  # _ident (first column) - ensure it's a string
-                row[1],  # messageid (second column)
-                detect_time_str,
-                create_time_str,
-                getattr(row, 'classification_text', "") or "",
-                getattr(row, 'severity', "") or "",
-                getattr(row, 'source_ipv4', "") or "",
-                getattr(row, 'target_ipv4', "") or "",
-                getattr(row, 'analyzer_name', "") or "",
-                getattr(row, 'analyzer_host', "") or "",
-                getattr(row, 'analyzer_model', "") or "",
-            ]
-        )
+    try:
+        # Write header row and yield it
+        writer.writerow(header)
         yield output.getvalue()
         output.seek(0)
         output.truncate(0)
+
+        # Write data rows one by one
+        for row in results:
+            # In SQLAlchemy 2.0 with labeled columns, we can access by attribute name
+            # The labels we set in the query: detect_time, create_time, classification_text, etc.
+            detect_time_str = format_iso_datetime(getattr(row, 'detect_time', None))
+            create_time_str = format_iso_datetime(getattr(row, 'create_time', None))
+
+            writer.writerow(
+                [
+                    str(row[0]),  # _ident (first column) - ensure it's a string
+                    row[1],  # messageid (second column)
+                    detect_time_str,
+                    create_time_str,
+                    getattr(row, 'classification_text', "") or "",
+                    getattr(row, 'severity', "") or "",
+                    getattr(row, 'source_ipv4', "") or "",
+                    getattr(row, 'target_ipv4', "") or "",
+                    getattr(row, 'analyzer_name', "") or "",
+                    getattr(row, 'analyzer_host', "") or "",
+                    getattr(row, 'analyzer_model', "") or "",
+                ]
+            )
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+    finally:
+        # Ensure the result set is properly closed
+        # This prevents "unbuffered result was left incomplete" warnings
+        if hasattr(results, 'close'):
+            results.close()
 
 
 @router.get("/alerts/{format}")
@@ -175,7 +182,6 @@ async def export_alerts(
     
     # Use SQLAlchemy 2.0 execution options for streaming
     # yield_per enables server-side cursors and limits buffer size
-    # We use partitions() to ensure the cursor is properly managed
     query = query.execution_options(yield_per=1000)
     
     # Execute the query - returns a Result object that can be iterated
