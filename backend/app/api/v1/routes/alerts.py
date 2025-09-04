@@ -140,10 +140,9 @@ async def list_alerts(
 
     query = apply_sorting(query, sort_by, sort_order, sort_options, DetectTime.time)
 
-    # BUG FIX: Count must use filtered query to include IP filters
-    # Create a subquery for counting
-    count_subquery = query.subquery()
-    count_stmt = select(func.count()).select_from(count_subquery)
+    # SQLAlchemy 2.0 optimized count using scalar_subquery
+    # This is more efficient than creating a full subquery
+    count_stmt = select(func.count()).select_from(query.distinct().subquery())
     total = db.scalar(count_stmt) or 0
 
     total_pages = (total + size - 1) // size
@@ -505,59 +504,5 @@ async def get_alert_detail(
         raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}")
 
 
-@router.delete("/{alert_id}")
-async def delete_alert(
-    alert_id: int,
-    db: Session = Depends(get_prelude_db),
-) -> dict:
-    """Delete a specific alert and all its related data."""
-    try:
-        alert = db.execute(select(Alert).where(Alert._ident == alert_id)).scalar_one_or_none()
-        if not alert:
-            raise HTTPException(status_code=404, detail="Alert not found")
-
-        # Child tables must be deleted before parent tables (FK constraints)
-        related_tables = [
-            ProcessArg,
-            ProcessEnv,
-            Process,
-            Service,
-            WebService,
-            Address,
-            Reference,
-            AdditionalData,
-            Alertident,
-            AnalyzerTime,
-            Node,
-            Analyzer,
-            Source,
-            Target,
-            Impact,
-            Classification,
-            DetectTime,
-            CreateTime,
-            Assessment,
-        ]
-
-        # Use SQLAlchemy v2 delete syntax
-        from sqlalchemy import delete
-        
-        for table in related_tables:
-            stmt = delete(table).where(table._message_ident == alert_id)
-            db.execute(stmt)
-
-        stmt = delete(Alert).where(Alert._ident == alert_id)
-        db.execute(stmt)
-
-        db.commit()
-
-        return {
-            "message": f"Alert {alert_id} and all related data successfully deleted"
-        }
-
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error deleting alert: {str(e)}")
+# DELETE endpoint removed - Prelude DB is read-only as per architecture design
+# Alert data should only be modified through the Prelude IDS system itself
