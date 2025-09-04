@@ -521,18 +521,22 @@ def test_process_additional_data_basic():
     assert result == expected
 
 
-def test_process_additional_data_truncate_payload():
-    long_payload_bytes = ("A" * 150).encode("utf-8")  # Simulate bytes data
-    short_payload_bytes = "short".encode("utf-8")
+def test_process_additional_data_byte_string_formats():
+    payload_bytes = b"\x00ABCDEF\xff\x10"  # include non-utf8 bytes
     add_data_rows = [
-        MockRow(meaning="Payload", type="byte-string", data=long_payload_bytes),
-        MockRow(meaning="ShortPayload", type="byte-string", data=short_payload_bytes),
+        MockRow(meaning="Payload", type="byte-string", data=payload_bytes),
     ]
 
-    result = process_additional_data(add_data_rows, truncate_payload=True)
+    result = process_additional_data(add_data_rows)
 
-    assert result["Payload"] == "A" * 100 + "... (truncated)"
-    assert result["ShortPayload"] == "short"
+    assert "Payload" in result
+    payload = result["Payload"]
+    assert isinstance(payload, dict)
+    # readable exists and is a string (with replacement for undecodable bytes)
+    assert isinstance(payload.get("readable"), str)
+    # original is base64 of original bytes
+    import base64
+    assert payload.get("original") == base64.b64encode(payload_bytes).decode("ascii")
 
 
 def test_process_additional_data_empty():
