@@ -1,4 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
+from app.api.v1.routes import heartbeats
 from app.core.datetime_utils import get_current_time, ensure_timezone
 
 # Remove the skip directive to enable tests
@@ -17,11 +20,13 @@ def test_heartbeats_status_tree(auth_client):
     assert "nodes" in data
     assert "total_nodes" in data
     assert "total_agents" in data
+    assert "status_summary" in data
 
     # Verify data types
     assert isinstance(data["nodes"], list)
     assert isinstance(data["total_nodes"], int)
     assert isinstance(data["total_agents"], int)
+    assert isinstance(data["status_summary"], dict)
 
     # Verify node structure if any nodes exist
     if data["nodes"]:
@@ -43,7 +48,7 @@ def test_heartbeats_status_tree(auth_client):
             assert "status" in agent
 
             # Verify status is valid
-            assert agent["status"] in ["online", "offline"]
+            assert agent["status"] in ["active", "inactive", "offline", "unknown"]
 
     # Print some debug info
     print(f"\nTotal nodes in status view: {data['total_nodes']}")
@@ -62,11 +67,26 @@ def test_heartbeats_status_consistency(auth_client):
     assert data["total_nodes"] == len(data["nodes"])
     total_agents = sum(len(node["agents"]) for node in data["nodes"])
     assert data["total_agents"] == total_agents
+    assert sum(data["status_summary"].values()) == total_agents
 
     # Print some debug info
     print(
         f"\nVerified count consistency: nodes={data['total_nodes']}, agents={data['total_agents']}"
     )
+
+
+def test_heartbeat_status_marks_unknown_without_interval():
+    """Ensure missing intervals mark the agent status as unknown."""
+    now = datetime(2023, 10, 26, 12, 0, 0, tzinfo=timezone.utc)
+    row = SimpleNamespace(
+        last_heartbeat=now - timedelta(seconds=65_000),
+        heartbeat_interval=None,
+    )
+
+    _, _, status, interval = heartbeats._derive_heartbeat_metadata(row, now)
+
+    assert interval is None
+    assert status == "unknown"
 
 
 def test_heartbeats_status_days_parameter(auth_client):

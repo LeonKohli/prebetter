@@ -3,17 +3,33 @@
     role="banner"
     class="sticky top-0 z-20 border-b backdrop-blur supports-backdrop-blur:bg-background/95 px-2 md:px-4"
   >
-    <div class="h-12 flex items-center justify-between">
-      <NuxtLink to="/" class="flex items-center space-x-2 group" aria-label="Home">
-        <Icon name="lucide:shield-alert" class="h-5 w-5 text-primary" />
-        <div class="flex items-baseline space-x-1">
-          <span class="font-semibold text-sm tracking-tight">Prebetter</span>
-          <span class="text-xs text-muted-foreground hidden lg:inline">IDS</span>
-        </div>
-      </NuxtLink>
+    <AuthState v-slot="{ loggedIn, user }">
+      <div class="h-12 flex items-center justify-between">
+        <div class="flex items-center gap-6">
+          <NuxtLink to="/" class="flex items-center space-x-2 group" aria-label="Home">
+            <Icon name="lucide:shield-alert" class="h-5 w-5 text-primary" />
+            <div class="flex items-baseline space-x-1">
+              <span class="font-semibold text-sm tracking-tight">Prebetter</span>
+              <span class="text-xs text-muted-foreground hidden lg:inline">IDS</span>
+            </div>
+          </NuxtLink>
 
-      <div class="flex items-center space-x-4">
-        <AuthState v-slot="{ loggedIn, user }">
+          <nav v-if="loggedIn" class="hidden items-center gap-3 md:flex" aria-label="Main">
+            <NuxtLink
+              v-for="link in navLinks"
+              :key="link.to"
+              :to="link.to"
+              :class="cn(
+                'text-sm font-medium transition-colors hover:text-foreground',
+                isActiveLink(link) ? 'text-foreground' : 'text-muted-foreground'
+              )"
+            >
+              {{ link.label }}
+            </NuxtLink>
+          </nav>
+        </div>
+
+        <div class="flex items-center space-x-4">
           <div v-if="loggedIn && user" class="flex items-center space-x-4">
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
@@ -52,22 +68,42 @@
               </NuxtLink>
             </Button>
           </div>
-        </AuthState>
-        
-        <ClientOnly> 
-          <ColorModeToggle />
-          <template #fallback>
-            <div class="w-10 h-10"></div>
-          </template>
-        </ClientOnly>
+
+          <ClientOnly>
+            <ColorModeToggle />
+            <template #fallback>
+              <div class="w-10 h-10"></div>
+            </template>
+          </ClientOnly>
+        </div>
       </div>
-    </div>
+    </AuthState>
   </header>
 </template>
 
 <script setup lang="ts">
+import { cn } from '@/utils/utils'
+
 const { clear } = useUserSession()
 const router = useRouter()
+const route = useRoute()
+
+const navLinks = [
+  {
+    to: '/',
+    label: 'Alerts',
+    match: (path: string) => path === '/',
+  },
+  {
+    to: '/heartbeats',
+    label: 'Heartbeats',
+    match: (path: string) => path.startsWith('/heartbeats'),
+  },
+]
+
+function isActiveLink(link: (typeof navLinks)[number]) {
+  return link.match ? link.match(route.path) : route.path === link.to
+}
 
 const handleLogout = async () => {
   await $fetch('/api/auth/logout', {
