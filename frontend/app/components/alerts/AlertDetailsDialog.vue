@@ -187,13 +187,13 @@ function formatHttpLikePayload(raw: string): string {
         <div v-else-if="alertData" class="space-y-6">
           <!-- Tabs for different sections -->
           <Tabs v-model:model-value="activeTab" class="w-full">
-            <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 sticky top-0 z-10 bg-background border-b">
+            <TabsList class="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 sticky top-0 z-10 border-b">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="network">Network</TabsTrigger>
               <TabsTrigger value="analyzers">Analyzers</TabsTrigger>
               <TabsTrigger value="references">References</TabsTrigger>
               <TabsTrigger value="additional">Additional</TabsTrigger>
-            </TabsList>
+              </TabsList>
 
             <!-- Overview Tab -->
             <TabsContent value="overview" class="space-y-4 mt-4">

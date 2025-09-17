@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
-from collections import defaultdict
+from collections import Counter, defaultdict
+from datetime import datetime
 from typing import Annotated, Dict, Any
 from pydantic import ValidationError
 import logging
@@ -12,7 +13,7 @@ from app.database.query_builders import (
     build_efficient_heartbeats_query,
 )
 from app.database.cleanup import cleanup_old_heartbeats, cleanup_orphaned_analyzer_times
-from app.core.datetime_utils import get_time_range
+from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
 from app.models.prelude import AnalyzerTime
 from app.models.users import User
 from app.schemas.prelude import (
@@ -24,9 +25,62 @@ from app.schemas.prelude import (
 )
 from app.api.v1.routes.auth import get_current_user
 from app.api.v1.routes.users import get_current_superuser
+from app.database.models import determine_heartbeat_status
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
+
+
+HEARTBEAT_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+DEFAULT_ACTIVE_THRESHOLD_SECONDS = 60_000
+
+
+def _parse_last_heartbeat(raw_value: Any) -> datetime | None:
+    """Return a timezone-aware datetime for a raw heartbeat column."""
+    if raw_value in (None, "Never"):
+        return None
+
+    parsed_value = raw_value
+    if isinstance(raw_value, str):
+        try:
+            parsed_value = datetime.strptime(raw_value, HEARTBEAT_TIME_FORMAT)
+        except ValueError:
+            return None
+
+    return ensure_timezone(parsed_value)
+
+
+def _normalise_interval(raw_interval: Any) -> int | None:
+    """Convert persisted heartbeat intervals to a positive integer or None."""
+    if raw_interval is None:
+        return None
+    try:
+        interval = int(raw_interval)
+    except (TypeError, ValueError):
+        return None
+    return interval if interval > 0 else None
+
+
+def _derive_heartbeat_metadata(row: Dict[str, Any], now: datetime) -> tuple[
+    datetime | None, int, str, int | None
+]:
+    """Compute heartbeat metadata for response payloads."""
+    last_heartbeat = _parse_last_heartbeat(getattr(row, "last_heartbeat", None))
+    interval = _normalise_interval(getattr(row, "heartbeat_interval", None))
+
+    seconds_ago = -1
+    seconds_diff: int | None = None
+    if last_heartbeat is not None:
+        seconds_diff = int((now - last_heartbeat).total_seconds())
+        seconds_ago = max(seconds_diff, 0)
+
+    if interval is None:
+        # Without an interval we cannot classify activity reliably.
+        return last_heartbeat, seconds_ago, "unknown", None
+
+    status = determine_heartbeat_status(last_heartbeat, now, interval)
+
+    return last_heartbeat, seconds_ago, status, interval
 
 
 @router.get("/status", response_model=HeartbeatTreeResponse)
@@ -41,6 +95,8 @@ async def heartbeat_status(
         lambda: {"name": "", "os": None, "agents": {}}
     )
     total_agents = 0
+    status_counts: Counter[str] = Counter()
+    now = get_current_time()
 
     for row in results:
         node_name = row.host_name or "(no node)"
@@ -52,9 +108,12 @@ async def heartbeat_status(
 
         if row.analyzer_name not in nodes_dict[node_name]["agents"]:
             try:
-                last_heartbeat = (
-                    None if row.last_heartbeat == "Never" else row.last_heartbeat
-                )
+                (
+                    last_heartbeat,
+                    seconds_ago,
+                    status,
+                    heartbeat_interval,
+                ) = _derive_heartbeat_metadata(row, now)
 
                 agent_info = AgentInfo(
                     name=row.analyzer_name,
@@ -64,8 +123,9 @@ async def heartbeat_status(
                         "class": getattr(row, "class")
                     },
                     latest_heartbeat_at=last_heartbeat,
-                    seconds_ago=row.seconds_ago if row.seconds_ago is not None else -1,
-                    status=row.status,
+                    seconds_ago=seconds_ago,
+                    heartbeat_interval=heartbeat_interval,
+                    status=status,
                 )
                 nodes_dict[node_name]["agents"][row.analyzer_name] = agent_info
             except ValidationError as e:
@@ -73,6 +133,7 @@ async def heartbeat_status(
                 continue
 
             total_agents += 1
+            status_counts[status] += 1
 
     formatted_nodes = []
     for node_name, node_data in nodes_dict.items():
@@ -85,10 +146,16 @@ async def heartbeat_status(
             )
         )
 
+    summary = {status: status_counts.get(status, 0) for status in ("active", "inactive", "offline", "unknown")}
+    for extra_status, count in status_counts.items():
+        if extra_status not in summary:
+            summary[extra_status] = count
+
     return HeartbeatTreeResponse(
         nodes=formatted_nodes,
         total_nodes=len(formatted_nodes),
         total_agents=total_agents,
+        status_summary=summary,
     )
 
 
@@ -114,10 +181,13 @@ async def timeline_heartbeats(
 
     timeline_items = []
     for result in results:
+        host_name = result.host_name or "(no node)"
+        analyzer_name = result.analyzer_name or "Unknown analyzer"
+
         item = {
             "timestamp": result.timestamp,
-            "host_name": result.host_name or "Unknown host",
-            "analyzer_name": result.analyzer_name or "Unknown analyzer",
+            "host_name": host_name,
+            "analyzer_name": analyzer_name,
             "model": result.model or "",
             "version": result.version or "",
             "class_": result.class_ or "",

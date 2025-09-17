@@ -12,6 +12,9 @@ class AgentInfo(BaseModel):
     class_: str = Field(..., alias="class")
     latest_heartbeat_at: Optional[datetime] = None
     seconds_ago: int = Field(-1, description="Seconds since last heartbeat")
+    heartbeat_interval: Optional[int] = Field(
+        None, description="Configured heartbeat interval in seconds"
+    )
     status: str
 
     model_config = ConfigDict(from_attributes=True)
@@ -42,7 +45,7 @@ class AgentInfo(BaseModel):
     @classmethod
     def validate_status(cls, v):
         """Ensure status is valid."""
-        valid_statuses = ["online", "offline", "unknown"]
+        valid_statuses = ["active", "inactive", "offline", "unknown"]
         if v and v in valid_statuses:
             return v
         return "unknown"
@@ -60,6 +63,7 @@ class HeartbeatTreeResponse(BaseModel):
     nodes: list[HeartbeatNodeInfo]
     total_nodes: int
     total_agents: int
+    status_summary: Dict[str, int] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

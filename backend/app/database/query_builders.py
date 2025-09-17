@@ -598,6 +598,7 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
             Analyzer.version.label("version"),
             getattr(Analyzer, "class").label("class_"),
         )
+        .distinct()  # Add DISTINCT to prevent duplicates
         .select_from(AnalyzerTime)
         .join(
             Heartbeat,
@@ -611,7 +612,7 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
             and_(
                 Analyzer._message_ident == Heartbeat._ident,
                 Analyzer._parent_type == "H",
-                Analyzer._index == 0,
+                Analyzer._index == -1,  # Use -1 to get the actual sender, not the relay
             ),
         )
         .outerjoin(
@@ -619,7 +620,7 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
             and_(
                 Node._message_ident == Heartbeat._ident,
                 Node._parent_type == "H",
-                Node._parent0_index == 0,
+                Node._parent0_index == -1,  # Match the analyzer index
             ),
         )
         .outerjoin(
@@ -638,61 +639,31 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
 
 
 def build_efficient_heartbeats_query(db: Session, days: int = 1):
-    """Build an efficient query for heartbeats showing all analyzers from alerts."""
-    # Raw SQL for performance - complex self-joins are more efficient than ORM
+    """Build an efficient query for heartbeats showing all analyzers that have sent heartbeats."""
+    # Raw SQL for performance - shows all analyzers with recent heartbeats
     sql = text("""
-    SELECT 
-        all_analyzers.host_name,
-        all_analyzers.analyzer_name,
-        all_analyzers.model,
-        all_analyzers.version,
-        all_analyzers.class,
-        all_analyzers.os,
-        COALESCE(DATE_FORMAT(heartbeats.last_heartbeat, '%Y-%m-%d %H:%i:%s'), 'Never') as last_heartbeat,
-        COALESCE(TIMESTAMPDIFF(SECOND, heartbeats.last_heartbeat, NOW()), -1) as seconds_ago,
-        CASE 
-            # 60000 seconds threshold accounts for network issues
-            WHEN heartbeats.last_heartbeat IS NOT NULL 
-                AND TIMESTAMPDIFF(SECOND, heartbeats.last_heartbeat, NOW()) <= 60000 
-            THEN 'online'
-            ELSE 'offline'
-        END as status
-    FROM (
-        SELECT DISTINCT 
-            n.name as host_name,
-            a.name as analyzer_name,
-            MAX(a.model) as model,
-            MAX(a.version) as version,
-            MAX(a.class) as class,
-            MAX(CONCAT(IFNULL(a.ostype, ''), ' ', IFNULL(a.osversion, ''))) as os
-        FROM Prelude_Analyzer a
-        INNER JOIN Prelude_Node n 
-            ON n._message_ident = a._message_ident
-            AND n._parent_type = 'A'
-            AND n._parent0_index = -1
-        WHERE a._parent_type = 'A'
-        GROUP BY n.name, a.name
-    ) AS all_analyzers
-    LEFT JOIN (
-        SELECT 
-            n.name as host_name,
-            a.name as analyzer_name,
-            MAX(at.time) as last_heartbeat
-        FROM Prelude_Heartbeat h
-        INNER JOIN Prelude_AnalyzerTime at 
-            ON at._message_ident = h._ident
-            AND at.time >= DATE_SUB(NOW(), INTERVAL :days DAY)
-        INNER JOIN Prelude_Analyzer a 
-            ON a._message_ident = h._ident
-            AND a._parent_type = 'H'
-        INNER JOIN Prelude_Node n 
-            ON n._message_ident = h._ident
-            AND n._parent_type = 'H'
-        GROUP BY n.name, a.name
-    ) AS heartbeats 
-        ON all_analyzers.host_name = heartbeats.host_name 
-        AND all_analyzers.analyzer_name = heartbeats.analyzer_name
-    ORDER BY all_analyzers.host_name, all_analyzers.analyzer_name
+    SELECT
+        n.name as host_name,
+        a.name as analyzer_name,
+        MAX(a.model) as model,
+        MAX(a.version) as version,
+        MAX(a.class) as class,
+        MAX(CONCAT(IFNULL(a.ostype, ''), ' ', IFNULL(a.osversion, ''))) as os,
+        MAX(at.time) as last_heartbeat,
+        MAX(h.heartbeat_interval) as heartbeat_interval
+    FROM Prelude_Heartbeat h
+    INNER JOIN Prelude_AnalyzerTime at
+        ON at._message_ident = h._ident
+        AND at._parent_type = 'H'
+        AND at.time >= DATE_SUB(NOW(), INTERVAL :days DAY)
+    INNER JOIN Prelude_Analyzer a
+        ON a._message_ident = h._ident
+        AND a._parent_type = 'H'
+    INNER JOIN Prelude_Node n
+        ON n._message_ident = h._ident
+        AND n._parent_type = 'H'
+    GROUP BY n.name, a.name
+    ORDER BY n.name, a.name
     """)
 
     # Return the text query with parameters bound
