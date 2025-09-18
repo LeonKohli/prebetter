@@ -30,7 +30,7 @@ export default defineNuxtConfig({
     description: 'A modern Intrusion Detection System dashboard for Prelude IDS',
     defaultLocale: 'de',
   },
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/tailwind.css'],
   shadcn: {
     prefix: '',
     componentDir: './app/components/ui'
