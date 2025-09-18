@@ -1,6 +1,18 @@
 <template>
   <div class="flex items-center justify-between pb-2">
     <div class="flex items-center gap-3">
+      <!-- Back to groups when drilled into ungrouped filtered view -->
+      <Button
+        v-if="isDrilldown"
+        variant="ghost"
+        size="sm"
+        class="-ml-1 px-2"
+        aria-label="Back to groups"
+        @click="backToGroups"
+      >
+        <Icon name="lucide:arrow-left" class="mr-1 h-4 w-4" />
+        Back to groups
+      </Button>
       <div class="relative">
         <Icon name="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -143,6 +155,32 @@ interface Emits {
 const emit = defineEmits<Emits>()
 
 const { urlState, table, isGrouped, pending } = useAlertTableContext()
+const route = useRoute()
+
+// Detect drilldown: ungrouped view with any of the deep-link filters present
+const isDrilldown = computed(() => {
+  const f = urlState.filters.value
+  return !isGrouped.value && (Boolean(f.classification_text) || Boolean(f.source_ipv4) || Boolean(f.target_ipv4))
+})
+
+async function backToGroups() {
+  // Build a single navigation update to avoid racing URL pushes
+  const { classification_text, source_ipv4, target_ipv4, ...rest } = urlState.filters.value
+  const newQuery: Record<string, any> = {
+    ...route.query,
+    view: 'grouped',
+    sort: 'total_count:desc',
+    page: '1',
+    filter: Object.keys(rest).length > 0 ? JSON.stringify(rest) : undefined,
+  }
+  // Remove empty values
+  Object.keys(newQuery).forEach((k) => {
+    if (newQuery[k] === '' || newQuery[k] === null || newQuery[k] === undefined) {
+      delete newQuery[k]
+    }
+  })
+  await navigateTo({ query: newQuery })
+}
 
 
 const dateRange = computed<DateRangeValue>({
