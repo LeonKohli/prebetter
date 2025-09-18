@@ -1,7 +1,5 @@
-from sqlalchemy import text, select
+from sqlalchemy import text
 from app.database.config import prebetter_engine, prelude_engine, PrebetterBase
-from app.models.users import User
-from app.core.security import get_password_hash, create_user_id
 import logging
 import asyncio
 import sqlalchemy.exc
@@ -52,34 +50,10 @@ async def ensure_database() -> None:
 
         try:
             PrebetterBase.metadata.create_all(bind=prebetter_engine)
+            logger.info("Database tables created successfully!")
         except sqlalchemy.exc.OperationalError as e:
             logger.error(f"Failed to create tables: {str(e)}")
             raise
-
-        from sqlalchemy.orm import Session
-
-        db = Session(prebetter_engine)
-        try:
-            superuser = db.execute(select(User).where(User.is_superuser)).scalar_one_or_none()
-            if not superuser:
-                superuser = User(
-                    id=create_user_id(),
-                    email="admin@example.com",
-                    username="admin",
-                    hashed_password=get_password_hash("admin"),
-                    is_superuser=True,
-                )
-                db.add(superuser)
-                db.commit()
-                logger.info("Superuser created successfully!")
-            else:
-                logger.info("Superuser already exists.")
-        except Exception as e:
-            logger.error(f"Error checking/creating superuser: {str(e)}")
-            db.rollback()
-            raise
-        finally:
-            db.close()
 
         logger.info("Database initialization completed successfully!")
     except Exception as e:

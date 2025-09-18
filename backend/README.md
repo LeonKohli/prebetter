@@ -159,7 +159,7 @@ The API implements a structured lifecycle management approach:
 1. **Startup Phase:**
    - Database connection verification
    - Schema validation
-   - Initial superuser creation (if needed)
+   - Database tables creation
    - Health state initialization
 
 2. **Runtime Phase:**
@@ -212,6 +212,21 @@ The API implements a structured lifecycle management approach:
    fastapi dev
    ```
 
+7. **Create Initial User Account:**
+
+   The system no longer automatically creates default credentials for security reasons.
+   You must manually create your first user account:
+
+   ```bash
+   uv run python -m app.scripts.create_user
+   ```
+
+   The script will:
+   - Prompt for username, email, and password
+   - Ask if you want to create a superuser (admin)
+   - Show a summary and ask for confirmation
+   - Create the user in the database
+   
 ## API Endpoints
 
 ### Authentication & User Management
