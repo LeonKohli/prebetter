@@ -13,21 +13,26 @@
 <script setup lang="ts">
 const colorMode = useColorMode()
 
-const icon = computed(() => (colorMode.value === 'dark' ? 'lucide:moon' : 'lucide:sun'))
-const label = computed(() => (colorMode.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'))
+const icon = computed(() => {
+  // Always show icon based on what's actually displayed
+  return colorMode.value === 'dark' ? 'lucide:moon' : 'lucide:sun'
+})
+
+const label = computed(() => {
+  return colorMode.value === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+})
 
 function toggle() {
-  // Toggle between light and dark, explicitly setting the preference.
-  // If the current preference is 'system', it will default to toggling based on the detected value.
-  const currentPreference = colorMode.preference
-  const currentValue = colorMode.value // fallback if preference is 'system'
+  // When toggling, we need to handle the system preference case
+  // If preference is system, toggle based on current value
+  // Otherwise toggle between light and dark
 
-  if (currentPreference === 'system') {
-    // If system, toggle based on the *detected* value
-    colorMode.preference = currentValue === 'dark' ? 'light' : 'dark'
+  if (colorMode.preference === 'system') {
+    // User is on system preference, toggle to opposite of current value
+    colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
   } else {
-    // Otherwise, toggle the explicit preference
-    colorMode.preference = currentPreference === 'dark' ? 'light' : 'dark'
+    // User has explicit preference, toggle it
+    colorMode.preference = colorMode.preference === 'dark' ? 'light' : 'dark'
   }
 }
 </script>

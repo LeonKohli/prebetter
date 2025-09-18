@@ -36,7 +36,9 @@ export default defineNuxtConfig({
     componentDir: './app/components/ui'
   },
   colorMode: {
-    classSuffix: ''
+    classSuffix: '',
+    preference: 'system', // Default to auto (respects OS theme)
+    fallback: 'light'    // Fallback if system preference can't be detected
   },
   vite: {
     plugins: [
