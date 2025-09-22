@@ -246,6 +246,9 @@ async def get_grouped_alerts(
 
         groups = [grouped_alert_to_response(pair, alerts_map) for pair in pairs]
 
+        # Calculate total number of alerts represented by the current page
+        total_alerts_on_page = sum(group.total_count or 0 for group in groups)
+
         total_pages = (total_pairs + size - 1) // size
 
         return GroupedAlertResponse(
@@ -253,6 +256,7 @@ async def get_grouped_alerts(
             pagination=PaginatedResponse(
                 total=total_pairs, page=page, size=size, pages=total_pages
             ),
+            total_alerts=total_alerts_on_page,
         )
 
     except Exception as e:

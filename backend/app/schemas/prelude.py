@@ -376,6 +376,7 @@ class GroupedAlert(BaseModel):
 class GroupedAlertResponse(BaseModel):
     groups: List[GroupedAlert] = Field(..., description="List of grouped alerts")
     pagination: PaginatedResponse
+    total_alerts: int = Field(..., description="Total number of individual alerts across all groups on current page")
 
     model_config = ConfigDict(from_attributes=True)
 
