@@ -82,6 +82,7 @@ export interface AlertListResponse {
 export interface GroupedAlertResponse {
   groups: GroupedAlert[]
   pagination: PaginatedResponse
+  total_alerts: number
 }
 
 // Flattened representation of grouped alerts for table display

@@ -204,7 +204,7 @@ const displayData = computed(() => {
 
 const paginationInfo = computed((): PaginatedResponse => {
   if (!data.value) return { total: 0, pages: 0, page: 1, size: 100 }
-  
+
   if (isGrouped.value) {
     const response = data.value as GroupedAlertResponse
     return response.pagination || { total: 0, pages: 0, page: 1, size: 100 }
@@ -212,6 +212,34 @@ const paginationInfo = computed((): PaginatedResponse => {
     const response = data.value as AlertListResponse
     return response.pagination || { total: 0, pages: 0, page: 1, size: 100 }
   }
+})
+
+// Track how many rows we render and how many alerts they represent
+const tableTotals = computed(() => {
+  if (!data.value) return { rows: 0, alerts: 0 }
+
+  if (isGrouped.value) {
+    const response = data.value as GroupedAlertResponse
+    const alerts = typeof response.total_alerts === 'number'
+      ? response.total_alerts
+      : (response.groups || []).reduce((total, group) => {
+        if (typeof group.total_count === 'number') {
+          return total + group.total_count
+        }
+
+        if (!group.alerts?.length) return total
+        return total + group.alerts.reduce((groupTotal, alert) => groupTotal + alert.count, 0)
+      }, 0)
+
+    return {
+      rows: displayData.value.length,
+      alerts
+    }
+  }
+
+  // Ungrouped rows map 1:1 to alerts
+  const rows = displayData.value.length
+  return { rows, alerts: rows }
 })
 
 // Define table data type - includes flattened grouped alerts
@@ -458,7 +486,12 @@ onUnmounted(() => {
           <template v-if="!isGrouped && table.getFilteredSelectedRowModel().rows.length > 0">
             {{ table.getFilteredSelectedRowModel().rows.length }} of
           </template>
-          {{ paginationInfo.total }} {{ isGrouped ? 'groups' : 'alerts' }}
+          <template v-if="isGrouped">
+            {{ tableTotals.rows }} rows / {{ tableTotals.alerts }} alerts
+          </template>
+          <template v-else>
+            {{ tableTotals.rows }} alerts
+          </template>
         </div>
         
         <div class="flex items-center gap-2">

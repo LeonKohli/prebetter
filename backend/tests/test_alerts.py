@@ -172,6 +172,7 @@ def test_grouped_alerts(auth_client):
     # Verify all required fields are present in the pagination object
     assert "groups" in data
     assert "pagination" in data
+    assert "total_alerts" in data
     pagination = data["pagination"]
     assert "total" in pagination
     assert "page" in pagination
@@ -202,6 +203,10 @@ def test_grouped_alerts(auth_client):
             assert "analyzer" in alert
             assert "analyzer_host" in alert
             assert "detected_at" in alert
+
+        # Total alerts should reflect the sum of alerts per group
+        total_alerts = sum(group.get("total_count", 0) for group in data["groups"])
+        assert data["total_alerts"] == total_alerts
 
     # We'll skip additional tests to make the test run faster
     # The basic validation above is sufficient to check if the endpoint works
