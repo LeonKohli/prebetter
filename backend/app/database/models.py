@@ -107,7 +107,7 @@ def process_grouped_alerts_details(alerts, max_limit=1000):
         # Stop processing if we've reached the limit
         if processed_count >= max_limit:
             break
-            
+
         key = (a.source_ipv4, a.target_ipv4)
         if key not in alerts_map:
             alerts_map[key] = []
@@ -134,6 +134,10 @@ def process_grouped_alerts_details(alerts, max_limit=1000):
                 )
             )
             processed_count += 1
+
+    # Sort alerts within each group by detected_at time (newest first)
+    for key in alerts_map:
+        alerts_map[key].sort(key=lambda x: x.detected_at if x.detected_at else "", reverse=True)
 
     return alerts_map
 
