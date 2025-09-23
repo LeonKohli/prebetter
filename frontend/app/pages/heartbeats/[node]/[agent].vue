@@ -144,6 +144,7 @@ import { useRoute } from '#imports'
 import HeartbeatStatusBadge from '@/components/heartbeats/HeartbeatStatusBadge.vue'
 import HeartbeatTimelineTable from '@/components/heartbeats/HeartbeatTimelineTable.vue'
 import { useHeartbeatStatus, useHeartbeatTimeline, formatRelativeFromSeconds } from '@/composables/useHeartbeats'
+import { formatTimestamp } from '@/utils/timestampFormatter'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -210,18 +211,8 @@ function handleTimelineHoursChange(value: unknown) {
 }
 
 function formatAbsolute(value: string) {
-  try {
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-    }).format(new Date(value))
-  } catch (error) {
-    return value
-  }
+  // Use centralized formatter with UTC display
+  return formatTimestamp(value, { style: 'short' })
 }
 
 function updateAutoRefresh(value: boolean) {
