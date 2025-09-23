@@ -4,6 +4,7 @@ import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, Analyze
 import AlertActions from '@/components/alerts/AlertActions.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { formatTimestamp, formatTimestampCompact, getRelativeTime } from '@/utils/timestampFormatter'
 
 export const useAlertTableColumns = () => {
   // Helper to create sortable header with proper indicators
@@ -108,21 +109,16 @@ export const useAlertTableColumns = () => {
       header: createSortableHeader('Date/Time'),
       cell: ({ row }) => {
         const dateStr = row.getValue('detected_at') as string
-        const date = dateStr ? new Date(dateStr) : null
-        
-        if (!date) return h('span', { class: 'text-muted-foreground' }, 'Unknown')
-        
+
+        if (!dateStr) return h('span', { class: 'text-muted-foreground' }, 'Unknown')
+
+        // Use centralized formatter with UTC display
+        const formatted = formatTimestampCompact(dateStr)
+        const relative = getRelativeTime(dateStr)
+
         return h('div', { class: 'text-sm' }, [
-          h('div', { class: 'font-medium' }, date.toLocaleDateString('de-DE', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          })),
-          h('div', { class: 'text-xs text-muted-foreground' }, date.toLocaleTimeString('de-DE', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-          }))
+          h('div', { class: 'font-medium' }, formatted),
+          h('div', { class: 'text-xs text-muted-foreground' }, relative)
         ])
       },
     },
@@ -167,24 +163,16 @@ export const useAlertTableColumns = () => {
       cell: ({ row }) => {
         const time = row.getValue<TimeInfo | string>('detected_at')
         const timestamp = time && typeof time === 'object' && 'timestamp' in time ? time.timestamp : time
-        const date = timestamp ? new Date(timestamp) : new Date()
-        const timeAgo = useTimeAgo(date)
-        
+
+        if (!timestamp) return h('span', { class: 'text-muted-foreground' }, 'Unknown')
+
+        // Use centralized formatter with UTC display
+        const formatted = formatTimestampCompact(timestamp)
+        const relative = getRelativeTime(timestamp)
+
         return h('div', { class: 'text-sm' }, [
-          h('div', { class: 'font-medium' }, date.toLocaleDateString('de-DE', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          })),
-          h('div', { class: 'text-xs text-muted-foreground flex items-center gap-1' }, [
-            h('span', {}, date.toLocaleTimeString('de-DE', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false
-            })),
-            h('span', { class: 'text-muted-foreground/70' }, '•'),
-            h('span', { class: 'text-muted-foreground/70' }, timeAgo.value)
-          ])
+          h('div', { class: 'font-medium' }, formatted),
+          h('div', { class: 'text-xs text-muted-foreground' }, relative)
         ])
       },
     },

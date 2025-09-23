@@ -97,6 +97,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatRelativeFromSeconds } from '@/composables/useHeartbeats'
+import { formatTimestamp } from '@/utils/timestampFormatter'
 
 const props = defineProps({
   nodes: {
@@ -118,17 +119,7 @@ function handleSelect(node: string, agent: string) {
 }
 
 function formatAbsolute(value: string) {
-  try {
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-    }).format(new Date(value))
-  } catch (error) {
-    return value
-  }
+  // Use centralized formatter with UTC display
+  return formatTimestamp(value, { style: 'short' })
 }
 </script>

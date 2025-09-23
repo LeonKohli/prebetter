@@ -86,6 +86,7 @@ import type { HeartbeatTimelineItem } from '@/types/heartbeats'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { formatTimestamp } from '@/utils/timestampFormatter'
 
 interface Props {
   title: string
@@ -110,18 +111,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 function formatAbsolute(value: string) {
-  try {
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-    }).format(new Date(value))
-  } catch (error) {
-    return value
-  }
+  // Use centralized formatter with UTC display
+  return formatTimestamp(value, { style: 'short' })
 }
 
 function itemKey(item: HeartbeatTimelineItem) {

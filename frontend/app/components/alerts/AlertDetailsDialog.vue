@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AlertDetail } from '@/types/alerts'
 import HexAsciiPayload from '@/components/alerts/HexAsciiPayload.vue'
+import { formatTimestamp, formatTimestampLocal } from '@/utils/timestampFormatter'
 
 const props = defineProps<{
   alertId?: string | null
@@ -63,13 +64,8 @@ function copyWithFeedback(key: string, text: string) {
   }, 1500)
 }
 
-function formatTimestamp(timestamp: string | Date): string {
-  const date = new Date(timestamp)
-  return new Intl.DateTimeFormat('de-DE', {
-    dateStyle: 'medium',
-    timeStyle: 'medium'
-  }).format(date)
-}
+// Timestamp formatting handled by centralized utility
+// Use formatTimestamp for UTC display or formatTimestampLocal for local time
 
 function getSeverityClass(severity?: string): string {
   const severityLower = severity?.toLowerCase()
