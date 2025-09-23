@@ -16,14 +16,11 @@ export interface TimestampOptions {
 
 /**
  * Get the user's locale in an SSR-safe way
+ * Always returns German locale as per system requirements
  */
 function getUserLocale(): string {
-  // Check if we're on the client side and navigator is available
-  if (process.client && typeof navigator !== 'undefined' && navigator.language) {
-    return navigator.language
-  }
-  // Default to en-US for server-side rendering
-  return 'en-US'
+  // Always use German locale as per system configuration
+  return 'de-DE'
 }
 
 /**
