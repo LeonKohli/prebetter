@@ -172,9 +172,8 @@ const displayData = computed(() => {
     
     response.groups?.forEach((group, groupIndex) => {
       if (group.alerts && group.alerts.length > 0) {
-        const sortedAlerts = [...group.alerts].sort((a, b) => b.count - a.count)
-        
-        sortedAlerts.forEach((alert, alertIndex) => {
+        // Keep the backend's chronological sorting (newest first)
+        group.alerts.forEach((alert, alertIndex) => {
           flattenedAlerts.push({
             source_ipv4: group.source_ipv4,
             target_ipv4: group.target_ipv4,
@@ -187,8 +186,8 @@ const displayData = computed(() => {
             groupIndex: groupIndex,
             alertIndex: alertIndex,
             isFirstInGroup: alertIndex === 0,
-            isLastInGroup: alertIndex === sortedAlerts.length - 1,
-            groupSize: sortedAlerts.length
+            isLastInGroup: alertIndex === group.alerts.length - 1,
+            groupSize: group.alerts.length
           })
         })
       }
