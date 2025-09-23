@@ -8,7 +8,7 @@
         </p>
       </div>
       <div v-if="lastUpdated" class="text-xs text-muted-foreground whitespace-nowrap">
-        Updated {{ new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(lastUpdated) }}
+        Updated {{ formatTimestamp(lastUpdated, { style: 'short', showTimezone: true }) }}
       </div>
     </div>
 
@@ -45,6 +45,7 @@
 import type { PropType } from 'vue'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import HeartbeatStatusBadge from '@/components/heartbeats/HeartbeatStatusBadge.vue'
+import { formatTimestamp } from '@/utils/timestampFormatter'
 
 type SummaryItem = {
   status: string
