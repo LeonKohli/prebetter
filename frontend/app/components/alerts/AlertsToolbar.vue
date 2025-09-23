@@ -144,6 +144,7 @@ import { useAlertTableContext } from '@/composables/useAlertTableContext'
 interface DateRangeValue {
   from: Date | undefined
   to: Date | undefined
+  presetId?: string
 }
 
 interface Emits {
@@ -183,6 +184,8 @@ async function backToGroups() {
 }
 
 
+const selectedPresetId = ref<string | undefined>(undefined)
+
 const dateRange = computed<DateRangeValue>({
   get: () => {
     const filters = urlState.filters.value
@@ -194,15 +197,17 @@ const dateRange = computed<DateRangeValue>({
     
     // If no dates are in URL, show last 24 hours in the picker UI only
     if (!from && !to) {
-      return getLast24HoursRange()
+      const range = getLast24HoursRange()
+      return { ...range, presetId: 'last-24-hours' }
     }
     
-    return { from, to }
+    return { from, to, presetId: selectedPresetId.value }
   },
   set: (value) => {
     if (!value.from || !value.to) {
       const { start_date, end_date, ...otherFilters } = urlState.filters.value
       urlState.filters.value = otherFilters
+      selectedPresetId.value = undefined
       return
     }
     
@@ -212,6 +217,9 @@ const dateRange = computed<DateRangeValue>({
       start_date: value.from.toISOString(),
       end_date: value.to.toISOString()
     }
+
+    // Preserve presetId locally for stable labeling in the picker
+    selectedPresetId.value = value.presetId
   }
 })
 
