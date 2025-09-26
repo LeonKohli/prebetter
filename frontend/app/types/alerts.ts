@@ -2,8 +2,9 @@
 
 export interface TimeInfo {
   timestamp: string
-  usec?: number
-  gmtoff?: number
+  // Legacy IDMEF fields - backend no longer sends these
+  usec?: never
+  gmtoff?: never
 }
 
 export interface NodeInfo {
