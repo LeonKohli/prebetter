@@ -130,9 +130,8 @@ class NetworkInfo(BaseModel):
 
 
 class TimeInfo(BaseModel):
+    """Simplified time info without IDMEF overhead."""
     timestamp: datetime
-    usec: Optional[int] = None
-    gmtoff: Optional[int] = None
 
     @field_validator("timestamp", mode="before")
     @classmethod
@@ -177,9 +176,8 @@ class ServiceInfo(BaseModel):
 
 
 class AnalyzerTimeInfo(BaseModel):
+    """Simplified analyzer time without IDMEF overhead."""
     timestamp: datetime
-    usec: Optional[int] = None
-    gmtoff: Optional[int] = None
 
     @field_validator("timestamp")
     def ensure_timezone_aware(cls, v):

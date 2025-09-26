@@ -6,7 +6,7 @@ the application to reduce code duplication and maintain consistent query pattern
 """
 
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import select, func, and_, literal_column, tuple_, text, case, literal
+from sqlalchemy import select, func, and_, literal_column, tuple_, text, case, literal, Integer
 from datetime import datetime
 import logging
 
@@ -47,12 +47,9 @@ def build_alert_base_query(db: Session):
         select(
             Alert._ident,
             Alert.messageid,
-            DetectTime.time.label("detect_time"),
-            DetectTime.usec.label("detect_time_usec"),
-            DetectTime.gmtoff.label("detect_time_gmtoff"),
-            CreateTime.time.label("create_time"),
-            CreateTime.usec.label("create_time_usec"),
-            CreateTime.gmtoff.label("create_time_gmtoff"),
+            # Apply timezone conversion directly in SQL (all data is CEST/gmtoff=7200)
+            func.timestampadd(text("SECOND"), DetectTime.gmtoff, DetectTime.time).label("detect_time"),
+            func.timestampadd(text("SECOND"), CreateTime.gmtoff, CreateTime.time).label("create_time"),
             Classification.text.label("classification_text"),
             Impact.severity,
             source_addr.address.label("source_ipv4"),
@@ -134,7 +131,12 @@ def build_grouped_alerts_query(db: Session):
             source_addr.address.label("source_ipv4"),
             target_addr.address.label("target_ipv4"),
             func.count(func.distinct(Alert._ident)).label("total_count"),
-            func.max(DetectTime.time).label("latest_time"),
+            # Convert to local time (all current data has gmtoff=7200/CEST)
+            func.timestampadd(
+                text("SECOND"),
+                func.max(DetectTime.gmtoff),
+                func.max(DetectTime.time)
+            ).label("latest_time"),
             func.max(Impact.severity).label("max_severity"),
             # GROUP_CONCAT aggregates string values efficiently
             func.group_concat(func.distinct(Classification.text), ",").label(
@@ -193,7 +195,12 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             # Use group_concat with DISTINCT for better performance
             func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
             func.group_concat(func.distinct(Node.name)).label("analyzer_hosts"),
-            func.max(DetectTime.time).label("latest_time"),
+            # Convert to local time (all current data has gmtoff=7200/CEST)
+            func.timestampadd(
+                text("SECOND"),
+                func.max(DetectTime.gmtoff),
+                func.max(DetectTime.time)
+            ).label("latest_time"),
         )
         .select_from(Alert)
         .join(DetectTime, Alert._ident == DetectTime._message_ident)

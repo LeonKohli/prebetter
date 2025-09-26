@@ -53,23 +53,11 @@ def alert_result_to_list_item(result: Row) -> AlertListItem:
 
     create_time_info = None
     if result.create_time:
-        create_time_info = TimeInfo(
-            timestamp=result.create_time,
-            usec=result.create_time_usec
-            if hasattr(result, "create_time_usec")
-            else None,
-            gmtoff=result.create_time_gmtoff
-            if hasattr(result, "create_time_gmtoff")
-            else None,
-        )
+        # Timestamp already converted to local time in SQL query
+        create_time_info = TimeInfo(timestamp=result.create_time)
 
-    detect_time_info = TimeInfo(
-        timestamp=result.detect_time,
-        usec=result.detect_time_usec if hasattr(result, "detect_time_usec") else None,
-        gmtoff=result.detect_time_gmtoff
-        if hasattr(result, "detect_time_gmtoff")
-        else None,
-    )
+    # Timestamp already converted to local time in SQL query
+    detect_time_info = TimeInfo(timestamp=result.detect_time)
 
     alert_item = AlertListItem(
         id=str(result._ident),
@@ -90,11 +78,19 @@ def grouped_alert_to_response(
 ) -> GroupedAlert:
     """Convert a pair result and its associated alerts to a GroupedAlert schema."""
     key = (pair.source_ipv4, pair.target_ipv4)
+    alerts = alerts_map.get(key, [])
+
+    # Use the group's overall latest_time for all alerts for consistency
+    # The backend query should handle timezone conversion using TIMESTAMPADD
+    if hasattr(pair, 'latest_time') and pair.latest_time:
+        for alert in alerts:
+            alert.detected_at = pair.latest_time
+
     return GroupedAlert(
         source_ipv4=pair.source_ipv4,
         target_ipv4=pair.target_ipv4,
         total_count=pair.total_count,
-        alerts=alerts_map.get(key, []),
+        alerts=alerts,
     )
 
 
