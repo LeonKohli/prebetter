@@ -43,11 +43,7 @@ def test_alert_result_to_list_item_full():
         "_ident": 12345,
         "messageid": "msg-001",
         "create_time": datetime(2023, 10, 26, 10, 0, 0, tzinfo=timezone.utc),
-        "create_time_usec": 500,
-        "create_time_gmtoff": 0,
         "detect_time": datetime(2023, 10, 26, 10, 0, 5, tzinfo=timezone.utc),
-        "detect_time_usec": 600,
-        "detect_time_gmtoff": 0,
         "classification_text": "Test Classification",
         "severity": "high",
         "source_ipv4": "192.168.1.100",
@@ -77,11 +73,9 @@ def test_alert_result_to_list_item_full():
 
     assert result.created_at is not None
     assert result.created_at.timestamp == mock_data["create_time"]
-    assert result.created_at.usec == 500
 
     assert result.detected_at is not None
     assert result.detected_at.timestamp == mock_data["detect_time"]
-    assert result.detected_at.usec == 600
 
     assert result.analyzer is not None
     assert result.analyzer.name == "TestAnalyzer (analyzer)"  # Checks hostname split
@@ -124,7 +118,6 @@ def test_alert_result_to_list_item_minimal():
 
     assert result.detected_at is not None
     assert result.detected_at.timestamp == mock_data["detect_time"]
-    assert result.detected_at.usec is None
 
     assert result.analyzer is not None
     assert result.analyzer.name == "BasicAnalyzer"  # No host to split
@@ -244,15 +237,17 @@ def test_process_grouped_alerts_details_basic():
 
     pair1_alerts = result_map[("1.1.1.1", "2.2.2.2")]
     assert len(pair1_alerts) == 2
-    assert pair1_alerts[0].classification == "Class A"
-    assert pair1_alerts[0].count == 10
-    assert pair1_alerts[0].analyzer == ["Analyzer1", "AnalyzerX"]
-    assert pair1_alerts[0].analyzer_host == ["host1", "hostX"]  # Check hostname split
-    assert pair1_alerts[0].detected_at == alert_data_1["latest_time"]
+    # Alerts are sorted by detected_at time (newest first), so Class B (11:00) comes before Class A (10:00)
+    assert pair1_alerts[0].classification == "Class B"
+    assert pair1_alerts[0].count == 5
+    assert pair1_alerts[0].analyzer == ["Analyzer2"]
+    assert pair1_alerts[0].analyzer_host == ["host2"]
+    assert pair1_alerts[0].detected_at == alert_data_2["latest_time"]
 
-    assert pair1_alerts[1].classification == "Class B"
-    assert pair1_alerts[1].analyzer == ["Analyzer2"]
-    assert pair1_alerts[1].analyzer_host == ["host2"]
+    assert pair1_alerts[1].classification == "Class A"
+    assert pair1_alerts[1].count == 10
+    assert pair1_alerts[1].analyzer == ["Analyzer1", "AnalyzerX"]
+    assert pair1_alerts[1].analyzer_host == ["host1", "hostX"]  # Check hostname split
 
     pair2_alerts = result_map[("3.3.3.3", "4.4.4.4")]
     assert len(pair2_alerts) == 1
@@ -339,9 +334,7 @@ def test_build_analyzer_info_full():
     node_info = NodeInfo(name="node1", location="DMZ", category="Edge")
     process_info = ProcessInfo(name="fw_proc", pid=1234, path="/usr/bin/fw")
     analyzer_time_info = AnalyzerTimeInfo(
-        timestamp=datetime(2023, 10, 26, 10, 0, 0, tzinfo=timezone.utc),
-        usec=100,
-        gmtoff=0,
+        timestamp=datetime(2023, 10, 26, 10, 0, 0, tzinfo=timezone.utc)
     )
 
     result = build_analyzer_info(
