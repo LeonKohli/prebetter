@@ -1,12 +1,20 @@
 import pytest
 import uuid
 from typing import Generator
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env.test file BEFORE importing app
+env_file = Path(__file__).parent.parent / ".env.test"
+load_dotenv(env_file)
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from app.main import app
 from app.models.users import User
 from app.core.security import get_password_hash
+
 
 # Global test data
 TEST_USER = {

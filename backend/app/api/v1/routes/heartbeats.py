@@ -3,7 +3,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Annotated, Dict, Any
+from typing import Dict, Any
 from pydantic import ValidationError
 import logging
 
@@ -12,10 +12,8 @@ from app.database.query_builders import (
     build_heartbeats_timeline_query,
     build_efficient_heartbeats_query,
 )
-from app.database.cleanup import cleanup_old_heartbeats, cleanup_orphaned_analyzer_times
 from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
 from app.models.prelude import AnalyzerTime
-from app.models.users import User
 from app.schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
@@ -24,7 +22,6 @@ from app.schemas.prelude import (
     PaginatedHeartbeatTimelineResponse,
 )
 from app.api.v1.routes.auth import get_current_user
-from app.api.v1.routes.users import get_current_superuser
 from app.database.models import determine_heartbeat_status
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -61,9 +58,9 @@ def _normalise_interval(raw_interval: Any) -> int | None:
     return interval if interval > 0 else None
 
 
-def _derive_heartbeat_metadata(row: Dict[str, Any], now: datetime) -> tuple[
-    datetime | None, int, str, int | None
-]:
+def _derive_heartbeat_metadata(
+    row: Dict[str, Any], now: datetime
+) -> tuple[datetime | None, int, str, int | None]:
     """Compute heartbeat metadata for response payloads."""
     last_heartbeat = _parse_last_heartbeat(getattr(row, "last_heartbeat", None))
     interval = _normalise_interval(getattr(row, "heartbeat_interval", None))
@@ -119,9 +116,7 @@ async def heartbeat_status(
                     name=row.analyzer_name,
                     model=row.model,
                     version=row.version,
-                    **{
-                        "class": getattr(row, "class")
-                    },
+                    **{"class": getattr(row, "class")},
                     latest_heartbeat_at=last_heartbeat,
                     seconds_ago=seconds_ago,
                     heartbeat_interval=heartbeat_interval,
@@ -146,7 +141,10 @@ async def heartbeat_status(
             )
         )
 
-    summary = {status: status_counts.get(status, 0) for status in ("active", "inactive", "offline", "unknown")}
+    summary = {
+        status: status_counts.get(status, 0)
+        for status in ("active", "inactive", "offline", "unknown")
+    }
     for extra_status, count in status_counts.items():
         if extra_status not in summary:
             summary[extra_status] = count
@@ -202,41 +200,4 @@ async def timeline_heartbeats(
             "size": size,
             "pages": (total_count + size - 1) // size,
         },
-    }
-
-
-@router.post("/cleanup")
-async def cleanup_heartbeats(
-    _: Annotated[
-        User, Depends(get_current_superuser)
-    ],
-    db: Session = Depends(get_prelude_db),
-    retention_days: int = Query(
-        30, ge=1, le=90, description="Days of heartbeat data to retain"
-    ),
-    dry_run: bool = Query(
-        False,
-        description="If true, only preview what would be deleted without actually deleting",
-    ),
-):
-    from app.models.prelude import Heartbeat
-
-    total_heartbeats_before = db.scalar(select(func.count(Heartbeat._ident)))
-
-    deleted_heartbeats, deleted_analyzer_times = cleanup_old_heartbeats(
-        db, retention_days, dry_run=dry_run
-    )
-
-    deleted_orphans = cleanup_orphaned_analyzer_times(db, dry_run=dry_run)
-
-    total_heartbeats_after = db.scalar(select(func.count(Heartbeat._ident)))
-
-    return {
-        "deleted_heartbeats": deleted_heartbeats,
-        "deleted_analyzer_times": deleted_analyzer_times,
-        "deleted_orphaned_records": deleted_orphans,
-        "retention_days": retention_days,
-        "dry_run": dry_run,
-        "total_heartbeats_before": total_heartbeats_before,
-        "total_heartbeats_after": total_heartbeats_after,
     }
