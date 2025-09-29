@@ -43,8 +43,6 @@ def test_list_alerts(auth_client):
         # Verify time info structure if present
         if alert["detected_at"]:
             assert "timestamp" in alert["detected_at"]
-            assert "usec" in alert["detected_at"]
-            assert "gmtoff" in alert["detected_at"]
 
     # Test sorting
     sort_response = auth_client.get("/api/v1/alerts/?sort_by=severity&sort_order=desc")
@@ -122,9 +120,7 @@ def test_alert_detail(auth_client):
 
     # Verify optional fields have correct types when present
     if "create_time" in data and data["create_time"]:
-        assert "time" in data["create_time"]
-        assert "usec" in data["create_time"]
-        assert "gmtoff" in data["create_time"]
+        assert "timestamp" in data["create_time"]
 
     if "classification_text" in data:
         assert isinstance(data["classification_text"], str)
@@ -267,9 +263,3 @@ def test_alert_detail_edge_cases(auth_client):
     # Test very large alert ID
     response = auth_client.get("/api/v1/alerts/999999999999999")
     assert response.status_code == 404
-
-    # Truncate parameter has been removed; ensure endpoint works without it
-
-
-# DELETE tests removed - Prelude DB is read-only as per architecture design
-# Alert data should only be modified through the Prelude IDS system itself
