@@ -6,7 +6,17 @@ the application to reduce code duplication and maintain consistent query pattern
 """
 
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import select, func, and_, literal_column, tuple_, text, case, literal, Integer
+from sqlalchemy import (
+    select,
+    func,
+    and_,
+    literal_column,
+    tuple_,
+    text,
+    case,
+    literal,
+)
+from sqlalchemy import Table, MetaData
 from datetime import datetime
 import logging
 
@@ -37,6 +47,44 @@ from .config import (
 
 logger = logging.getLogger(__name__)
 
+_PAIR_TABLE = None  # cache for reflected Prebetter_Pair Table
+
+
+def _get_prebetter_pair_table(db: Session):
+    """Reflect Prebetter_Pair if present; cache result for this process."""
+    global _PAIR_TABLE
+    if _PAIR_TABLE is not None:
+        return _PAIR_TABLE
+    try:
+        metadata = MetaData()
+        _PAIR_TABLE = Table("Prebetter_Pair", metadata, autoload_with=db.get_bind())
+        return _PAIR_TABLE
+    except Exception:
+        _PAIR_TABLE = None
+        return None
+
+
+def _canonical_source_join(alert_alias, alias_name: str = "source"):
+    """Return the canonical Source alias (index 0) and join condition."""
+
+    source_alias = aliased(Source, name=alias_name)
+    join_condition = and_(
+        source_alias._message_ident == alert_alias._ident,
+        source_alias._index == 0,
+    )
+    return source_alias, join_condition
+
+
+def _canonical_target_join(alert_alias, alias_name: str = "target"):
+    """Return the canonical Target alias (index 0) and join condition."""
+
+    target_alias = aliased(Target, name=alias_name)
+    join_condition = and_(
+        target_alias._message_ident == alert_alias._ident,
+        target_alias._index == 0,
+    )
+    return target_alias, join_condition
+
 
 def build_alert_base_query(db: Session):
     """Build a base query for alerts with essential joins."""
@@ -48,8 +96,12 @@ def build_alert_base_query(db: Session):
             Alert._ident,
             Alert.messageid,
             # Apply timezone conversion directly in SQL (all data is CEST/gmtoff=7200)
-            func.timestampadd(text("SECOND"), DetectTime.gmtoff, DetectTime.time).label("detect_time"),
-            func.timestampadd(text("SECOND"), CreateTime.gmtoff, CreateTime.time).label("create_time"),
+            func.timestampadd(text("SECOND"), DetectTime.gmtoff, DetectTime.time).label(
+                "detect_time"
+            ),
+            func.timestampadd(text("SECOND"), CreateTime.gmtoff, CreateTime.time).label(
+                "create_time"
+            ),
             Classification.text.label("classification_text"),
             Impact.severity,
             source_addr.address.label("source_ipv4"),
@@ -121,66 +173,320 @@ def build_alert_count_query(db: Session):
     return count_query, {"source_addr": source_addr, "target_addr": target_addr}
 
 
-def build_grouped_alerts_query(db: Session):
-    """Build a query for alerts grouped by source and target IP."""
-    source_addr = aliased(Address, name="source_addr")
-    target_addr = aliased(Address, name="target_addr")
+def build_grouped_alerts_query(
+    db: Session,
+    *,
+    include_classification: bool = False,
+    include_analyzer: bool = False,
+    include_impact: bool = False,
+):
+    """Build a query for alerts grouped by canonical source and target IP.
 
-    pairs_query = (
-        select(
+    The query is kept lean by default. Optional joins are added only when
+    required for filters or sorting to avoid row multiplication and expensive
+    aggregates in the hot path.
+    """
+
+    pair_table = _get_prebetter_pair_table(db)
+    if pair_table is not None:
+        select_cols = [
+            func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
+            func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
+            func.timestampadd(
+                text("SECOND"), func.max(DetectTime.gmtoff), func.max(DetectTime.time)
+            ).label("latest_time"),
+            func.count().label("total_count"),
+        ]
+        if include_impact:
+            select_cols.append(func.max(Impact.severity).label("max_severity"))
+
+        pairs_query = (
+            select(*select_cols)
+            .select_from(DetectTime)
+            .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
+        )
+        if include_impact:
+            pairs_query = pairs_query.outerjoin(
+                Impact, Impact._message_ident == DetectTime._message_ident
+            )
+        if include_classification:
+            pairs_query = pairs_query.outerjoin(
+                Classification, Classification._message_ident == DetectTime._message_ident
+            )
+        if include_analyzer:
+            pairs_query = pairs_query.outerjoin(
+                Analyzer, get_analyzer_join_conditions(DetectTime._message_ident)
+            )
+
+        pairs_query = pairs_query.group_by(pair_table.c.pair_key)
+
+        return pairs_query, {
+            "pair": pair_table,
+            "source_ip_order_col": func.inet_ntoa(pair_table.c.source_ip),
+            "target_ip_order_col": func.inet_ntoa(pair_table.c.target_ip),
+            "source_ip_int_col": pair_table.c.source_ip,
+            "target_ip_int_col": pair_table.c.target_ip,
+        }
+    else:
+        # Anchor on DetectTime (range filter) to avoid an extra eq_ref Alert hop
+        source_alias = aliased(Source, name="source")
+        target_alias = aliased(Target, name="target")
+        source_addr = aliased(Address, name="source_addr")
+        target_addr = aliased(Address, name="target_addr")
+
+        # Core select columns
+        select_cols = [
             source_addr.address.label("source_ipv4"),
             target_addr.address.label("target_ipv4"),
-            func.count(func.distinct(Alert._ident)).label("total_count"),
-            # Convert to local time (all current data has gmtoff=7200/CEST)
             func.timestampadd(
-                text("SECOND"),
-                func.max(DetectTime.gmtoff),
-                func.max(DetectTime.time)
+                text("SECOND"), func.max(DetectTime.gmtoff), func.max(DetectTime.time)
             ).label("latest_time"),
-            func.max(Impact.severity).label("max_severity"),
-            # GROUP_CONCAT aggregates string values efficiently
-            func.group_concat(func.distinct(Classification.text), ",").label(
-                "latest_classification"
-            ),
-            func.group_concat(func.distinct(Analyzer.name), ",").label("analyzer_name"),
+        ]
+
+        # COUNT strategy: count DetectTime rows (one per alert time) to avoid
+        # introducing Alert into FROM (which would create a cross join).
+        # Use DISTINCT when classification is joined to avoid overcounting.
+        if include_classification:
+            total_count_expr = func.count(func.distinct(DetectTime._message_ident))
+        else:
+            total_count_expr = func.count()
+        select_cols.append(total_count_expr.label("total_count"))
+
+        if include_impact:
+            select_cols.append(func.max(Impact.severity).label("max_severity"))
+
+        pairs_query = (
+            select(*select_cols)
+            .select_from(DetectTime)
+            .join(
+                source_alias,
+                and_(
+                    source_alias._message_ident == DetectTime._message_ident,
+                    source_alias._index == 0,
+                ),
+            )
+            .join(
+                target_alias,
+                and_(
+                    target_alias._message_ident == DetectTime._message_ident,
+                    target_alias._index == 0,
+                ),
+            )
+            .outerjoin(
+                source_addr,
+                and_(
+                    source_addr._message_ident == DetectTime._message_ident,
+                    source_addr._parent_type == "S",
+                    source_addr._parent0_index == source_alias._index,
+                    source_addr._index == -1,
+                    source_addr.category == "ipv4-addr",
+                ),
+            )
+            .outerjoin(
+                target_addr,
+                and_(
+                    target_addr._message_ident == DetectTime._message_ident,
+                    target_addr._parent_type == "T",
+                    target_addr._parent0_index == target_alias._index,
+                    target_addr._index == -1,
+                    target_addr.category == "ipv4-addr",
+                ),
+            )
         )
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .outerjoin(Impact, Impact._message_ident == Alert._ident)
-        .outerjoin(Classification, Classification._message_ident == Alert._ident)
+
+        if include_impact:
+            pairs_query = pairs_query.outerjoin(
+                Impact, Impact._message_ident == DetectTime._message_ident
+            )
+        if include_classification:
+            pairs_query = pairs_query.outerjoin(
+                Classification, Classification._message_ident == DetectTime._message_ident
+            )
+        if include_analyzer:
+            pairs_query = pairs_query.outerjoin(
+                Analyzer, get_analyzer_join_conditions(DetectTime._message_ident)
+            )
+
+        pairs_query = (
+            pairs_query.where(source_addr.address.isnot(None))
+            .where(target_addr.address.isnot(None))
+            .group_by(source_addr.address, target_addr.address)
+        )
+
+        return pairs_query, {
+            "source": source_alias,
+            "target": target_alias,
+            "source_addr": source_addr,
+            "target_addr": target_addr,
+        }
+
+
+def build_grouped_alerts_count_query(
+    db: Session,
+    *,
+    include_classification: bool = False,
+    include_analyzer: bool = False,
+    include_impact: bool = False,
+):
+    """Build a lightweight count query for grouped alerts pagination.
+
+    Optional joins are added only when they are needed for filters.
+    """
+
+    pair_table = _get_prebetter_pair_table(db)
+    if pair_table is not None:
+        count_query = (
+            select(func.count(func.distinct(pair_table.c.pair_key)))
+            .select_from(DetectTime)
+            .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
+        )
+        if include_impact:
+            count_query = count_query.outerjoin(
+                Impact, Impact._message_ident == DetectTime._message_ident
+            )
+        if include_classification:
+            count_query = count_query.outerjoin(
+                Classification, Classification._message_ident == DetectTime._message_ident
+            )
+        if include_analyzer:
+            count_query = count_query.outerjoin(
+                Analyzer, get_analyzer_join_conditions(DetectTime._message_ident)
+            )
+        return count_query, {
+            "pair": pair_table,
+            "source_ip_int_col": pair_table.c.source_ip,
+            "target_ip_int_col": pair_table.c.target_ip,
+        }
+
+    # Fallback: Address-based count
+    source_alias = aliased(Source, name="count_source")
+    target_alias = aliased(Target, name="count_target")
+    source_addr = aliased(Address, name="count_source_addr")
+    target_addr = aliased(Address, name="count_target_addr")
+
+    distinct_pairs = text(
+        "DISTINCT count_source_addr.address, count_target_addr.address"
+    )
+    count_query = (
+        select(func.count(distinct_pairs))
+        .select_from(DetectTime)
+        .join(
+            source_alias,
+            and_(
+                source_alias._message_ident == DetectTime._message_ident,
+                source_alias._index == 0,
+            ),
+        )
+        .join(
+            target_alias,
+            and_(
+                target_alias._message_ident == DetectTime._message_ident,
+                target_alias._index == 0,
+            ),
+        )
         .outerjoin(
             source_addr,
             and_(
-                source_addr._message_ident == Alert._ident,
+                source_addr._message_ident == DetectTime._message_ident,
                 source_addr._parent_type == "S",
+                source_addr._parent0_index == source_alias._index,
+                source_addr._index == -1,
                 source_addr.category == "ipv4-addr",
             ),
         )
         .outerjoin(
             target_addr,
             and_(
-                target_addr._message_ident == Alert._ident,
+                target_addr._message_ident == DetectTime._message_ident,
                 target_addr._parent_type == "T",
+                target_addr._parent0_index == target_alias._index,
+                target_addr._index == -1,
                 target_addr.category == "ipv4-addr",
             ),
         )
-        .outerjoin(
-            Analyzer,
-            get_analyzer_join_conditions(Alert._ident),
-        )
-        .where(source_addr.address.isnot(None))
-        .where(target_addr.address.isnot(None))
-        .group_by(
-            source_addr.address,
-            target_addr.address,
-        )
     )
 
-    return pairs_query, {"source_addr": source_addr, "target_addr": target_addr}
+    if include_impact:
+        count_query = count_query.outerjoin(
+            Impact, Impact._message_ident == DetectTime._message_ident
+        )
+    if include_classification:
+        count_query = count_query.outerjoin(
+            Classification, Classification._message_ident == DetectTime._message_ident
+        )
+    if include_analyzer:
+        count_query = count_query.outerjoin(
+            Analyzer, get_analyzer_join_conditions(DetectTime._message_ident)
+        )
+
+    count_query = count_query.where(source_addr.address.isnot(None)).where(
+        target_addr.address.isnot(None)
+    )
+
+    return count_query, {
+        "source": source_alias,
+        "target": target_alias,
+        "source_addr": source_addr,
+        "target_addr": target_addr,
+    }
 
 
 def build_grouped_alerts_detail_query(db: Session, pairs):
-    """Build a query for detailed information about grouped alerts."""
+    """Build a query for detailed information about grouped alerts.
+
+    Uses Prebetter_Pair when available to avoid Address joins and tuple IN.
+    Falls back to DetectTime + Address joins otherwise.
+    """
+    pair_table = _get_prebetter_pair_table(db)
+    if pair_table is not None:
+        # Compute pair_key list from provided pairs
+        import ipaddress
+
+        def ip_to_int(ip: str) -> int:
+            return int(ipaddress.IPv4Address(ip))
+
+        pair_keys = [
+            (ip_to_int(p.source_ipv4) << 32) + ip_to_int(p.target_ipv4) for p in pairs
+        ]
+
+        alerts_query = (
+            select(
+                func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
+                func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
+                Classification.text.label("classification"),
+                func.count().label("count"),
+                func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
+                literal(None).label("analyzer_hosts"),
+                func.timestampadd(
+                    text("SECOND"),
+                    func.max(DetectTime.gmtoff),
+                    func.max(DetectTime.time),
+                ).label("latest_time"),
+            )
+            .select_from(DetectTime)
+            .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
+            .outerjoin(
+                Classification,
+                Classification._message_ident == DetectTime._message_ident,
+            )
+            .outerjoin(
+                Analyzer, get_analyzer_join_conditions(DetectTime._message_ident)
+            )
+            .where(
+                pair_table.c.pair_key.in_(pair_keys) if pair_keys else literal(False)
+            )
+            .group_by(pair_table.c.pair_key, Classification.text)
+        )
+
+        return alerts_query, {
+            "pair": pair_table,
+            "source_ip_int_col": pair_table.c.source_ip,
+            "target_ip_int_col": pair_table.c.target_ip,
+        }
+
+    # Fallback: DetectTime + Address joins
+    source_alias = aliased(Source, name="detail_source")
+    target_alias = aliased(Target, name="detail_target")
     source_addr = aliased(Address, name="source_addr")
     target_addr = aliased(Address, name="target_addr")
 
@@ -191,50 +497,71 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
             source_addr.address.label("source_ipv4"),
             target_addr.address.label("target_ipv4"),
             Classification.text.label("classification"),
-            func.count(func.distinct(Alert._ident)).label("count"),
-            # Use group_concat with DISTINCT for better performance
-            func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
-            func.group_concat(func.distinct(Node.name)).label("analyzer_hosts"),
-            # Convert to local time (all current data has gmtoff=7200/CEST)
+            func.count().label("count"),
+                func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
+                literal(None).label("analyzer_hosts"),
             func.timestampadd(
                 text("SECOND"),
                 func.max(DetectTime.gmtoff),
-                func.max(DetectTime.time)
+                func.max(DetectTime.time),
             ).label("latest_time"),
         )
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .outerjoin(Classification, Classification._message_ident == Alert._ident)
+        .select_from(DetectTime)
         .join(
-            source_addr,
+            source_alias,
             and_(
-                source_addr._message_ident == Alert._ident,
-                source_addr._parent_type == "S",
-                source_addr.category == "ipv4-addr",
+                source_alias._message_ident == DetectTime._message_ident,
+                source_alias._index == 0,
             ),
         )
         .join(
+            target_alias,
+            and_(
+                target_alias._message_ident == DetectTime._message_ident,
+                target_alias._index == 0,
+            ),
+        )
+        .outerjoin(
+            source_addr,
+            and_(
+                source_addr._message_ident == DetectTime._message_ident,
+                source_addr._parent_type == "S",
+                source_addr._parent0_index == source_alias._index,
+                source_addr._index == -1,
+                source_addr.category == "ipv4-addr",
+            ),
+        )
+        .outerjoin(
             target_addr,
             and_(
-                target_addr._message_ident == Alert._ident,
+                target_addr._message_ident == DetectTime._message_ident,
                 target_addr._parent_type == "T",
+                target_addr._parent0_index == target_alias._index,
+                target_addr._index == -1,
                 target_addr.category == "ipv4-addr",
             ),
         )
         .outerjoin(
-            Analyzer,
-            get_analyzer_join_conditions(Alert._ident),
+            Classification,
+            Classification._message_ident == DetectTime._message_ident,
         )
         .outerjoin(
-            Node,
-            get_node_join_conditions(Alert._ident),
+            Analyzer, get_analyzer_join_conditions(DetectTime._message_ident)
         )
-        # tuple_ matches multiple columns efficiently
-        .where(tuple_(source_addr.address, target_addr.address).in_(pair_tuples))
+        .where(
+            tuple_(source_addr.address, target_addr.address).in_(pair_tuples)
+            if pair_tuples
+            else literal(False)
+        )
         .group_by(source_addr.address, target_addr.address, Classification.text)
     )
 
-    return alerts_query, {"source_addr": source_addr, "target_addr": target_addr}
+    return alerts_query, {
+        "source": source_alias,
+        "target": target_alias,
+        "source_addr": source_addr,
+        "target_addr": target_addr,
+    }
 
 
 def build_alert_detail_query(db: Session, alert_id: int):
@@ -468,9 +795,7 @@ def build_alerts_statistics_query(
         .join(DetectTime, Alert._ident == DetectTime._message_ident)
         .where(DetectTime.time >= start_time)
         .where(DetectTime.time <= end_time)
-        .outerjoin(
-            Classification, Classification._message_ident == Alert._ident
-        )
+        .outerjoin(Classification, Classification._message_ident == Alert._ident)
         .group_by(Classification.text)
     )
 

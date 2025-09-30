@@ -41,6 +41,42 @@ Optional flags:
 - `--no-cleanup-orphans`: Skip orphan heartbeat sweep
 - `--dry-run`: Report counts without making changes
 
+### prelude_index_maintenance.py
+Audits critical Prelude database indexes and creates any that are missing.
+
+```bash
+# Show current index status
+uv run python -m app.scripts.prelude_index_maintenance check
+
+# Create any missing indexes (with confirmation)
+uv run python -m app.scripts.prelude_index_maintenance apply
+
+# Non-interactive creation
+uv run python -m app.scripts.prelude_index_maintenance apply --yes
+```
+
+### prelude_pair_accelerator.py
+Installs and manages the Prebetter_Pair accelerator (pair hash) for faster grouped
+count/list queries without heavy joins.
+
+```bash
+# Install table + triggers
+uv run python -m app.scripts.prelude_pair_accelerator install
+
+# Backfill the last 7 days
+uv run python -m app.scripts.prelude_pair_accelerator backfill-days --days 7
+
+# Backfill an explicit window
+uv run python -m app.scripts.prelude_pair_accelerator backfill --start 2025-09-22T22:00:00Z --end 2025-09-30T21:59:59Z
+
+# Check status
+uv run python -m app.scripts.prelude_pair_accelerator status
+
+# Remove triggers (and optionally table)
+uv run python -m app.scripts.prelude_pair_accelerator uninstall
+uv run python -m app.scripts.prelude_pair_accelerator uninstall --drop-table
+```
+
 ## Security Notes
 
 - No default credentials are created automatically

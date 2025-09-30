@@ -12,6 +12,7 @@ from app.database.config import (
 from app.database.query_builders import (
     build_alert_base_query,
     build_grouped_alerts_query,
+    build_grouped_alerts_count_query,
     build_grouped_alerts_detail_query,
     build_alert_detail_query,
 )
@@ -114,7 +115,6 @@ async def list_alerts(
         Analyzer=Analyzer,
     )
 
-
     sort_options = {
         SortField.DETECT_TIME: DetectTime.time,
         SortField.CREATE_TIME: CreateTime.time,
@@ -138,7 +138,9 @@ async def list_alerts(
     offset = (page - 1) * size
 
     # distinct() prevents duplicates from joins, _ident ensures stable pagination
-    alerts = db.execute(query.distinct().order_by(Alert._ident).offset(offset).limit(size)).all()
+    alerts = db.execute(
+        query.distinct().order_by(Alert._ident).offset(offset).limit(size)
+    ).all()
 
     alert_items = [alert_result_to_list_item(alert) for alert in alerts]
 
@@ -167,7 +169,23 @@ async def get_grouped_alerts(
 ) -> GroupedAlertResponse:
     """Retrieve alerts grouped by source and target IP addresses."""
     try:
-        pairs_query, models = build_grouped_alerts_query(db)
+        # Include optional joins only when needed for sorting or filtering
+        need_cls = (classification is not None) or (sort_by == SortField.CLASSIFICATION)
+        need_analyzer = (analyzer_model is not None) or (sort_by == SortField.ANALYZER)
+        need_impact = (severity is not None) or (sort_by == SortField.SEVERITY)
+
+        pairs_query, models = build_grouped_alerts_query(
+            db,
+            include_classification=need_cls,
+            include_analyzer=need_analyzer,
+            include_impact=need_impact,
+        )
+        count_query, count_models = build_grouped_alerts_count_query(
+            db,
+            include_classification=need_cls,
+            include_analyzer=need_analyzer,
+            include_impact=need_impact,
+        )
 
         pairs_query = apply_standard_alert_filters(
             query=pairs_query,
@@ -185,18 +203,46 @@ async def get_grouped_alerts(
             Analyzer=Analyzer,
         )
 
-        source_addr = models["source_addr"]
-        target_addr = models["target_addr"]
+        count_query = apply_standard_alert_filters(
+            query=count_query,
+            severity=severity,
+            classification=classification,
+            start_date=start_date,
+            end_date=end_date,
+            source_ip=source_ip,
+            target_ip=target_ip,
+            analyzer_model=analyzer_model,
+            **count_models,
+            Impact=Impact,
+            Classification=Classification,
+            DetectTime=DetectTime,
+            Analyzer=Analyzer,
+        )
+
+        # Determine order-by columns for source/target depending on path
+        source_order_col = (
+            models["source_addr"].address if "source_addr" in models else models.get("source_ip_order_col")
+        )
+        target_order_col = (
+            models["target_addr"].address if "target_addr" in models else models.get("target_ip_order_col")
+        )
+
+        count_expr = (
+            func.count(func.distinct(DetectTime._message_ident))
+            if need_cls
+            else func.count()
+        )
 
         sort_option = {
             "detect_time": func.max(DetectTime.time),
             "severity": func.max(Impact.severity),
             "classification": func.max(Classification.text),
-            "source_ip": source_addr.address,
-            "target_ip": target_addr.address,
+            "source_ip": source_order_col,
+            "target_ip": target_order_col,
             "analyzer": func.max(Analyzer.name),
-            "alert_id": func.count(func.distinct(Alert._ident)),
-            "total_count": func.count(func.distinct(Alert._ident)),
+            # Keep sort functions aligned with the aggregation strategy used in the builder
+            "alert_id": count_expr,
+            "total_count": count_expr,
         }
 
         order_by_clause = sort_option.get(sort_by.value)
@@ -205,9 +251,7 @@ async def get_grouped_alerts(
                 order_by_clause = order_by_clause.desc()
             pairs_query = pairs_query.order_by(order_by_clause)
 
-        # count() returns number of groups for pagination
-        count_subquery = pairs_query.subquery()
-        total_pairs = db.scalar(select(func.count()).select_from(count_subquery)) or 0
+        total_pairs = db.scalar(count_query) or 0
 
         pairs_query = pairs_query.offset((page - 1) * size).limit(size)
         pairs = db.execute(pairs_query).all()
@@ -229,15 +273,6 @@ async def get_grouped_alerts(
             Classification=Classification,
             DetectTime=DetectTime,
             Analyzer=Analyzer,
-        )
-
-        source_addr = alert_models["source_addr"]
-        target_addr = alert_models["target_addr"]
-
-        alerts_query = alerts_query.group_by(
-            source_addr.address,
-            target_addr.address,
-            Classification.text,
         )
 
         alerts = db.execute(alerts_query).all()
@@ -273,7 +308,9 @@ async def get_alert_detail(
 ) -> AlertDetail:
     """Get detailed information about a specific alert."""
     try:
-        alert_exists = db.execute(select(Alert._ident).where(Alert._ident == alert_id)).scalar_one_or_none()
+        alert_exists = db.execute(
+            select(Alert._ident).where(Alert._ident == alert_id)
+        ).scalar_one_or_none()
         if not alert_exists:
             raise HTTPException(status_code=404, detail="Alert not found")
 
@@ -296,25 +333,33 @@ async def get_alert_detail(
 
         analyzers_info = []
         for analyzer in analyzers_query:
-            process_args = db.execute(
-                select(ProcessArg.arg)
-                .where(
-                    ProcessArg._message_ident == alert_id,
-                    ProcessArg._parent_type == "A",
-                    ProcessArg._parent0_index == analyzer[0]._index,
+            process_args = (
+                db.execute(
+                    select(ProcessArg.arg)
+                    .where(
+                        ProcessArg._message_ident == alert_id,
+                        ProcessArg._parent_type == "A",
+                        ProcessArg._parent0_index == analyzer[0]._index,
+                    )
+                    .order_by(ProcessArg._index)
                 )
-                .order_by(ProcessArg._index)
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
-            process_env = db.execute(
-                select(ProcessEnv.env)
-                .where(
-                    ProcessEnv._message_ident == alert_id,
-                    ProcessEnv._parent_type == "A",
-                    ProcessEnv._parent0_index == analyzer[0]._index,
+            process_env = (
+                db.execute(
+                    select(ProcessEnv.env)
+                    .where(
+                        ProcessEnv._message_ident == alert_id,
+                        ProcessEnv._parent_type == "A",
+                        ProcessEnv._parent0_index == analyzer[0]._index,
+                    )
+                    .order_by(ProcessEnv._index)
                 )
-                .order_by(ProcessEnv._index)
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             node_info = build_node_info(analyzer[1]) if analyzer[1] else None
 
