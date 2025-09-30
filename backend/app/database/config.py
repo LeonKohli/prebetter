@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, MetaData, and_, literal
+from sqlalchemy import create_engine, MetaData, and_, literal, func
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
 from typing import Generator, Optional
 from datetime import datetime
@@ -112,6 +112,9 @@ def apply_standard_alert_filters(
     DetectTime = models.get("DetectTime")
     source_addr = models.get("source_addr")
     target_addr = models.get("target_addr")
+    # Optional integer IP columns when using Prebetter_Pair
+    source_ip_int_col = models.get("source_ip_int_col")
+    target_ip_int_col = models.get("target_ip_int_col")
     Analyzer = models.get("Analyzer")
 
     # Apply filters progressively from most to least selective for better query planning
@@ -135,13 +138,19 @@ def apply_standard_alert_filters(
         query = query.where(literal(False))
 
     # Apply exact match filters first (likely most selective)
-    if source_ip and source_addr:
-        # Using exact equality without func.binary() for better index utilization
-        query = query.where(source_addr.address == source_ip)
+    if source_ip:
+        if source_ip_int_col is not None:
+            query = query.where(source_ip_int_col == func.inet_aton(source_ip))
+        elif source_addr:
+            # Using exact equality without func.binary() for better index utilization
+            query = query.where(source_addr.address == source_ip)
 
-    if target_ip and target_addr:
-        # Using exact equality without func.binary() for better index utilization
-        query = query.where(target_addr.address == target_ip)
+    if target_ip:
+        if target_ip_int_col is not None:
+            query = query.where(target_ip_int_col == func.inet_aton(target_ip))
+        elif target_addr:
+            # Using exact equality without func.binary() for better index utilization
+            query = query.where(target_addr.address == target_ip)
 
     if severity and Impact:
         query = query.where(Impact.severity == severity)
