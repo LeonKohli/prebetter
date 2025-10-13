@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from .core.config import get_settings
 from .core.logging import setup_logging
 from .api.base import api_router
-from .database.init_db import ensure_database, check_database_connections
+from .database.init_db import ensure_database, check_database_connections, check_pair_accelerator
 from .services.health import update_health_state, get_health_status, HealthResponse
 from .middleware.setup import setup_middleware
 import logging
@@ -34,6 +34,16 @@ async def lifespan(app: FastAPI):
             logger.warning(
                 "Prelude database connection failed. Some functionality will be limited."
             )
+
+        # Enforce presence of the pair-key accelerator; do not start without it
+        try:
+            check_pair_accelerator(strict=True)
+        except Exception as e:
+            logger.error(
+                "Prebetter_Pair accelerator is required but not available: %s", str(e)
+            )
+            # Fail startup as requested: avoid unpredictable fallbacks
+            raise
 
         update_health_state(ready=True)
         logger.info("Application startup complete.")

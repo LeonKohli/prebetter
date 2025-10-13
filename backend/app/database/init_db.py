@@ -61,6 +61,78 @@ async def ensure_database() -> None:
         raise
 
 
+def check_pair_accelerator(strict: bool = True) -> bool:
+    """Verify that the Prebetter_Pair accelerator is installed on the Prelude DB.
+
+    Checks for:
+    - Table presence in current schema
+    - Triggers on Prelude_Address: prebetter_pair_ai and prebetter_pair_au
+    - Required indexes on Prebetter_Pair
+
+    If `strict` is True, raises RuntimeError when a requirement is missing.
+    Returns True when all checks pass, False otherwise.
+    """
+    ok = True
+    issues: list[str] = []
+
+    try:
+        with prelude_engine.connect() as conn:
+            # Table presence
+            tbl = conn.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                    "WHERE table_schema = DATABASE() AND table_name = 'Prebetter_Pair'"
+                )
+            ).scalar()
+            if not tbl:
+                ok = False
+                issues.append("Table Prebetter_Pair is missing")
+
+            # Triggers
+            triggers = conn.execute(text("SHOW TRIGGERS LIKE 'Prelude_Address'"))
+            trigger_names = {row[0] for row in triggers.fetchall()} if triggers else set()
+            for req in ("prebetter_pair_ai", "prebetter_pair_au"):
+                if req not in trigger_names:
+                    ok = False
+                    issues.append(f"Trigger {req} is missing on Prelude_Address")
+
+            # Indexes (best-effort)
+            idx = conn.execute(
+                text(
+                    "SELECT index_name, GROUP_CONCAT(column_name ORDER BY seq_in_index) cols "
+                    "FROM information_schema.statistics "
+                    "WHERE table_schema = DATABASE() AND table_name = 'Prebetter_Pair' "
+                    "GROUP BY index_name"
+                )
+            ).fetchall()
+            idx_map = {row[0]: (row[1] or "") for row in idx}
+            required = {
+                "PRIMARY": "_message_ident",
+                "idx_pair_key": "pair_key",
+                "idx_source": "source_ip",
+                "idx_target": "target_ip",
+            }
+            for name, cols in required.items():
+                if name not in idx_map:
+                    ok = False
+                    issues.append(f"Index {name} is missing on Prebetter_Pair")
+
+    except Exception as e:
+        logger.error(f"Error checking pair accelerator: {e}")
+        ok = False
+        issues.append(str(e))
+
+    if not ok:
+        msg = "; ".join(issues) if issues else "Prebetter_Pair accelerator not available"
+        if strict:
+            raise RuntimeError(msg)
+        logger.warning(msg)
+    else:
+        logger.info("Prebetter_Pair accelerator is present (table, triggers, indexes)")
+
+    return ok
+
+
 if __name__ == "__main__":
     print("Initializing prebetter database...")
     asyncio.run(ensure_database())
