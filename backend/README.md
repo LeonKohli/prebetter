@@ -152,6 +152,41 @@ The connection to these databases is handled through SQLAlchemy with:
 - Standardized join conditions for entity relationships
 - Timezone-aware date handling
 
+### Required Accelerator: Prebetter_Pair (Pair-Key)
+
+Grouped endpoints (list/count/details grouped by source/target IP) require the
+`Prebetter_Pair` accelerator installed in the Prelude DB. The API verifies its
+presence during startup and will fail fast if it's missing. There is no
+Address-based fallback — this guarantees consistent performance and behavior.
+
+- What it is: a helper table (`Prebetter_Pair`) maintained by triggers on
+  `Prelude_Address` that stores one canonical IPv4 pair per message and a single
+  `pair_key` (BIGINT). This enables grouping/counting by a single indexed key
+  and removes heavy multi-table joins and multi-column DISTINCT.
+
+- Install / Status / Backfill:
+  ```bash
+  # Install table + triggers
+  uv run python -m app.scripts.prelude_pair_accelerator install
+
+  # Backfill recent data (idempotent)
+  uv run python -m app.scripts.prelude_pair_accelerator backfill-days --days 7
+
+  # Check presence (table, triggers, indexes) and row count
+  uv run python -m app.scripts.prelude_pair_accelerator status
+
+  # Uninstall (remove triggers; optional table drop)
+  uv run python -m app.scripts.prelude_pair_accelerator uninstall [--drop-table]
+  ```
+
+- Preboot checklist (must pass):
+  1) `uv run python -m app.scripts.prelude_pair_accelerator status`
+  2) `uv run python -m app.scripts.prelude_index_maintenance check` (ensure `idx_dt_time_ident_gmtoff` exists)
+  3) Start the API; it will verify the accelerator and refuse to start if missing
+
+See `docs/prelude-slow-query-analysis.md` for the detailed design, schema,
+triggers, and troubleshooting guidance.
+
 ## Application Lifecycle
 
 The API implements a structured lifecycle management approach:

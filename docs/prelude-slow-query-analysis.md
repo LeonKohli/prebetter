@@ -184,8 +184,72 @@ uv run python -m app.scripts.prelude_pair_accelerator install
 uv run python -m app.scripts.prelude_pair_accelerator backfill-days --days 7
 ```
 
-The backend detects `Prebetter_Pair` automatically and switches grouped count/list
-to use it; if absent, it falls back to the Address-based path.
+The backend requires `Prebetter_Pair` and will fail startup if it is missing. No
+Address-based fallback is used anymore — this avoids unpredictable performance
+and guarantees all grouped paths run on the fast pair-key plan.
+
+### Prebetter_Pair Design & Behavior
+
+- Schema (MariaDB):
+  - `_message_ident BIGINT PRIMARY KEY` — references the alert/heartbeat message._ident
+  - `source_ip INT UNSIGNED`, `target_ip INT UNSIGNED` — IPv4 encoded via `INET_ATON()`
+  - `pair_key BIGINT UNSIGNED` — persistent generated column: `source_ip * 4294967296 + target_ip`
+  - Indexes: `PRIMARY(_message_ident)`, `idx_pair_key(pair_key)`, `idx_source(source_ip)`, `idx_target(target_ip)`
+
+- Triggers (on `Prelude_Address`):
+  - AFTER INSERT/UPDATE, for canonical rows only: `category='ipv4-addr'`, `_index=-1`, `_parent0_index=0`.
+  - If the new row is for the Source side (`_parent_type='S'`), resolve the Target canonical address for the same message; if Target, resolve Source. When both exist, `INSERT IGNORE` into `Prebetter_Pair`.
+  - Behavior is idempotent and safe under concurrency.
+
+- Why it helps:
+  - Replaces multi-table address joins + `COUNT(DISTINCT source, target)` with a single-column grouping `pair_key`.
+  - Eliminates row multiplication from address fan-out, and allows integer comparisons for filters/sorts (index-friendly).
+  - Keeps the hot-path list/count queries lean; details can still join Classification/Analyzer as needed.
+
+- Limitations & assumptions:
+  - IPv4-only (current dataset). To support IPv6 later, add `VARBINARY(16)` columns and a different hash, or dual-key grouping.
+  - Canonical Source/Target row is `_index=0` and canonical address row is `_index=-1` (empirically true on current dataset). If business logic requires per-index grouping, extend triggers and queries accordingly.
+
+### Backend Integration Details
+
+- Detection: builders reflect the presence of `Prebetter_Pair`; if found, list/count/details use the pair-key path, otherwise they fall back to Address joins.
+
+- List (pairs):
+  - `SELECT INET_NTOA(source_ip), INET_NTOA(target_ip), MAX(TIMESTAMPADD(SECOND, gmtoff, time)), COUNT(*) FROM DetectTime JOIN Prebetter_Pair … GROUP BY pair_key`.
+  - Sort-by source/target uses `INET_NTOA(source_ip/target_ip)`; severity/classification/analyzer sorts use `MAX(...)` aggregates only when requested (conditional joins).
+
+- Count (pairs):
+  - `SELECT COUNT(DISTINCT pair_key) FROM DetectTime JOIN Prebetter_Pair …` — fast, no derived table materialization.
+
+- Details (per pair):
+  - Given page pairs, compute their `pair_key`s and aggregate: `GROUP BY pair_key, Classification.text`. Analyzer hosts (Node) are disabled by default for performance (frontend doesn’t render them currently).
+  - Analyzer names under alerts often aren’t present (≈5% coverage). We relaxed joins to `Analyzer._parent_type='A'` (any index), grouping names via `GROUP_CONCAT(DISTINCT ...)` to improve coverage when present.
+
+- Filtering improvements:
+  - Source/target IP filters leverage integer columns when using `Prebetter_Pair`: `source_ip = INET_ATON(:ip)`. The fallback path continues to filter on `Address.address`.
+  - Date filtering is anchored on `DetectTime.time`; timestamps are adjusted with `TIMESTAMPADD(SECOND, gmtoff, time)` where needed for presentation.
+
+### Operations & Troubleshooting
+
+- Install / Backfill / Uninstall:
+  - `uv run python -m app.scripts.prelude_pair_accelerator install` → creates table + triggers.
+  - `uv run python -m app.scripts.prelude_pair_accelerator backfill-days --days 7` or `backfill --start ... --end ...` → idempotent population for a window.
+  - `uv run python -m app.scripts.prelude_pair_accelerator status` → presence + row count.
+  - `uv run python -m app.scripts.prelude_pair_accelerator uninstall [--drop-table]` → remove triggers, optionally table.
+
+- Verifying coverage:
+  - For a target window, `COUNT(*)` of `DetectTime` rows should match `JOIN Prebetter_Pair` rows when canonical S/T address rows exist (as validated on the current dataset).
+  - Slow-log: list/count queries should no longer show tuple `IN` or multi-column `DISTINCT`; look for `COUNT(DISTINCT pair_key)` and `GROUP BY pair_key` patterns.
+
+- If performance regresses:
+  - Ensure `idx_pair_key` exists (and not fragmented), and that `Prelude_DetectTime` has the composite index `idx_dt_time_ident_gmtoff(time, _message_ident, gmtoff)`.
+  - Verify triggers exist and are firing (check `SHOW TRIGGERS LIKE 'Prelude_Address'`). If missing, run `install` and backfill.
+  - Confirm the backend detected `Prebetter_Pair` (list/count queries in logs should reference pair_key; otherwise the fallback path is active).
+
+### IPv6 & Future Extensions
+
+- Extend schema with `source_ip6 VARBINARY(16)`, `target_ip6 VARBINARY(16)` and a 128-bit hash or dual-column grouping if IPv6 appears.
+- If alerts legitimately need multiple S/T pairs per message, model per-index pairs by adding `_source_index`/`_target_index` in `Prebetter_Pair` and adjusting triggers/queries accordingly.
 
 ## 2025-09-30 Update: Live Results and Detail Rewrite
 
