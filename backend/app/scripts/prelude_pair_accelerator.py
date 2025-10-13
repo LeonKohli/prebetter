@@ -1,19 +1,25 @@
-"""Install and manage the Prebetter_Pair accelerator (pair hash) for Prelude.
+"""Prebetter_Pair accelerator for Prelude IDS database.
 
 This utility creates a helper table and triggers that maintain a canonical
-source/target pair per message, enabling fast grouped list/count queries
+source/target IP pair per message, enabling fast grouped list/count queries
 without heavy joins. It can also backfill data for a given time window.
+
+Usage:
+    uv run python -m app.scripts.prelude_pair_accelerator [COMMAND] [OPTIONS]
 """
 
 from __future__ import annotations
 
-import typer
+import logging
 from datetime import datetime, timedelta, timezone
+
+import typer
 from sqlalchemy import text
 
 from app.database.config import prelude_engine
 
-app = typer.Typer(help="Prelude pair accelerator", no_args_is_help=True)
+app = typer.Typer(help="Prelude pair accelerator", no_args_is_help=True, add_completion=False)
+logger = logging.getLogger(__name__)
 
 
 CREATE_TABLE_SQL = """
@@ -110,38 +116,93 @@ END;
 
 
 def _drop_triggers(conn) -> None:
+    """Drop existing pair accelerator triggers.
+
+    Args:
+        conn: Database connection
+    """
     conn.execute(text("DROP TRIGGER IF EXISTS prebetter_pair_ai"))
     conn.execute(text("DROP TRIGGER IF EXISTS prebetter_pair_au"))
 
 
 @app.command()
 def install() -> None:
-    """Create Prebetter_Pair table and install triggers."""
-    with prelude_engine.begin() as conn:
-        conn.execute(text(CREATE_TABLE_SQL))
-        _drop_triggers(conn)
-        # MariaDB needs DELIMITER only in client; we send exact bodies
-        conn.execute(text(TRIGGER_AI_SQL))
-        conn.execute(text(TRIGGER_AU_SQL))
-    typer.secho("Prebetter_Pair installed (table + triggers).", fg=typer.colors.GREEN)
+    """Create Prebetter_Pair table and install triggers.
+
+    This creates the helper table and database triggers that automatically
+    maintain source/target IP pairs for each message.
+    """
+    try:
+        with prelude_engine.begin() as conn:
+            typer.echo("Creating Prebetter_Pair table...")
+            conn.execute(text(CREATE_TABLE_SQL))
+
+            typer.echo("Installing triggers...")
+            _drop_triggers(conn)
+            conn.execute(text(TRIGGER_AI_SQL))
+            conn.execute(text(TRIGGER_AU_SQL))
+
+        typer.secho("✓ Prebetter_Pair installed successfully (table + triggers)", fg=typer.colors.GREEN, bold=True)
+
+    except Exception as e:
+        logger.error(f"Installation failed: {e}")
+        typer.secho(f"✗ Installation failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
 
 
 @app.command()
-def uninstall(drop_table: bool = typer.Option(False, help="Drop table as well")) -> None:
-    """Remove triggers, optionally drop helper table."""
-    with prelude_engine.begin() as conn:
-        _drop_triggers(conn)
+def uninstall(
+    drop_table: bool = typer.Option(False, "--drop-table", help="Also drop the Prebetter_Pair table"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+) -> None:
+    """Remove triggers and optionally drop the helper table.
+
+    By default, only triggers are removed. Use --drop-table to also
+    remove the Prebetter_Pair table and all its data.
+    """
+    if drop_table and not yes:
+        confirm = typer.confirm(
+            "This will delete the Prebetter_Pair table and all data. Continue?",
+            default=False,
+        )
+        if not confirm:
+            typer.echo("Cancelled.")
+            raise typer.Exit(code=0)
+
+    try:
+        with prelude_engine.begin() as conn:
+            typer.echo("Removing triggers...")
+            _drop_triggers(conn)
+
+            if drop_table:
+                typer.echo("Dropping table...")
+                conn.execute(text("DROP TABLE IF EXISTS Prebetter_Pair"))
+
+        message = "✓ Triggers removed"
         if drop_table:
-            conn.execute(text("DROP TABLE IF EXISTS Prebetter_Pair"))
-    typer.secho("Prebetter_Pair triggers removed." + (" Table dropped." if drop_table else ""), fg=typer.colors.YELLOW)
+            message += " and table dropped"
+
+        typer.secho(message, fg=typer.colors.YELLOW, bold=True)
+
+    except Exception as e:
+        logger.error(f"Uninstall failed: {e}")
+        typer.secho(f"✗ Uninstall failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
 
 
 @app.command()
 def backfill(
-    start: datetime = typer.Option(..., help="Start datetime (ISO)"),
-    end: datetime = typer.Option(..., help="End datetime (ISO)"),
+    start: datetime = typer.Option(..., "--start", help="Start datetime (ISO format)"),
+    end: datetime = typer.Option(..., "--end", help="End datetime (ISO format)"),
 ) -> None:
-    """Backfill Prebetter_Pair for a time range (idempotent)."""
+    """Backfill Prebetter_Pair for a date range.
+
+    This command populates the Prebetter_Pair table with historical data
+    for the specified time range. It is idempotent - running it multiple
+    times will not create duplicates.
+    """
+    typer.echo(f"Backfilling from {start:%Y-%m-%d %H:%M:%S} to {end:%Y-%m-%d %H:%M:%S}")
+
     sql = text(
         """
         INSERT IGNORE INTO Prebetter_Pair (_message_ident, source_ip, target_ip)
@@ -157,37 +218,94 @@ def backfill(
           AND dt.time BETWEEN :start AND :end
         """
     )
-    with prelude_engine.begin() as conn:
-        result = conn.execute(sql, {"start": start, "end": end})
-        # result.rowcount may be -1 for INSERT IGNORE; fetch affected with ROW_COUNT()
-        inserted = conn.execute(text("SELECT ROW_COUNT() AS inserted")).scalar()
-    typer.secho(f"Backfill complete. Inserted ~{inserted} rows.", fg=typer.colors.GREEN)
+
+    try:
+        with prelude_engine.begin() as conn:
+            result = conn.execute(sql, {"start": start, "end": end})
+            # result.rowcount may be -1 for INSERT IGNORE; fetch affected with ROW_COUNT()
+            inserted = conn.execute(text("SELECT ROW_COUNT() AS inserted")).scalar()
+
+        typer.secho(f"✓ Backfill complete. Inserted ~{inserted:,} rows.", fg=typer.colors.GREEN, bold=True)
+
+    except Exception as e:
+        logger.error(f"Backfill failed: {e}")
+        typer.secho(f"✗ Backfill failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
 
 
 @app.command()
-def backfill_days(days: int = typer.Option(7, help="Backfill the last N days")) -> None:
+def backfill_days(
+    days: int = typer.Option(7, "--days", "-d", min=1, max=365, help="Number of days to backfill"),
+) -> None:
+    """Backfill Prebetter_Pair for the last N days.
+
+    Convenience command to backfill recent data without specifying
+    exact start and end dates.
+    """
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
-    # Reuse the same logic as the explicit backfill command
+
+    typer.echo(f"Backfilling last {days} day(s)")
     backfill(start=start, end=end)
 
 
 @app.command()
 def status() -> None:
-    with prelude_engine.connect() as conn:
-        exists = conn.execute(
-            text(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'Prebetter_Pair'"
-            )
-        ).scalar()
-        pairs = conn.execute(text("SELECT COUNT(*) FROM Prebetter_Pair")) if exists else None
-    if not exists:
-        typer.secho("Prebetter_Pair absent.", fg=typer.colors.RED)
-    else:
-        typer.secho(
-            f"Prebetter_Pair present. Rows: {pairs.scalar()}.", fg=typer.colors.GREEN
-        )
+    """Check Prebetter_Pair installation status.
+
+    Shows whether the table exists and provides statistics about
+    the number of pairs stored.
+    """
+    try:
+        with prelude_engine.connect() as conn:
+            # Check if table exists
+            exists = conn.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                    "WHERE table_schema = DATABASE() AND table_name = 'Prebetter_Pair'"
+                )
+            ).scalar()
+
+            if not exists:
+                typer.secho("✗ Prebetter_Pair table not found", fg=typer.colors.RED, bold=True)
+                typer.echo("Run 'install' command to create the table and triggers")
+                raise typer.Exit(code=1)
+
+            # Get row count
+            row_count = conn.execute(text("SELECT COUNT(*) FROM Prebetter_Pair")).scalar()
+
+            # Check triggers
+            triggers = conn.execute(
+                text(
+                    "SELECT trigger_name FROM information_schema.triggers "
+                    "WHERE trigger_schema = DATABASE() "
+                    "AND trigger_name IN ('prebetter_pair_ai', 'prebetter_pair_au')"
+                )
+            ).fetchall()
+
+            trigger_names = {t[0] for t in triggers}
+
+            typer.secho("✓ Prebetter_Pair Status", fg=typer.colors.GREEN, bold=True)
+            typer.echo(f"\nTable: Present")
+            typer.echo(f"Rows: {row_count:,}")
+            typer.echo(f"\nTriggers:")
+            typer.echo(f"  • prebetter_pair_ai: {'✓' if 'prebetter_pair_ai' in trigger_names else '✗ Missing'}")
+            typer.echo(f"  • prebetter_pair_au: {'✓' if 'prebetter_pair_au' in trigger_names else '✗ Missing'}")
+
+            if len(trigger_names) < 2:
+                typer.secho("\n⚠ Some triggers are missing. Run 'install' to fix.", fg=typer.colors.YELLOW)
+
+    except Exception as e:
+        logger.error(f"Status check failed: {e}")
+        typer.secho(f"✗ Status check failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+
+def main() -> None:
+    """Entry point for the script."""
+    logging.basicConfig(level=logging.INFO)
+    app()
 
 
 if __name__ == "__main__":
-    app()
+    main()
