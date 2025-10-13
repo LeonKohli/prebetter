@@ -328,38 +328,31 @@ async def get_alert_detail(
         alert_idents = db.execute(queries["alert_idents"]).scalars().all()
         add_data_rows = db.execute(queries["additional_data"]).scalars().all()
 
+        # Eagerly load all process args and envs to avoid N+1 queries
+        all_process_args = db.execute(queries["process_args"]).all()
+        all_process_envs = db.execute(queries["process_envs"]).all()
+
+        # Build lookup dictionaries for O(1) access by analyzer index
+        process_args_by_analyzer = {}
+        for parent_idx, arg, arg_idx in all_process_args:
+            if parent_idx not in process_args_by_analyzer:
+                process_args_by_analyzer[parent_idx] = []
+            process_args_by_analyzer[parent_idx].append(arg)
+
+        process_envs_by_analyzer = {}
+        for parent_idx, env, env_idx in all_process_envs:
+            if parent_idx not in process_envs_by_analyzer:
+                process_envs_by_analyzer[parent_idx] = []
+            process_envs_by_analyzer[parent_idx].append(env)
+
         # Always return full, non-truncated data in multiple formats
         additional_data = process_additional_data(add_data_rows)
 
         analyzers_info = []
         for analyzer in analyzers_query:
-            process_args = (
-                db.execute(
-                    select(ProcessArg.arg)
-                    .where(
-                        ProcessArg._message_ident == alert_id,
-                        ProcessArg._parent_type == "A",
-                        ProcessArg._parent0_index == analyzer[0]._index,
-                    )
-                    .order_by(ProcessArg._index)
-                )
-                .scalars()
-                .all()
-            )
-
-            process_env = (
-                db.execute(
-                    select(ProcessEnv.env)
-                    .where(
-                        ProcessEnv._message_ident == alert_id,
-                        ProcessEnv._parent_type == "A",
-                        ProcessEnv._parent0_index == analyzer[0]._index,
-                    )
-                    .order_by(ProcessEnv._index)
-                )
-                .scalars()
-                .all()
-            )
+            # Use pre-loaded data from dictionaries instead of executing N queries
+            process_args = process_args_by_analyzer.get(analyzer[0]._index, [])
+            process_env = process_envs_by_analyzer.get(analyzer[0]._index, [])
 
             node_info = build_node_info(analyzer[1]) if analyzer[1] else None
 
