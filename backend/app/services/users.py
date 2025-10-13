@@ -19,15 +19,21 @@ class UserService:
 
     def get_by_id(self, user_id: str) -> Optional[User]:
         """Retrieve a user by their ID."""
-        return self.db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+        return self.db.execute(
+            select(User).where(User.id == user_id)
+        ).scalar_one_or_none()
 
     def get_by_username(self, username: str) -> Optional[User]:
         """Retrieve a user by their username."""
-        return self.db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+        return self.db.execute(
+            select(User).where(User.username == username)
+        ).scalar_one_or_none()
 
     def get_by_email(self, email: str) -> Optional[User]:
         """Retrieve a user by their email."""
-        return self.db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        return self.db.execute(
+            select(User).where(User.email == email)
+        ).scalar_one_or_none()
 
     def list_users(self, skip: int = 0, limit: int = 100) -> List[User]:
         """List users with pagination."""
@@ -56,7 +62,7 @@ class UserService:
             username=user_data.username,
             full_name=user_data.full_name,
             hashed_password=get_password_hash(user_data.password),
-            is_superuser=getattr(user_data, 'is_superuser', False),
+            is_superuser=getattr(user_data, "is_superuser", False),
         )
         self.db.add(db_user)
         try:
@@ -110,9 +116,12 @@ class UserService:
 
         # Prevent deleting last superuser (administrative lockout)
         if db_user.is_superuser is True:
-            superuser_count = self.db.scalar(
-                select(func.count(User.id)).where(User.is_superuser == True)  # noqa: E712
-            ) or 0
+            superuser_count = (
+                self.db.scalar(
+                    select(func.count(User.id)).where(User.is_superuser == True)  # noqa: E712
+                )
+                or 0
+            )
             if superuser_count <= 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

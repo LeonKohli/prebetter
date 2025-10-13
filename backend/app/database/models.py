@@ -82,7 +82,7 @@ def grouped_alert_to_response(
 
     # Use the group's overall latest_time for all alerts for consistency
     # The backend query should handle timezone conversion using TIMESTAMPADD
-    if hasattr(pair, 'latest_time') and pair.latest_time:
+    if hasattr(pair, "latest_time") and pair.latest_time:
         for alert in alerts:
             alert.detected_at = pair.latest_time
 
@@ -133,7 +133,9 @@ def process_grouped_alerts_details(alerts, max_limit=1000):
 
     # Sort alerts within each group by detected_at time (newest first)
     for key in alerts_map:
-        alerts_map[key].sort(key=lambda x: x.detected_at if x.detected_at else "", reverse=True)
+        alerts_map[key].sort(
+            key=lambda x: x.detected_at if x.detected_at else "", reverse=True
+        )
 
     return alerts_map
 
@@ -267,7 +269,10 @@ def process_additional_data(add_data_rows):
                     current_value = {"readable": text_value, "original": b64}
                 elif isinstance(raw_data, str):
                     # We only have a string; provide readable text and no raw
-                    current_value = {"readable": clean_byte_string(raw_data), "original": None}
+                    current_value = {
+                        "readable": clean_byte_string(raw_data),
+                        "original": None,
+                    }
                 else:
                     # Fallback to string representation
                     current_value = {"readable": str(raw_data), "original": None}

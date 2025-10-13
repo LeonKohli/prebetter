@@ -11,7 +11,6 @@ from sqlalchemy import (
     func,
     and_,
     literal_column,
-    tuple_,
     text,
     case,
     literal,
@@ -213,7 +212,8 @@ def build_grouped_alerts_query(
             )
         if include_classification:
             pairs_query = pairs_query.outerjoin(
-                Classification, Classification._message_ident == DetectTime._message_ident
+                Classification,
+                Classification._message_ident == DetectTime._message_ident,
             )
         if include_analyzer:
             pairs_query = pairs_query.outerjoin(
@@ -264,7 +264,8 @@ def build_grouped_alerts_count_query(
             )
         if include_classification:
             count_query = count_query.outerjoin(
-                Classification, Classification._message_ident == DetectTime._message_ident
+                Classification,
+                Classification._message_ident == DetectTime._message_ident,
             )
         if include_analyzer:
             count_query = count_query.outerjoin(

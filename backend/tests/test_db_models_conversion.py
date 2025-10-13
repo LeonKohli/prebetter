@@ -529,6 +529,7 @@ def test_process_additional_data_byte_string_formats():
     assert isinstance(payload.get("readable"), str)
     # original is base64 of original bytes
     import base64
+
     assert payload.get("original") == base64.b64encode(payload_bytes).decode("ascii")
 
 

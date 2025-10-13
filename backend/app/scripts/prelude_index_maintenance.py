@@ -11,14 +11,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import typer
 from sqlalchemy import text
 
 from app.database.config import prelude_engine
 
-app = typer.Typer(help="Prelude index maintenance", no_args_is_help=True, add_completion=False)
+app = typer.Typer(
+    help="Prelude index maintenance", no_args_is_help=True, add_completion=False
+)
 logger = logging.getLogger(__name__)
 
 
@@ -101,15 +102,23 @@ def check() -> None:
             missing = _missing_indexes(conn)
 
         if not missing:
-            typer.secho("✓ All required Prelude indexes are present.", fg=typer.colors.GREEN, bold=True)
+            typer.secho(
+                "✓ All required Prelude indexes are present.",
+                fg=typer.colors.GREEN,
+                bold=True,
+            )
             typer.echo(f"\nTotal indexes checked: {len(REQUIRED_INDEXES)}")
             return
 
-        typer.secho(f"⚠ Missing Prelude indexes ({len(missing)}):", fg=typer.colors.YELLOW, bold=True)
+        typer.secho(
+            f"⚠ Missing Prelude indexes ({len(missing)}):",
+            fg=typer.colors.YELLOW,
+            bold=True,
+        )
         for index in missing:
             typer.echo(f"  • {index.table}.{index.name}")
 
-        typer.echo(f"\nRun 'apply' command to create missing indexes.")
+        typer.echo("\nRun 'apply' command to create missing indexes.")
 
     except Exception as e:
         logger.error(f"Index check failed: {e}")
@@ -131,15 +140,25 @@ def apply(
             missing = _missing_indexes(conn)
 
             if not missing:
-                typer.secho("✓ All required Prelude indexes are already present.", fg=typer.colors.GREEN, bold=True)
+                typer.secho(
+                    "✓ All required Prelude indexes are already present.",
+                    fg=typer.colors.GREEN,
+                    bold=True,
+                )
                 return
 
-            typer.secho(f"The following {len(missing)} index(es) will be created:", fg=typer.colors.CYAN, bold=True)
+            typer.secho(
+                f"The following {len(missing)} index(es) will be created:",
+                fg=typer.colors.CYAN,
+                bold=True,
+            )
             for index in missing:
                 typer.echo(f"  • {index.table}.{index.name}")
 
             if not yes:
-                typer.echo("\nNote: Index creation may take several minutes on large tables.")
+                typer.echo(
+                    "\nNote: Index creation may take several minutes on large tables."
+                )
                 confirm = typer.confirm("Proceed with index creation?", default=False)
                 if not confirm:
                     typer.echo("Cancelled.")
@@ -147,12 +166,19 @@ def apply(
 
             typer.echo()
             for idx, index in enumerate(missing, 1):
-                typer.echo(f"[{idx}/{len(missing)}] Creating {index.table}.{index.name} ... ", nl=False)
+                typer.echo(
+                    f"[{idx}/{len(missing)}] Creating {index.table}.{index.name} ... ",
+                    nl=False,
+                )
                 conn.execute(text(index.create_sql))
                 typer.secho("done", fg=typer.colors.GREEN)
 
         typer.echo()
-        typer.secho(f"✓ Index creation complete! Created {len(missing)} index(es).", fg=typer.colors.GREEN, bold=True)
+        typer.secho(
+            f"✓ Index creation complete! Created {len(missing)} index(es).",
+            fg=typer.colors.GREEN,
+            bold=True,
+        )
 
     except Exception as e:
         logger.error(f"Index creation failed: {e}")
@@ -167,7 +193,11 @@ def list() -> None:
     Shows the complete list of indexes that this utility manages,
     regardless of whether they are currently present or missing.
     """
-    typer.secho(f"Required Prelude indexes ({len(REQUIRED_INDEXES)}):", fg=typer.colors.CYAN, bold=True)
+    typer.secho(
+        f"Required Prelude indexes ({len(REQUIRED_INDEXES)}):",
+        fg=typer.colors.CYAN,
+        bold=True,
+    )
 
     for idx, index in enumerate(REQUIRED_INDEXES, 1):
         typer.echo(f"\n[{idx}] {index.table}.{index.name}")

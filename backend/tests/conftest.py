@@ -52,7 +52,9 @@ def test_db() -> Generator[Session, None, None]:
     db.commit()
 
     # Ensure admin exists with correct password and superuser status
-    admin = db.execute(select(User).where(User.username == "admin")).scalar_one_or_none()
+    admin = db.execute(
+        select(User).where(User.username == "admin")
+    ).scalar_one_or_none()
     if admin:
         admin.hashed_password = get_password_hash("admin")  # type: ignore[assignment]
         admin.is_superuser = True  # type: ignore[assignment]
@@ -90,7 +92,9 @@ def test_db() -> Generator[Session, None, None]:
     db.commit()
 
     # Reset admin to original state
-    admin = db.execute(select(User).where(User.username == "admin")).scalar_one_or_none()
+    admin = db.execute(
+        select(User).where(User.username == "admin")
+    ).scalar_one_or_none()
     if admin:
         admin.hashed_password = get_password_hash("admin")  # type: ignore[assignment]
         admin.is_superuser = True  # type: ignore[assignment]
