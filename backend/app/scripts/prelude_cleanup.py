@@ -1,9 +1,12 @@
-"""Unified Prelude database cleanup script.
+"""Unified Prelude database cleanup utility.
 
-This command trims alert and heartbeat data older than a configurable
+This script trims alert and heartbeat data older than a configurable
 retention window and removes orphaned heartbeat artifacts left by previous
-maintenance jobs. It is intended to be scheduled (e.g. nightly via cron)
+maintenance jobs. It is intended to be scheduled (e.g., nightly via cron)
 using the application's existing database configuration.
+
+Usage:
+    uv run python -m app.scripts.prelude_cleanup [COMMAND] [OPTIONS]
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from sqlalchemy.engine import Connection
 from app.core.datetime_utils import get_current_time
 from app.database.config import prelude_engine
 
-app = typer.Typer(help="Prelude DB cleanup utility", add_completion=False)
+app = typer.Typer(help="Prelude DB cleanup utility", no_args_is_help=True, add_completion=False)
 logger = logging.getLogger(__name__)
 
 ALERT_TMP_TABLE = "tmp_alert_ids"
@@ -405,19 +408,35 @@ def _cleanup_orphans(
     return dict(removed)
 
 
-def _gather_preview(conn: Connection, cutoff, include_orphans: bool) -> Dict[str, Any]:
+def _gather_preview(
+    conn: Connection,
+    alert_cutoff,
+    heartbeat_cutoff,
+    include_orphans: bool,
+) -> Dict[str, Any]:
+    """Gather preview statistics for cleanup operation.
+
+    Args:
+        conn: Database connection
+        alert_cutoff: Cutoff datetime for alerts
+        heartbeat_cutoff: Cutoff datetime for heartbeats
+        include_orphans: Whether to include orphan counts
+
+    Returns:
+        Dictionary with preview statistics
+    """
     preview: Dict[str, Any] = {}
 
     alert_count = conn.scalar(
         text("SELECT COUNT(*) FROM Prelude_DetectTime WHERE time < :cutoff"),
-        {"cutoff": cutoff},
+        {"cutoff": alert_cutoff},
     )
     heartbeat_count = conn.scalar(
         text(
             "SELECT COUNT(*) FROM Prelude_CreateTime "
             "WHERE _parent_type = 'H' AND time < :cutoff"
         ),
-        {"cutoff": cutoff},
+        {"cutoff": heartbeat_cutoff},
     )
     preview["alerts_due"] = int(alert_count or 0)
     preview["heartbeats_due"] = int(heartbeat_count or 0)
@@ -432,24 +451,51 @@ def _gather_preview(conn: Connection, cutoff, include_orphans: bool) -> Dict[str
 
 @app.command()
 def run(
-    retention_days: int = typer.Option(
-        30, min=1, max=365, help="Days of data to retain"
+    alert_retention_days: int = typer.Option(
+        30, "--alert-retention", "-a", min=1, max=365, help="Days of alert data to retain"
+    ),
+    heartbeat_retention_days: int = typer.Option(
+        None, "--heartbeat-retention", "-h", min=1, max=365, help="Days of heartbeat data to retain (defaults to alert retention)"
     ),
     batch_size: int = typer.Option(
-        50000, min=1000, max=200000, help="Rows processed per batch"
+        50000, "--batch-size", "-b", min=1000, max=200000, help="Rows processed per batch"
     ),
     cleanup_orphans: bool = typer.Option(
-        True, help="Remove heartbeat orphaned rows after batch cleanup."
+        True, "--cleanup-orphans/--no-cleanup-orphans", help="Remove heartbeat orphaned rows"
     ),
     dry_run: bool = typer.Option(
-        False, help="Report counts without deleting anything."
+        False, "--dry-run", help="Preview what would be deleted without making changes"
     ),
-):
-    """Execute the Prelude database cleanup."""
-    cutoff_dt = (get_current_time() - timedelta(days=retention_days)).replace(
+) -> None:
+    """Execute cleanup with separate alert (-a) and heartbeat (-h) retention.
+
+    Remove old alerts and heartbeats with independent retention policies.
+    Heartbeats default to alert retention if -h not specified.
+
+    Examples:
+        run -a 30           # Keep 30 days of both
+        run -a 30 -h 7      # Keep 30d alerts, 7d heartbeats
+        run -a 60 -h 14 --dry-run
+    """
+    # Default heartbeat retention to alert retention if not specified
+    if heartbeat_retention_days is None:
+        heartbeat_retention_days = alert_retention_days
+
+    alert_cutoff_dt = (get_current_time() - timedelta(days=alert_retention_days)).replace(
         tzinfo=None
     )
-    typer.echo(f"Using cutoff timestamp: {cutoff_dt:%Y-%m-%d %H:%M:%S} UTC")
+    heartbeat_cutoff_dt = (get_current_time() - timedelta(days=heartbeat_retention_days)).replace(
+        tzinfo=None
+    )
+
+    typer.secho("Prelude Database Cleanup", fg=typer.colors.CYAN, bold=True)
+    typer.echo(f"Alert retention: {alert_retention_days} days (cutoff: {alert_cutoff_dt:%Y-%m-%d %H:%M:%S} UTC)")
+    typer.echo(f"Heartbeat retention: {heartbeat_retention_days} days (cutoff: {heartbeat_cutoff_dt:%Y-%m-%d %H:%M:%S} UTC)")
+    typer.echo(f"Batch size: {batch_size:,}")
+    typer.echo(f"Cleanup orphans: {'Yes' if cleanup_orphans else 'No'}")
+
+    if dry_run:
+        typer.secho("\nDRY RUN MODE - No changes will be made", fg=typer.colors.YELLOW, bold=True)
 
     insert_alert_sql = (
         "INSERT INTO tmp_alert_ids (id) "
@@ -463,80 +509,162 @@ def run(
         "ORDER BY ct.time LIMIT :limit"
     )
 
-    with prelude_engine.connect() as conn:
-        conn.execute(text("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED"))
-        conn.commit()
+    try:
+        with prelude_engine.connect() as conn:
+            conn.execute(text("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED"))
+            conn.commit()
 
-        if dry_run:
-            preview = _gather_preview(conn, cutoff_dt, include_orphans=cleanup_orphans)
-            typer.echo("Dry-run preview (no changes applied):")
-            for key, value in preview.items():
-                typer.echo(f"  {key}: {value}")
-            conn.rollback()
-            return
+            if dry_run:
+                preview = _gather_preview(
+                    conn, alert_cutoff_dt, heartbeat_cutoff_dt, include_orphans=cleanup_orphans
+                )
+                typer.echo("\nPreview (no changes applied):")
+                for key, value in preview.items():
+                    typer.echo(f"  {key}: {value:,}")
+                conn.rollback()
+                return
 
-        conn.commit()
+            conn.commit()
 
-        alert_total, alert_children = _delete_batches(
-            conn,
-            ALERT_TMP_TABLE,
-            insert_alert_sql,
-            ALERT_DELETE_STATEMENTS,
-            cutoff_dt,
-            batch_size,
-        )
-        typer.echo(f"Removed {alert_total} alerts older than {retention_days} days")
+            typer.echo()
+            alert_total, alert_children = _delete_batches(
+                conn,
+                ALERT_TMP_TABLE,
+                insert_alert_sql,
+                ALERT_DELETE_STATEMENTS,
+                alert_cutoff_dt,
+                batch_size,
+            )
+            typer.secho(
+                f"✓ Removed {alert_total:,} alerts older than {alert_retention_days} days",
+                fg=typer.colors.GREEN,
+            )
 
-        heartbeat_total, heartbeat_children = _delete_batches(
-            conn,
-            HEARTBEAT_TMP_TABLE,
-            insert_heartbeat_sql,
-            HEARTBEAT_DELETE_STATEMENTS,
-            cutoff_dt,
-            batch_size,
-        )
-        typer.echo(
-            f"Removed {heartbeat_total} heartbeats older than {retention_days} days"
-        )
+            heartbeat_total, heartbeat_children = _delete_batches(
+                conn,
+                HEARTBEAT_TMP_TABLE,
+                insert_heartbeat_sql,
+                HEARTBEAT_DELETE_STATEMENTS,
+                heartbeat_cutoff_dt,
+                batch_size,
+            )
+            typer.secho(
+                f"✓ Removed {heartbeat_total:,} heartbeats older than {heartbeat_retention_days} days",
+                fg=typer.colors.GREEN,
+            )
 
-        orphan_stats: Dict[str, int] = {}
-        if cleanup_orphans:
-            orphan_stats = _cleanup_orphans(conn, HEARTBEAT_ORPHAN_TASKS, batch_size)
+            orphan_stats: Dict[str, int] = {}
+            if cleanup_orphans:
+                orphan_stats = _cleanup_orphans(conn, HEARTBEAT_ORPHAN_TASKS, batch_size)
+                if orphan_stats:
+                    typer.secho(f"✓ Removed {sum(orphan_stats.values()):,} orphaned rows", fg=typer.colors.GREEN)
 
-        typer.echo("Cleanup summary:")
-        typer.echo(f"  alerts_removed: {alert_total}")
-        typer.echo(f"  heartbeats_removed: {heartbeat_total}")
-        typer.echo(f"  alert_child_rows_removed: {sum(alert_children.values())}")
-        typer.echo(
-            f"  heartbeat_child_rows_removed: {sum(heartbeat_children.values())}"
-        )
-        if cleanup_orphans:
-            typer.echo(f"  orphan_rows_removed: {sum(orphan_stats.values())}")
+            typer.echo("\n" + "=" * 60)
+            typer.secho("Cleanup Summary", fg=typer.colors.CYAN, bold=True)
+            typer.echo("=" * 60)
+            typer.echo(f"  Alerts removed: {alert_total:,}")
+            typer.echo(f"  Heartbeats removed: {heartbeat_total:,}")
+            typer.echo(f"  Alert child rows: {sum(alert_children.values()):,}")
+            typer.echo(f"  Heartbeat child rows: {sum(heartbeat_children.values()):,}")
+            if cleanup_orphans:
+                typer.echo(f"  Orphan rows: {sum(orphan_stats.values()):,}")
+            typer.echo(f"  Total rows removed: {alert_total + heartbeat_total + sum(alert_children.values()) + sum(heartbeat_children.values()) + sum(orphan_stats.values()):,}")
 
-        if alert_children:
-            typer.echo("  alert_child_breakdown:")
-            for table, count in sorted(
-                alert_children.items(), key=lambda x: x[1], reverse=True
-            ):
-                typer.echo(f"    {table}: {count}")
-        if heartbeat_children:
-            typer.echo("  heartbeat_child_breakdown:")
-            for table, count in sorted(
-                heartbeat_children.items(), key=lambda x: x[1], reverse=True
-            ):
-                typer.echo(f"    {table}: {count}")
-        if cleanup_orphans and orphan_stats:
-            typer.echo("  orphan_breakdown:")
-            for table, count in sorted(
-                orphan_stats.items(), key=lambda x: x[1], reverse=True
-            ):
-                typer.echo(f"    {table}: {count}")
+            if alert_children:
+                typer.echo("\nAlert child breakdown:")
+                for table, count in sorted(
+                    alert_children.items(), key=lambda x: x[1], reverse=True
+                ):
+                    typer.echo(f"  {table}: {count:,}")
+            if heartbeat_children:
+                typer.echo("\nHeartbeat child breakdown:")
+                for table, count in sorted(
+                    heartbeat_children.items(), key=lambda x: x[1], reverse=True
+                ):
+                    typer.echo(f"  {table}: {count:,}")
+            if cleanup_orphans and orphan_stats:
+                typer.echo("\nOrphan breakdown:")
+                for table, count in sorted(
+                    orphan_stats.items(), key=lambda x: x[1], reverse=True
+                ):
+                    typer.echo(f"  {table}: {count:,}")
+
+            typer.echo("=" * 60)
+            typer.secho("✓ Cleanup complete!", fg=typer.colors.GREEN, bold=True)
+
+    except Exception as e:
+        logger.error(f"Cleanup failed: {e}")
+        typer.secho(f"\n✗ Cleanup failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def status(
+    alert_retention_days: int = typer.Option(
+        30, "--alert-retention", "-a", min=1, max=365, help="Days of alert data to retain"
+    ),
+    heartbeat_retention_days: int = typer.Option(
+        None, "--heartbeat-retention", "-h", min=1, max=365, help="Days of heartbeat data to retain (defaults to alert retention)"
+    ),
+) -> None:
+    """Show cleanup preview with alert (-a) and heartbeat (-h) retention.
+
+    Check how many records would be deleted without making changes.
+
+    Examples:
+        status -a 30        # Preview 30 days for both
+        status -a 30 -h 7   # Preview different retentions
+    """
+    # Default heartbeat retention to alert retention if not specified
+    if heartbeat_retention_days is None:
+        heartbeat_retention_days = alert_retention_days
+
+    alert_cutoff_dt = (get_current_time() - timedelta(days=alert_retention_days)).replace(
+        tzinfo=None
+    )
+    heartbeat_cutoff_dt = (get_current_time() - timedelta(days=heartbeat_retention_days)).replace(
+        tzinfo=None
+    )
+
+    typer.secho("Cleanup Status", fg=typer.colors.CYAN, bold=True)
+    typer.echo(f"Alert retention: {alert_retention_days} days (cutoff: {alert_cutoff_dt:%Y-%m-%d %H:%M:%S} UTC)")
+    typer.echo(f"Heartbeat retention: {heartbeat_retention_days} days (cutoff: {heartbeat_cutoff_dt:%Y-%m-%d %H:%M:%S} UTC)")
+
+    try:
+        with prelude_engine.connect() as conn:
+            preview = _gather_preview(
+                conn, alert_cutoff_dt, heartbeat_cutoff_dt, include_orphans=True
+            )
+
+            typer.echo("\nData eligible for cleanup:")
+            typer.echo(f"  Alerts: {preview.get('alerts_due', 0):,}")
+            typer.echo(f"  Heartbeats: {preview.get('heartbeats_due', 0):,}")
+
+            orphan_total = sum(
+                count for key, count in preview.items()
+                if key not in ('alerts_due', 'heartbeats_due')
+            )
+            if orphan_total > 0:
+                typer.echo(f"  Orphaned records: {orphan_total:,}")
+
+            total = preview.get('alerts_due', 0) + preview.get('heartbeats_due', 0)
+            if total == 0:
+                typer.secho("\n✓ No data needs cleanup", fg=typer.colors.GREEN, bold=True)
+            else:
+                typer.secho(f"\n⚠ Total records eligible: {total:,}", fg=typer.colors.YELLOW, bold=True)
+                typer.echo("Run 'run --dry-run' with the same retention settings to see detailed preview")
+
+    except Exception as e:
+        logger.error(f"Status check failed: {e}")
+        typer.secho(f"✗ Status check failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
 
 
 def main() -> None:
+    """Entry point for the script."""
     logging.basicConfig(level=logging.INFO)
     app()
 
 
-if __name__ == "__main__":  # pragma: no cover - CLI entry point
+if __name__ == "__main__":
     main()
