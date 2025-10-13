@@ -2,7 +2,11 @@ from fastapi import FastAPI, Request
 from .core.config import get_settings
 from .core.logging import setup_logging
 from .api.base import api_router
-from .database.init_db import ensure_database, check_database_connections, check_pair_accelerator
+from .database.init_db import (
+    ensure_database,
+    check_database_connections,
+    check_pair_accelerator,
+)
 from .services.health import update_health_state, get_health_status, HealthResponse
 from .middleware.setup import setup_middleware
 import logging

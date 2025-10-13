@@ -15,12 +15,16 @@ async def get_unique_classifications(
 ) -> List[str]:
     """Get a list of unique classification texts."""
     try:
-        results = db.execute(
-            select(Classification.text)
-            .where(Classification.text.isnot(None))
-            .distinct()
-            .order_by(Classification.text)
-        ).scalars().all()
+        results = (
+            db.execute(
+                select(Classification.text)
+                .where(Classification.text.isnot(None))
+                .distinct()
+                .order_by(Classification.text)
+            )
+            .scalars()
+            .all()
+        )
         return list(results)
     except Exception as e:
         raise HTTPException(
@@ -34,12 +38,16 @@ async def get_unique_severities(
 ) -> List[str]:
     """Get a list of unique impact severities."""
     try:
-        results = db.execute(
-            select(Impact.severity)
-            .where(Impact.severity.isnot(None))
-            .distinct()
-            .order_by(func.lower(Impact.severity))
-        ).scalars().all()
+        results = (
+            db.execute(
+                select(Impact.severity)
+                .where(Impact.severity.isnot(None))
+                .distinct()
+                .order_by(func.lower(Impact.severity))
+            )
+            .scalars()
+            .all()
+        )
         return list(results)
     except Exception as e:
         raise HTTPException(
@@ -53,16 +61,20 @@ async def get_unique_analyzers(
 ) -> List[str]:
     """Get a list of unique analyzer names."""
     try:
-        results = db.execute(
-            select(Analyzer.name)
-            .where(
-                Analyzer.name.isnot(None),
-                Analyzer._parent_type == "A",
-                Analyzer._index == -1,
+        results = (
+            db.execute(
+                select(Analyzer.name)
+                .where(
+                    Analyzer.name.isnot(None),
+                    Analyzer._parent_type == "A",
+                    Analyzer._index == -1,
+                )
+                .distinct()
+                .order_by(Analyzer.name)
             )
-            .distinct()
-            .order_by(Analyzer.name)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return list(results)
     except Exception as e:
         raise HTTPException(

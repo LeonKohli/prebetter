@@ -108,5 +108,5 @@ async def update_profile(
     if "password" in update_data:
         del update_data["password"]
     filtered_update = UserUpdate(**update_data)
-    
+
     return user_service.update_user(str(current_user.id), filtered_update)

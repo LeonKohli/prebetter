@@ -32,8 +32,6 @@ from app.models.prelude import (
     DetectTime,
     Analyzer,
     CreateTime,
-    ProcessArg,
-    ProcessEnv,
 )
 from app.schemas.prelude import (
     AlertListResponse,
@@ -221,10 +219,14 @@ async def get_grouped_alerts(
 
         # Determine order-by columns for source/target depending on path
         source_order_col = (
-            models["source_addr"].address if "source_addr" in models else models.get("source_ip_order_col")
+            models["source_addr"].address
+            if "source_addr" in models
+            else models.get("source_ip_order_col")
         )
         target_order_col = (
-            models["target_addr"].address if "target_addr" in models else models.get("target_ip_order_col")
+            models["target_addr"].address
+            if "target_addr" in models
+            else models.get("target_ip_order_col")
         )
 
         count_expr = (
