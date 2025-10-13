@@ -776,9 +776,7 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
 
 def build_efficient_heartbeats_query(db: Session, days: int = 1):
     """Build an efficient query for heartbeats showing all analyzers that have sent heartbeats."""
-    # Raw SQL for performance - list all analyzers under heartbeat messages,
-    # and compute their latest heartbeat (if any). Use LEFT JOIN for at to
-    # include agents without events in the window.
+    # Raw SQL for performance - shows all analyzers with recent heartbeats
     sql = text("""
     SELECT
         n.name as host_name,
@@ -790,9 +788,10 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
         MAX(at.time) as last_heartbeat,
         MAX(h.heartbeat_interval) as heartbeat_interval
     FROM Prelude_Heartbeat h
-    LEFT JOIN Prelude_AnalyzerTime at
+    INNER JOIN Prelude_AnalyzerTime at
         ON at._message_ident = h._ident
         AND at._parent_type = 'H'
+        AND at.time >= DATE_SUB(NOW(), INTERVAL :days DAY)
     INNER JOIN Prelude_Analyzer a
         ON a._message_ident = h._ident
         AND a._parent_type = 'H'
@@ -803,5 +802,5 @@ def build_efficient_heartbeats_query(db: Session, days: int = 1):
     ORDER BY n.name, a.name
     """)
 
-    # No bound parameters needed (LEFT JOIN includes agents with no recent events)
-    return sql
+    # Return the text query with parameters bound
+    return sql.bindparams(days=days)
