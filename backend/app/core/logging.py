@@ -7,7 +7,6 @@ from typing import Any, Optional
 
 
 class JsonFormatter(logging.Formatter):
-
     def format(self, record):
         log_record = {
             "timestamp": datetime.utcnow().isoformat(),

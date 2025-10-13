@@ -131,6 +131,7 @@ class NetworkInfo(BaseModel):
 
 class TimeInfo(BaseModel):
     """Simplified time info without IDMEF overhead."""
+
     timestamp: datetime
 
     @field_validator("timestamp", mode="before")
@@ -177,6 +178,7 @@ class ServiceInfo(BaseModel):
 
 class AnalyzerTimeInfo(BaseModel):
     """Simplified analyzer time without IDMEF overhead."""
+
     timestamp: datetime
 
     @field_validator("timestamp")
@@ -374,7 +376,10 @@ class GroupedAlert(BaseModel):
 class GroupedAlertResponse(BaseModel):
     groups: List[GroupedAlert] = Field(..., description="List of grouped alerts")
     pagination: PaginatedResponse
-    total_alerts: int = Field(..., description="Total number of individual alerts across all groups on current page")
+    total_alerts: int = Field(
+        ...,
+        description="Total number of individual alerts across all groups on current page",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

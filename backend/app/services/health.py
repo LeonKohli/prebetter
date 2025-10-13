@@ -17,7 +17,6 @@ _HEALTH_STATE = {
 
 
 class HealthResponse(BaseModel):
-
     status: str = Field(
         ..., description="Overall system status: healthy, degraded, or unhealthy"
     )

@@ -18,7 +18,9 @@ from sqlalchemy import text
 
 from app.database.config import prelude_engine
 
-app = typer.Typer(help="Prelude pair accelerator", no_args_is_help=True, add_completion=False)
+app = typer.Typer(
+    help="Prelude pair accelerator", no_args_is_help=True, add_completion=False
+)
 logger = logging.getLogger(__name__)
 
 
@@ -142,7 +144,11 @@ def install() -> None:
             conn.execute(text(TRIGGER_AI_SQL))
             conn.execute(text(TRIGGER_AU_SQL))
 
-        typer.secho("✓ Prebetter_Pair installed successfully (table + triggers)", fg=typer.colors.GREEN, bold=True)
+        typer.secho(
+            "✓ Prebetter_Pair installed successfully (table + triggers)",
+            fg=typer.colors.GREEN,
+            bold=True,
+        )
 
     except Exception as e:
         logger.error(f"Installation failed: {e}")
@@ -152,7 +158,9 @@ def install() -> None:
 
 @app.command()
 def uninstall(
-    drop_table: bool = typer.Option(False, "--drop-table", help="Also drop the Prebetter_Pair table"),
+    drop_table: bool = typer.Option(
+        False, "--drop-table", help="Also drop the Prebetter_Pair table"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ) -> None:
     """Remove triggers and optionally drop the helper table.
@@ -221,11 +229,15 @@ def backfill(
 
     try:
         with prelude_engine.begin() as conn:
-            result = conn.execute(sql, {"start": start, "end": end})
+            conn.execute(sql, {"start": start, "end": end})
             # result.rowcount may be -1 for INSERT IGNORE; fetch affected with ROW_COUNT()
             inserted = conn.execute(text("SELECT ROW_COUNT() AS inserted")).scalar()
 
-        typer.secho(f"✓ Backfill complete. Inserted ~{inserted:,} rows.", fg=typer.colors.GREEN, bold=True)
+        typer.secho(
+            f"✓ Backfill complete. Inserted ~{inserted:,} rows.",
+            fg=typer.colors.GREEN,
+            bold=True,
+        )
 
     except Exception as e:
         logger.error(f"Backfill failed: {e}")
@@ -235,7 +247,9 @@ def backfill(
 
 @app.command()
 def backfill_days(
-    days: int = typer.Option(7, "--days", "-d", min=1, max=365, help="Number of days to backfill"),
+    days: int = typer.Option(
+        7, "--days", "-d", min=1, max=365, help="Number of days to backfill"
+    ),
 ) -> None:
     """Backfill Prebetter_Pair for the last N days.
 
@@ -267,12 +281,16 @@ def status() -> None:
             ).scalar()
 
             if not exists:
-                typer.secho("✗ Prebetter_Pair table not found", fg=typer.colors.RED, bold=True)
+                typer.secho(
+                    "✗ Prebetter_Pair table not found", fg=typer.colors.RED, bold=True
+                )
                 typer.echo("Run 'install' command to create the table and triggers")
                 raise typer.Exit(code=1)
 
             # Get row count
-            row_count = conn.execute(text("SELECT COUNT(*) FROM Prebetter_Pair")).scalar()
+            row_count = conn.execute(
+                text("SELECT COUNT(*) FROM Prebetter_Pair")
+            ).scalar()
 
             # Check triggers
             triggers = conn.execute(
@@ -286,14 +304,21 @@ def status() -> None:
             trigger_names = {t[0] for t in triggers}
 
             typer.secho("✓ Prebetter_Pair Status", fg=typer.colors.GREEN, bold=True)
-            typer.echo(f"\nTable: Present")
+            typer.echo("\nTable: Present")
             typer.echo(f"Rows: {row_count:,}")
-            typer.echo(f"\nTriggers:")
-            typer.echo(f"  • prebetter_pair_ai: {'✓' if 'prebetter_pair_ai' in trigger_names else '✗ Missing'}")
-            typer.echo(f"  • prebetter_pair_au: {'✓' if 'prebetter_pair_au' in trigger_names else '✗ Missing'}")
+            typer.echo("\nTriggers:")
+            typer.echo(
+                f"  • prebetter_pair_ai: {'✓' if 'prebetter_pair_ai' in trigger_names else '✗ Missing'}"
+            )
+            typer.echo(
+                f"  • prebetter_pair_au: {'✓' if 'prebetter_pair_au' in trigger_names else '✗ Missing'}"
+            )
 
             if len(trigger_names) < 2:
-                typer.secho("\n⚠ Some triggers are missing. Run 'install' to fix.", fg=typer.colors.YELLOW)
+                typer.secho(
+                    "\n⚠ Some triggers are missing. Run 'install' to fix.",
+                    fg=typer.colors.YELLOW,
+                )
 
     except Exception as e:
         logger.error(f"Status check failed: {e}")

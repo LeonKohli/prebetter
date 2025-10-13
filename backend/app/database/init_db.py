@@ -90,7 +90,9 @@ def check_pair_accelerator(strict: bool = True) -> bool:
 
             # Triggers
             triggers = conn.execute(text("SHOW TRIGGERS LIKE 'Prelude_Address'"))
-            trigger_names = {row[0] for row in triggers.fetchall()} if triggers else set()
+            trigger_names = (
+                {row[0] for row in triggers.fetchall()} if triggers else set()
+            )
             for req in ("prebetter_pair_ai", "prebetter_pair_au"):
                 if req not in trigger_names:
                     ok = False
@@ -123,7 +125,9 @@ def check_pair_accelerator(strict: bool = True) -> bool:
         issues.append(str(e))
 
     if not ok:
-        msg = "; ".join(issues) if issues else "Prebetter_Pair accelerator not available"
+        msg = (
+            "; ".join(issues) if issues else "Prebetter_Pair accelerator not available"
+        )
         if strict:
             raise RuntimeError(msg)
         logger.warning(msg)

@@ -10,7 +10,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-import sys
 from typing import Optional
 
 import typer
@@ -21,7 +20,9 @@ from app.core.security import create_user_id, get_password_hash
 from app.database.config import PrebetterBase, prebetter_engine
 from app.models.users import User
 
-app = typer.Typer(help="Prebetter user management", no_args_is_help=False, add_completion=False)
+app = typer.Typer(
+    help="Prebetter user management", no_args_is_help=False, add_completion=False
+)
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +49,9 @@ def _validate_password(password: str) -> Optional[str]:
     return None
 
 
-def _create_user_in_db(username: str, email: str, password: str, is_superuser: bool) -> bool:
+def _create_user_in_db(
+    username: str, email: str, password: str, is_superuser: bool
+) -> bool:
     """Create user in database.
 
     Args:
@@ -71,7 +74,11 @@ def _create_user_in_db(username: str, email: str, password: str, is_superuser: b
             ).scalar_one_or_none()
 
             if existing_user:
-                typer.secho(f"Error: Username '{username}' already exists!", fg=typer.colors.RED, err=True)
+                typer.secho(
+                    f"Error: Username '{username}' already exists!",
+                    fg=typer.colors.RED,
+                    err=True,
+                )
                 return False
 
             # Check if email already exists
@@ -80,7 +87,11 @@ def _create_user_in_db(username: str, email: str, password: str, is_superuser: b
             ).scalar_one_or_none()
 
             if existing_email:
-                typer.secho(f"Error: Email '{email}' is already registered!", fg=typer.colors.RED, err=True)
+                typer.secho(
+                    f"Error: Email '{email}' is already registered!",
+                    fg=typer.colors.RED,
+                    err=True,
+                )
                 return False
 
             # Create new user
@@ -96,7 +107,11 @@ def _create_user_in_db(username: str, email: str, password: str, is_superuser: b
             db.commit()
 
             user_type = "SUPERUSER" if is_superuser else "USER"
-            typer.secho(f"\n✓ {user_type} '{username}' created successfully!", fg=typer.colors.GREEN, bold=True)
+            typer.secho(
+                f"\n✓ {user_type} '{username}' created successfully!",
+                fg=typer.colors.GREEN,
+                bold=True,
+            )
 
             return True
 
@@ -108,10 +123,16 @@ def _create_user_in_db(username: str, email: str, password: str, is_superuser: b
 
 @app.command()
 def create(
-    username: Optional[str] = typer.Option(None, "--username", "-u", help="Username for the new user"),
+    username: Optional[str] = typer.Option(
+        None, "--username", "-u", help="Username for the new user"
+    ),
     email: Optional[str] = typer.Option(None, "--email", "-e", help="Email address"),
-    password: Optional[str] = typer.Option(None, "--password", "-p", help="Password (prompted if not provided)"),
-    superuser: bool = typer.Option(False, "--superuser", "-s", help="Create as superuser"),
+    password: Optional[str] = typer.Option(
+        None, "--password", "-p", help="Password (prompted if not provided)"
+    ),
+    superuser: bool = typer.Option(
+        False, "--superuser", "-s", help="Create as superuser"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ) -> None:
     """Create a new user for Prebetter.
