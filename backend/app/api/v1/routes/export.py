@@ -8,7 +8,7 @@ from io import StringIO
 from enum import Enum
 
 from app.database.config import (
-    get_prelude_db, 
+    get_prelude_db,
     apply_standard_alert_filters,
 )
 from app.database.query_builders import build_alert_base_query
@@ -64,8 +64,8 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
         for row in results:
             # In SQLAlchemy 2.0 with labeled columns, we can access by attribute name
             # The labels we set in the query: detect_time, create_time, classification_text, etc.
-            detect_time_str = format_iso_datetime(getattr(row, 'detect_time', None))
-            create_time_str = format_iso_datetime(getattr(row, 'create_time', None))
+            detect_time_str = format_iso_datetime(getattr(row, "detect_time", None))
+            create_time_str = format_iso_datetime(getattr(row, "create_time", None))
 
             writer.writerow(
                 [
@@ -73,13 +73,13 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
                     row[1],  # messageid (second column)
                     detect_time_str,
                     create_time_str,
-                    getattr(row, 'classification_text', "") or "",
-                    getattr(row, 'severity', "") or "",
-                    getattr(row, 'source_ipv4', "") or "",
-                    getattr(row, 'target_ipv4', "") or "",
-                    getattr(row, 'analyzer_name', "") or "",
-                    getattr(row, 'analyzer_host', "") or "",
-                    getattr(row, 'analyzer_model', "") or "",
+                    getattr(row, "classification_text", "") or "",
+                    getattr(row, "severity", "") or "",
+                    getattr(row, "source_ipv4", "") or "",
+                    getattr(row, "target_ipv4", "") or "",
+                    getattr(row, "analyzer_name", "") or "",
+                    getattr(row, "analyzer_host", "") or "",
+                    getattr(row, "analyzer_model", "") or "",
                 ]
             )
             yield output.getvalue()
@@ -88,7 +88,7 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
     finally:
         # Ensure the result set is properly closed
         # This prevents "unbuffered result was left incomplete" warnings
-        if hasattr(results, 'close'):
+        if hasattr(results, "close"):
             results.close()
 
 
@@ -155,7 +155,7 @@ async def export_alerts(
                 continue
         if alert_id_ints:
             query = query.where(Alert._ident.in_(alert_id_ints))
-    
+
     # Only apply other filters if we're not filtering by specific alert IDs
     # This ensures we get all requested alerts even if they lack some joined data
     if not alert_ids:
@@ -179,11 +179,11 @@ async def export_alerts(
     # Order by alert ID descending and add limit for safety
     # We can't reliably order by DetectTime.time since it might be NULL for some alerts
     query = query.order_by(Alert._ident.desc()).limit(50000)
-    
+
     # Use SQLAlchemy 2.0 execution options for streaming
     # yield_per enables server-side cursors and limits buffer size
     query = query.execution_options(yield_per=1000)
-    
+
     # Execute the query - returns a Result object that can be iterated
     results = db.execute(query)
 

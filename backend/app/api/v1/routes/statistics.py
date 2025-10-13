@@ -88,8 +88,7 @@ async def get_timeline(
         results = db.execute(
             timeline_query.group_by(
                 text("time_bucket"), Impact.severity, Classification.text, Analyzer.name
-            )
-            .order_by(text("time_bucket"))
+            ).order_by(text("time_bucket"))
         ).all()
 
         timeline_data = {}
@@ -159,7 +158,7 @@ async def get_statistics_summary(
 
     try:
         from sqlalchemy import func, select
-        
+
         # Count total alerts
         base_subquery = query["base"].distinct().subquery()
         total_alerts = db.scalar(select(func.count()).select_from(base_subquery)) or 0
