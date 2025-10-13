@@ -7,8 +7,8 @@
           Snapshot of connected nodes and analyzer agents.
         </p>
       </div>
-      <div v-if="lastUpdated" class="text-xs text-muted-foreground whitespace-nowrap">
-        Updated {{ formatTimestamp(lastUpdated, { style: 'short', showTimezone: true }) }}
+      <div class="text-xs text-muted-foreground whitespace-nowrap" data-allow-mismatch="children">
+        <span v-if="lastUpdated">Updated {{ formatTimestamp(lastUpdated, { style: 'short', showTimezone: true }) }}</span>
       </div>
     </div>
 
