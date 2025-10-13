@@ -1,15 +1,25 @@
-"""CLI utility to audit and enforce critical Prelude DB indexes."""
+"""Prelude database index maintenance utility.
+
+This script audits and enforces critical indexes on Prelude database tables
+to ensure optimal query performance for the Prebetter IDS dashboard.
+
+Usage:
+    uv run python -m app.scripts.prelude_index_maintenance [COMMAND]
+"""
 
 from __future__ import annotations
 
-import typer
+import logging
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Optional
+
+import typer
 from sqlalchemy import text
 
 from app.database.config import prelude_engine
 
-app = typer.Typer(help="Prelude index maintenance", no_args_is_help=True)
+app = typer.Typer(help="Prelude index maintenance", no_args_is_help=True, add_completion=False)
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -41,15 +51,32 @@ REQUIRED_INDEXES: tuple[RequiredIndex, ...] = (
 
 
 def _get_existing_index_names(conn, table: str) -> set[str]:
+    """Get all existing index names for a table.
+
+    Args:
+        conn: Database connection
+        table: Table name to check
+
+    Returns:
+        Set of index names
+    """
     query = text(
         "SELECT index_name FROM information_schema.statistics "
-        "WHERE table_schema = :schema AND table_name = :table"
+        "WHERE table_schema = DATABASE() AND table_name = :table"
     )
-    rows = conn.execute(query, {"schema": "prelude", "table": table}).all()
+    rows = conn.execute(query, {"table": table}).all()
     return {row[0] for row in rows}
 
 
 def _missing_indexes(conn) -> list[RequiredIndex]:
+    """Identify which required indexes are missing.
+
+    Args:
+        conn: Database connection
+
+    Returns:
+        List of missing RequiredIndex objects
+    """
     missing: list[RequiredIndex] = []
     cache: dict[str, set[str]] = {}
 
@@ -58,50 +85,100 @@ def _missing_indexes(conn) -> list[RequiredIndex]:
             cache[index.table] = _get_existing_index_names(conn, index.table)
         if index.name not in cache[index.table]:
             missing.append(index)
+
     return missing
 
 
 @app.command()
 def check() -> None:
-    """List required indexes and show which ones are missing."""
-    with prelude_engine.connect() as conn:
-        missing = _missing_indexes(conn)
+    """Check for missing required indexes.
 
-    if not missing:
-        typer.secho("All required Prelude indexes are present.", fg=typer.colors.GREEN)
-        return
+    Lists all required indexes and identifies which ones are missing
+    from the Prelude database.
+    """
+    try:
+        with prelude_engine.connect() as conn:
+            missing = _missing_indexes(conn)
 
-    typer.secho("Missing Prelude indexes:", fg=typer.colors.YELLOW)
-    for index in missing:
-        typer.echo(f"- {index.table}.{index.name}")
+        if not missing:
+            typer.secho("✓ All required Prelude indexes are present.", fg=typer.colors.GREEN, bold=True)
+            typer.echo(f"\nTotal indexes checked: {len(REQUIRED_INDEXES)}")
+            return
+
+        typer.secho(f"⚠ Missing Prelude indexes ({len(missing)}):", fg=typer.colors.YELLOW, bold=True)
+        for index in missing:
+            typer.echo(f"  • {index.table}.{index.name}")
+
+        typer.echo(f"\nRun 'apply' command to create missing indexes.")
+
+    except Exception as e:
+        logger.error(f"Index check failed: {e}")
+        typer.secho(f"✗ Index check failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
 
 
 @app.command()
-def apply(yes: bool = typer.Option(False, "--yes", help="Apply without confirmation.")) -> None:
-    """Create any missing indexes declared by this utility."""
-    with prelude_engine.begin() as conn:
-        missing = _missing_indexes(conn)
-        if not missing:
-            typer.secho("All required Prelude indexes are already present.", fg=typer.colors.GREEN)
-            return
+def apply(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+) -> None:
+    """Create any missing required indexes.
 
-        typer.secho("The following indexes will be created:", fg=typer.colors.YELLOW)
-        for index in missing:
-            typer.echo(f"- {index.table}.{index.name}")
+    This command will create all missing indexes that are declared as required
+    by this utility. Index creation may take time on large tables.
+    """
+    try:
+        with prelude_engine.begin() as conn:
+            missing = _missing_indexes(conn)
 
-        if not yes:
-            confirm = typer.confirm("Proceed with index creation?", default=False)
-            if not confirm:
-                typer.echo("Aborted.")
+            if not missing:
+                typer.secho("✓ All required Prelude indexes are already present.", fg=typer.colors.GREEN, bold=True)
                 return
 
-        for index in missing:
-            typer.echo(f"Creating {index.table}.{index.name} ...", nl=False)
-            conn.execute(text(index.create_sql))
-            typer.echo(" done.")
+            typer.secho(f"The following {len(missing)} index(es) will be created:", fg=typer.colors.CYAN, bold=True)
+            for index in missing:
+                typer.echo(f"  • {index.table}.{index.name}")
 
-    typer.secho("Index creation complete.", fg=typer.colors.GREEN)
+            if not yes:
+                typer.echo("\nNote: Index creation may take several minutes on large tables.")
+                confirm = typer.confirm("Proceed with index creation?", default=False)
+                if not confirm:
+                    typer.echo("Cancelled.")
+                    raise typer.Exit(code=0)
+
+            typer.echo()
+            for idx, index in enumerate(missing, 1):
+                typer.echo(f"[{idx}/{len(missing)}] Creating {index.table}.{index.name} ... ", nl=False)
+                conn.execute(text(index.create_sql))
+                typer.secho("done", fg=typer.colors.GREEN)
+
+        typer.echo()
+        typer.secho(f"✓ Index creation complete! Created {len(missing)} index(es).", fg=typer.colors.GREEN, bold=True)
+
+    except Exception as e:
+        logger.error(f"Index creation failed: {e}")
+        typer.secho(f"\n✗ Index creation failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def list() -> None:
+    """List all required indexes defined by this utility.
+
+    Shows the complete list of indexes that this utility manages,
+    regardless of whether they are currently present or missing.
+    """
+    typer.secho(f"Required Prelude indexes ({len(REQUIRED_INDEXES)}):", fg=typer.colors.CYAN, bold=True)
+
+    for idx, index in enumerate(REQUIRED_INDEXES, 1):
+        typer.echo(f"\n[{idx}] {index.table}.{index.name}")
+        typer.echo(f"    SQL: {index.create_sql}")
+
+
+def main() -> None:
+    """Entry point for the script."""
+    logging.basicConfig(level=logging.INFO)
+    app()
 
 
 if __name__ == "__main__":
-    app()
+    main()
