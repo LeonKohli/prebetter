@@ -1,7 +1,8 @@
 import type { ColumnDef, Column } from '@tanstack/vue-table'
 import { Icon } from '#components'
-import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert } from '@/types/alerts'
+import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert, CompactGroupedAlert } from '@/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
+import ClassificationBadges from '@/components/alerts/ClassificationBadges.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatTimestamp, formatTimestampCompact, getRelativeTime } from '@/utils/timestampFormatter'
@@ -49,6 +50,80 @@ export const useAlertTableColumns = () => {
     window.dispatchEvent(event)
   }
 
+  // New compact grouped columns - one group per row
+  const compactGroupedColumns: ColumnDef<CompactGroupedAlert>[] = [
+    {
+      accessorKey: 'total_count',
+      header: createSortableHeader('Alerts'),
+      cell: ({ row }) => {
+        const totalCount = row.getValue('total_count') as number
+        const classificationCount = row.original.alerts?.length || 0
+
+        return h('div', { class: 'flex flex-col' }, [
+          h('span', { class: 'font-bold text-lg text-foreground' }, totalCount.toString()),
+          h('span', { class: 'text-xs text-muted-foreground' }, `${classificationCount} type${classificationCount !== 1 ? 's' : ''}`)
+        ])
+      },
+      size: 100,
+    },
+    {
+      accessorKey: 'source_ipv4',
+      header: createSortableHeader('Source IP'),
+      cell: ({ row }) => h('span', { class: 'font-mono text-sm' }, row.getValue('source_ipv4') || 'Unknown'),
+      size: 150,
+    },
+    {
+      accessorKey: 'target_ipv4',
+      header: createSortableHeader('Target IP'),
+      cell: ({ row }) => h('span', { class: 'font-mono text-sm' }, row.getValue('target_ipv4') || 'Unknown'),
+      size: 150,
+    },
+    {
+      accessorKey: 'alerts',
+      header: () => 'Classifications',
+      cell: ({ row }) => {
+        const alerts = row.original.alerts || []
+        return h(ClassificationBadges, {
+          classifications: alerts,
+          sourceIp: row.original.source_ipv4 || '',
+          targetIp: row.original.target_ipv4 || '',
+          maxVisible: 5
+        })
+      },
+      enableSorting: false,
+    },
+    {
+      id: 'detected_at',
+      accessorFn: (row) => row.alerts?.[0]?.detected_at,
+      header: createSortableHeader('Last Detected'),
+      cell: ({ row }) => {
+        const dateStr = row.original.alerts?.[0]?.detected_at
+
+        if (!dateStr) return h('span', { class: 'text-muted-foreground' }, 'Unknown')
+
+        const formatted = formatTimestampCompact(dateStr)
+        const relative = getRelativeTime(dateStr)
+
+        return h('div', { class: 'text-sm' }, [
+          h('div', { class: 'font-medium' }, formatted),
+          h('div', { class: 'text-xs text-muted-foreground' }, relative)
+        ])
+      },
+      size: 140,
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      cell: ({ row }) => h(AlertActions, {
+        alert: row.original,
+        isGrouped: true,
+        onViewDetails: handleViewDetails
+      }),
+      size: 60,
+    },
+  ]
+
+  // Legacy flattened grouped columns (kept for backward compatibility)
   const groupedColumns: ColumnDef<FlattenedGroupedAlert>[] = [
     {
       accessorKey: 'count',
@@ -238,6 +313,7 @@ export const useAlertTableColumns = () => {
     'severity': 'severity',
     'total_count': 'total_count', // Backend now supports this!
     'count': 'total_count', // Map count to total_count for backward compat
+    'alert_count': 'total_count', // Map alert_count to total_count for compact view
   } as const satisfies Record<string, string>
 
   const filterFieldMap = {
@@ -249,7 +325,8 @@ export const useAlertTableColumns = () => {
   } as const satisfies Record<string, string>
 
   return {
-    groupedColumns,
+    compactGroupedColumns,
+    groupedColumns, // legacy
     ungroupedColumns,
     sortFieldMap,
     filterFieldMap,
