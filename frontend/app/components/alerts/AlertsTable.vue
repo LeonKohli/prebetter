@@ -4,6 +4,7 @@ import type {
   ColumnFiltersState,
   SortingState,
   VisibilityState,
+  Table,
 } from '@tanstack/vue-table'
 import {
   FlexRender,
@@ -370,7 +371,7 @@ if (process.client) {
 // Provide context for child components
 provideAlertTableContext({
   urlState,
-  table,
+  table: table as Table<AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert>,
   isGrouped,
   pending
 })
