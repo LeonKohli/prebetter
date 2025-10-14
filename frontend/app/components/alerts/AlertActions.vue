@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { AlertListItem, FlattenedGroupedAlert } from '@/types/alerts'
+import type { AlertListItem, FlattenedGroupedAlert, CompactGroupedAlert } from '@/types/alerts'
 
 const props = defineProps<{
-  alert: AlertListItem | FlattenedGroupedAlert
+  alert: AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert
   isGrouped: boolean
 }>()
 
@@ -11,9 +11,16 @@ const emit = defineEmits<{
 }>()
 
 function copyId() {
-  const id = props.isGrouped 
-    ? `${(props.alert as FlattenedGroupedAlert).source_ipv4}-${(props.alert as FlattenedGroupedAlert).target_ipv4}` 
-    : (props.alert as AlertListItem).id
+  let id = ''
+  if (props.isGrouped) {
+    // For grouped rows, use the IP pair as identifier (works for both legacy and compact)
+    const anyAlert = props.alert as any
+    const src = anyAlert?.source_ipv4 || 'unknown'
+    const dst = anyAlert?.target_ipv4 || 'unknown'
+    id = `${src}-${dst}`
+  } else if ('id' in props.alert) {
+    id = props.alert.id
+  }
   navigator.clipboard.writeText(id || '')
 }
 
