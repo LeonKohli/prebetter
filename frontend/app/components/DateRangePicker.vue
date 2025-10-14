@@ -87,7 +87,6 @@
 
 <script setup lang="ts">
 import { useNow } from '@vueuse/core'
-import type { DateValue } from '@internationalized/date'
 import type { DateRange } from 'reka-ui'
 import {
   CalendarDate,
@@ -95,7 +94,6 @@ import {
   DateFormatter,
   getLocalTimeZone,
   today,
-  now,
   startOfWeek as rekaStartOfWeek,
   startOfMonth as rekaStartOfMonth,
   startOfYear as rekaStartOfYear,
