@@ -260,16 +260,18 @@ async def get_grouped_alerts(
 
         alerts_query, alert_models = build_grouped_alerts_detail_query(db, pairs)
 
-        # Apply the same filters
+        # Apply ONLY safe filters that don't require additional table joins
+        # Classification and date filters are safe (tables already in the query)
+        # Severity/analyzer filters cause Cartesian products (need Impact/Analyzer joins)
         alerts_query = apply_standard_alert_filters(
             query=alerts_query,
-            severity=severity,
-            classification=classification,
-            start_date=start_date,
-            end_date=end_date,
-            source_ip=source_ip,
-            target_ip=target_ip,
-            analyzer_model=analyzer_model,
+            severity=None,  # Skip - causes Cartesian product
+            classification=classification,  # Safe - Classification already joined
+            start_date=start_date,  # Safe - DetectTime already joined
+            end_date=end_date,  # Safe - DetectTime already joined
+            source_ip=None,  # Skip - already filtered by pair_key
+            target_ip=None,  # Skip - already filtered by pair_key
+            analyzer_model=None,  # Skip - causes Cartesian product
             **alert_models,
             Impact=Impact,
             Classification=Classification,
