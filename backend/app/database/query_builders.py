@@ -40,6 +40,7 @@ from ..models.prelude import (
     Heartbeat,
     ProcessArg,
     ProcessEnv,
+    CorrelationAlert,
 )
 from .config import (
     get_analyzer_join_conditions,
@@ -117,6 +118,7 @@ def build_alert_base_query(db: Session):
             Analyzer.osversion.label("analyzer_osversion"),
             Node.location.label("node_location"),
             Node.category.label("node_category"),
+            CorrelationAlert.name.label("correlation_description"),
         )
         .distinct()
         .select_from(Alert)
@@ -131,6 +133,7 @@ def build_alert_base_query(db: Session):
         )
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
+        .outerjoin(CorrelationAlert, CorrelationAlert._message_ident == Alert._ident)
         .outerjoin(
             source_addr,
             and_(
@@ -350,7 +353,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
 def build_alert_detail_query(db: Session, alert_id: int):
     """Build queries for detailed alert information (avoids cartesian products)."""
     base_query = (
-        select(Alert, CreateTime, DetectTime, Classification, Impact)
+        select(Alert, CreateTime, DetectTime, Classification, Impact, CorrelationAlert)
         .select_from(Alert)
         .outerjoin(
             CreateTime,
@@ -362,6 +365,7 @@ def build_alert_detail_query(db: Session, alert_id: int):
         .outerjoin(DetectTime, DetectTime._message_ident == Alert._ident)
         .outerjoin(Classification, Classification._message_ident == Alert._ident)
         .outerjoin(Impact, Impact._message_ident == Alert._ident)
+        .outerjoin(CorrelationAlert, CorrelationAlert._message_ident == Alert._ident)
         .where(Alert._ident == alert_id)
     )
 

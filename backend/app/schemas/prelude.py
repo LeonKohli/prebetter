@@ -261,6 +261,7 @@ class AlertListItem(BaseModel):
     source_ipv4: Optional[str] = None
     target_ipv4: Optional[str] = None
     analyzer: Optional[AnalyzerInfo] = None
+    correlation_description: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -300,6 +301,7 @@ class AlertDetail(BaseModel):
     web_services: List[WebServiceInfo] = []
     alert_idents: List[AlertIdentInfo] = []
     additional_data: dict = {}
+    correlation_description: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

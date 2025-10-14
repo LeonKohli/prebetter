@@ -153,8 +153,8 @@ async def list_alerts(
 @router.get("/groups", response_model=GroupedAlertResponse)
 async def get_grouped_alerts(
     page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(10, ge=1, le=100, description="Number of groups per page"),
-    sort_by: SortField = Query(SortField.DETECT_TIME, description="Field to sort by"),
+    size: int = Query(20, ge=1, le=100, description="Number of groups per page (default: 20)"),
+    sort_by: SortField = Query(SortField.TOTAL_COUNT, description="Field to sort by (default: total_count)"),
     sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
     severity: Optional[str] = None,
     classification: Optional[str] = None,
@@ -531,6 +531,7 @@ async def get_alert_detail(
                 for ai in alert_idents
             ],
             additional_data=additional_data,
+            correlation_description=alert[5].name if alert and alert[5] else None,
         )
     except HTTPException:
         raise
