@@ -13,8 +13,6 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const urlState = useNavigableUrlState()
-const route = useRoute()
-const router = useRouter()
 const expanded = ref(false)
 
 // Compute visible and hidden classifications
@@ -40,26 +38,6 @@ function handleClassificationClick(classification: string) {
 
 function toggleExpanded() {
   expanded.value = !expanded.value
-}
-
-async function viewAllForPair() {
-  const currentFilters = urlState.filters.value
-  const { classification_text, ...rest } = currentFilters
-
-  await router.push({
-    query: {
-      ...route.query,
-      view: 'ungrouped',
-      page: '1',
-      size: '100',
-      sort: 'detected_at:desc',
-      filter: JSON.stringify({
-        ...rest,
-        source_ipv4: props.sourceIp,
-        target_ipv4: props.targetIp,
-      }),
-    },
-  })
 }
 </script>
 
@@ -94,15 +72,6 @@ async function viewAllForPair() {
     >
       <Icon name="lucide:chevron-up" class="h-3 w-3" />
       <span>Show less</span>
-    </button>
-
-    <button
-      @click="viewAllForPair"
-      class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-muted hover:bg-muted/80 text-muted-foreground transition-colors border border-border cursor-pointer"
-      title="View all alerts for this pair"
-    >
-      <Icon name="lucide:list" class="h-3 w-3" />
-      <span>View pair</span>
     </button>
   </div>
 </template>
