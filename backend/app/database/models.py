@@ -69,6 +69,7 @@ def alert_result_to_list_item(result: Row) -> AlertListItem:
         source_ipv4=result.source_ipv4,
         target_ipv4=result.target_ipv4,
         analyzer=analyzer_info,
+        correlation_description=getattr(result, "correlation_description", None),
     )
     return alert_item
 
