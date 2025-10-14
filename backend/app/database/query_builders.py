@@ -196,7 +196,7 @@ def build_grouped_alerts_query(
             func.timestampadd(
                 text("SECOND"), func.max(DetectTime.gmtoff), func.max(DetectTime.time)
             ).label("latest_time"),
-            func.count().label("total_count"),
+            func.count(func.distinct(pair_table.c._message_ident)).label("total_count"),
         ]
         if include_impact:
             select_cols.append(func.max(Impact.severity).label("max_severity"))
@@ -307,7 +307,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
                 func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
                 func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
                 Classification.text.label("classification"),
-                func.count().label("count"),
+                func.count(func.distinct(pair_table.c._message_ident)).label("count"),
                 func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
                 literal(None).label("analyzer_hosts"),
                 func.timestampadd(
