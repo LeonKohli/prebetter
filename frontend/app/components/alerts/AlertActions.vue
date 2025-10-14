@@ -36,8 +36,6 @@ function handleViewDetails() {
 }
 
 async function viewAllForPair() {
-  if (!props.isGrouped) return
-
   const anyAlert = props.alert as any
   const sourceIp = anyAlert?.source_ipv4
   const targetIp = anyAlert?.target_ipv4
@@ -78,9 +76,9 @@ async function viewAllForPair() {
         <Icon name="lucide:file-text" class="mr-2 h-4 w-4" />
         View details
       </DropdownMenuItem>
-      <DropdownMenuItem v-if="isGrouped" @click="viewAllForPair">
+      <DropdownMenuItem @click="viewAllForPair">
         <Icon name="lucide:list" class="mr-2 h-4 w-4" />
-        View all alerts
+        View all from IP pair
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem @click="copyId">
