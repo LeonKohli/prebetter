@@ -106,7 +106,7 @@ export const useAlertTableColumns = () => {
 
         return h('div', { class: 'text-sm' }, [
           h('div', { class: 'font-medium' }, formatted),
-          h('div', { class: 'text-xs text-muted-foreground' }, relative)
+          h('div', { class: 'text-xs text-muted-foreground', 'data-allow-mismatch': '' }, relative)
         ])
       },
       size: 140,
@@ -193,7 +193,7 @@ export const useAlertTableColumns = () => {
 
         return h('div', { class: 'text-sm' }, [
           h('div', { class: 'font-medium' }, formatted),
-          h('div', { class: 'text-xs text-muted-foreground' }, relative)
+          h('div', { class: 'text-xs text-muted-foreground', 'data-allow-mismatch': '' }, relative)
         ])
       },
     },
@@ -247,7 +247,7 @@ export const useAlertTableColumns = () => {
 
         return h('div', { class: 'text-sm' }, [
           h('div', { class: 'font-medium' }, formatted),
-          h('div', { class: 'text-xs text-muted-foreground' }, relative)
+          h('div', { class: 'text-xs text-muted-foreground', 'data-allow-mismatch': '' }, relative)
         ])
       },
     },
@@ -272,7 +272,18 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: 'classification_text',
       header: createSortableHeader('Classification'),
-      cell: ({ row }) => row.getValue('classification_text') || 'Unknown',
+      cell: ({ row }) => {
+        const classification = row.getValue('classification_text') || 'Unknown'
+        const correlationDesc = row.original.correlation_description
+
+        if (correlationDesc) {
+          return h('div', { class: 'flex items-center gap-1.5', title: correlationDesc }, [
+            h('span', { class: 'text-blue-600 dark:text-blue-400 text-xs' }, '●'),
+            String(classification)
+          ])
+        }
+        return String(classification)
+      },
     },
     {
       accessorKey: 'source_ipv4',
