@@ -10,6 +10,10 @@ const emit = defineEmits<{
   viewDetails: [alertId: string]
 }>()
 
+const urlState = useNavigableUrlState()
+const route = useRoute()
+const router = useRouter()
+
 function copyId() {
   let id = ''
   if (props.isGrouped) {
@@ -30,6 +34,34 @@ function handleViewDetails() {
     emit('viewDetails', props.alert.id)
   }
 }
+
+async function viewAllForPair() {
+  if (!props.isGrouped) return
+
+  const anyAlert = props.alert as any
+  const sourceIp = anyAlert?.source_ipv4
+  const targetIp = anyAlert?.target_ipv4
+
+  if (!sourceIp || !targetIp) return
+
+  const currentFilters = urlState.filters.value
+  const { classification_text, ...rest } = currentFilters
+
+  await router.push({
+    query: {
+      ...route.query,
+      view: 'ungrouped',
+      page: '1',
+      size: '100',
+      sort: 'detected_at:desc',
+      filter: JSON.stringify({
+        ...rest,
+        source_ipv4: sourceIp,
+        target_ipv4: targetIp,
+      }),
+    },
+  })
+}
 </script>
 
 <template>
@@ -45,6 +77,10 @@ function handleViewDetails() {
       <DropdownMenuItem v-if="!isGrouped" @click="handleViewDetails">
         <Icon name="lucide:file-text" class="mr-2 h-4 w-4" />
         View details
+      </DropdownMenuItem>
+      <DropdownMenuItem v-if="isGrouped" @click="viewAllForPair">
+        <Icon name="lucide:list" class="mr-2 h-4 w-4" />
+        View all alerts
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem @click="copyId">
