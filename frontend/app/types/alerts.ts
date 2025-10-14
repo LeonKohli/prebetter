@@ -51,6 +51,7 @@ export interface AlertListItem {
   source_ipv4?: string
   target_ipv4?: string
   analyzer?: AnalyzerInfo
+  correlation_description?: string
 }
 
 export interface GroupedAlertDetail {
@@ -172,4 +173,5 @@ export interface AlertDetail {
   web_services: WebServiceInfo[]
   alert_idents: AlertIdentInfo[]
   additional_data: Record<string, any>
+  correlation_description?: string
 }

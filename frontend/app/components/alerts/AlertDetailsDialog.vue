@@ -92,6 +92,30 @@ function getSeverityPillClass(severity?: string): string {
   return map[s] || map.low!
 }
 
+async function viewAllFromPair() {
+  if (!alertData.value?.source?.address || !alertData.value?.target?.address) return
+
+  const router = useRouter()
+  const route = useRoute()
+
+  await router.push({
+    query: {
+      ...route.query,
+      view: 'ungrouped',
+      page: '1',
+      size: '100',
+      sort: 'detected_at:desc',
+      filter: JSON.stringify({
+        source_ipv4: alertData.value.source.address,
+        target_ipv4: alertData.value.target.address,
+      }),
+    },
+  })
+
+  // Close the dialog after navigation
+  dialogOpen.value = false
+}
+
 function isHttpLikePayload(key: string, value: unknown): boolean {
   if (typeof value !== 'string') return false
   const k = key.toLowerCase()
@@ -160,6 +184,17 @@ function formatHttpLikePayload(raw: string): string {
               <span class="text-sm font-medium truncate" :title="alertData.classification_text || 'N/A'">
                 {{ alertData.classification_text || 'N/A' }}
               </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Correlation Description (if present) -->
+        <div v-if="alertData?.correlation_description" class="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-4 py-3 mb-4">
+          <div class="flex items-start gap-2">
+            <Icon name="lucide:activity" class="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            <div class="flex-1 min-w-0">
+              <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">Correlation Analysis</h4>
+              <p class="text-sm text-blue-800 dark:text-blue-200">{{ alertData.correlation_description }}</p>
             </div>
           </div>
         </div>
@@ -578,9 +613,20 @@ function formatHttpLikePayload(raw: string): string {
       </div>
 
       <DialogFooter class="mt-4 border-t pt-4">
-        <Button variant="outline" @click="dialogOpen = false">
-          Close
-        </Button>
+        <div class="flex items-center justify-between w-full">
+          <Button
+            v-if="alertData?.source?.address && alertData?.target?.address"
+            variant="outline"
+            @click="viewAllFromPair"
+          >
+            <Icon name="lucide:list" class="mr-2 h-4 w-4" />
+            View all from IP pair
+          </Button>
+          <div v-else></div>
+          <Button variant="outline" @click="dialogOpen = false">
+            Close
+          </Button>
+        </div>
       </DialogFooter>
     </DialogContent>
   </Dialog>
