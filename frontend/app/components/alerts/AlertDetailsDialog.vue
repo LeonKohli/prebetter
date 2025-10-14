@@ -83,13 +83,13 @@ function getSeverityClass(severity?: string): string {
 
 // Match table severity styling for a consistent pill look
 function getSeverityPillClass(severity?: string): string {
-  const s = severity?.toLowerCase()
+  const s = (severity || 'low').toLowerCase()
   const map: Record<string, string> = {
     high: 'inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-primary text-primary-foreground',
     medium: 'inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-accent text-accent-foreground',
     low: 'inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-muted text-muted-foreground',
   }
-  return map[s ?? ''] || map.low
+  return map[s] || map.low!
 }
 
 function isHttpLikePayload(key: string, value: unknown): boolean {
