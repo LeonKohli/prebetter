@@ -29,3 +29,4 @@ AnalyzerTime = Base.classes.Prelude_AnalyzerTime
 Alertident = Base.classes.Prelude_Alertident
 Assessment = Base.classes.Prelude_Assessment
 Heartbeat = Base.classes.Prelude_Heartbeat
+CorrelationAlert = Base.classes.Prelude_CorrelationAlert
