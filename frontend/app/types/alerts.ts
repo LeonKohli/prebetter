@@ -51,6 +51,7 @@ export interface AlertListItem {
   source_ipv4?: string
   target_ipv4?: string
   analyzer?: AnalyzerInfo
+  correlation_description?: string
 }
 
 export interface GroupedAlertDetail {
@@ -86,7 +87,7 @@ export interface GroupedAlertResponse {
   total_alerts: number
 }
 
-// Flattened representation of grouped alerts for table display
+// Flattened representation of grouped alerts for table display (LEGACY - being replaced)
 export interface FlattenedGroupedAlert extends GroupedAlertDetail {
   source_ipv4?: string
   target_ipv4?: string
@@ -96,6 +97,12 @@ export interface FlattenedGroupedAlert extends GroupedAlertDetail {
   isFirstInGroup: boolean
   isLastInGroup: boolean
   groupSize: number
+}
+
+// New compact representation: one group = one table row
+export interface CompactGroupedAlert extends GroupedAlert {
+  // Inherits: source_ipv4, target_ipv4, total_count, alerts[]
+  groupIndex: number
 }
 
 // Additional types for alert details
@@ -166,4 +173,5 @@ export interface AlertDetail {
   web_services: WebServiceInfo[]
   alert_idents: AlertIdentInfo[]
   additional_data: Record<string, any>
+  correlation_description?: string
 }

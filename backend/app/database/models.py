@@ -69,6 +69,7 @@ def alert_result_to_list_item(result: Row) -> AlertListItem:
         source_ipv4=result.source_ipv4,
         target_ipv4=result.target_ipv4,
         analyzer=analyzer_info,
+        correlation_description=getattr(result, "correlation_description", None),
     )
     return alert_item
 
@@ -94,14 +95,21 @@ def grouped_alert_to_response(
     )
 
 
-def process_grouped_alerts_details(alerts, max_limit=1000):
-    """Process alert results into a grouped alerts map with a maximum limit."""
+def process_grouped_alerts_details(alerts, max_limit=None):
+    """Process alert results into a grouped alerts map.
+
+    Args:
+        alerts: Query results containing alert classification data
+        max_limit: Optional maximum number of classifications to process (None = unlimited)
+                   Note: Real-world data shows ~1600 total classifications across all pairs,
+                   so this limit is generally unnecessary and was removed by default.
+    """
     alerts_map = {}
     processed_count = 0
 
     for a in alerts:
-        # Stop processing if we've reached the limit
-        if processed_count >= max_limit:
+        # Stop processing if we've reached the limit (only if limit is set)
+        if max_limit is not None and processed_count >= max_limit:
             break
 
         key = (a.source_ipv4, a.target_ipv4)

@@ -4,6 +4,7 @@ import type {
   ColumnFiltersState,
   SortingState,
   VisibilityState,
+  Table,
 } from '@tanstack/vue-table'
 import {
   FlexRender,
@@ -17,7 +18,7 @@ import {
 import { useIntervalFn, useDocumentVisibility, watchDebounced } from '@vueuse/core'
 import { valueUpdater } from '@/utils/utils'
 import { applyDefaultDateFilters } from '@/utils/dateHelpers'
-import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
+import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, CompactGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
 import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
 
 // URL state synchronization with proper browser navigation
@@ -25,7 +26,7 @@ const router = useRouter()
 const route = useRoute()
 const urlState = useNavigableUrlState({
   defaultView: 'grouped',
-  defaultPageSize: 100,
+  defaultPageSize: 20, // Changed: 20 groups per page instead of 100 alerts
   defaultSortBy: 'detected_at',
   defaultSortOrder: 'desc',
   defaultGroupedSortBy: 'total_count',
@@ -49,7 +50,7 @@ function handleViewAlertDetails(details: { sourceIp: string; targetIp: string; c
 }
 
 // Get column definitions from composable
-const { groupedColumns, ungroupedColumns, sortFieldMap, filterFieldMap } = useAlertTableColumns()
+const { compactGroupedColumns, groupedColumns, ungroupedColumns, sortFieldMap, filterFieldMap } = useAlertTableColumns()
 
 
 // View mode directly from URL state
@@ -159,41 +160,23 @@ const showLoadingOverlay = computed(() =>
 // No need for type guards - we control the response type based on isGrouped
 
 // Current columns based on view mode
-const columns = computed(() => isGrouped.value ? groupedColumns : ungroupedColumns)
+const columns = computed(() => isGrouped.value ? compactGroupedColumns : ungroupedColumns)
 
 // Extract data and pagination from response
 const displayData = computed(() => {
   if (!data.value) return []
-  
+
   if (isGrouped.value) {
     // We know it's GroupedAlertResponse based on the fetch URL
     const response = data.value as GroupedAlertResponse
-    const flattenedAlerts: FlattenedGroupedAlert[] = []
-    
-    response.groups?.forEach((group, groupIndex) => {
-      if (group.alerts && group.alerts.length > 0) {
-        // Keep the backend's chronological sorting (newest first)
-        group.alerts.forEach((alert, alertIndex) => {
-          flattenedAlerts.push({
-            source_ipv4: group.source_ipv4,
-            target_ipv4: group.target_ipv4,
-            total_count: group.total_count,
-            classification: alert.classification,
-            count: alert.count,
-            analyzer: alert.analyzer,
-            analyzer_host: alert.analyzer_host,
-            detected_at: alert.detected_at,
-            groupIndex: groupIndex,
-            alertIndex: alertIndex,
-            isFirstInGroup: alertIndex === 0,
-            isLastInGroup: alertIndex === group.alerts.length - 1,
-            groupSize: group.alerts.length
-          })
-        })
-      }
-    })
-    
-    return flattenedAlerts
+
+    // NEW: Use compact grouped format - one group per row
+    const compactGroups: CompactGroupedAlert[] = response.groups?.map((group, index) => ({
+      ...group,
+      groupIndex: index
+    })) || []
+
+    return compactGroups
   } else {
     // We know it's AlertListResponse based on the fetch URL
     const response = data.value as AlertListResponse
@@ -215,7 +198,7 @@ const paginationInfo = computed((): PaginatedResponse => {
 
 // Track how many rows we render and how many alerts they represent
 const tableTotals = computed(() => {
-  if (!data.value) return { rows: 0, alerts: 0 }
+  if (!data.value) return { rows: 0, alerts: 0, total: 0 }
 
   if (isGrouped.value) {
     const response = data.value as GroupedAlertResponse
@@ -232,17 +215,21 @@ const tableTotals = computed(() => {
 
     return {
       rows: displayData.value.length,
-      alerts
+      alerts,
+      total: response.pagination?.total || displayData.value.length
     }
   }
 
-  // Ungrouped rows map 1:1 to alerts
+  // Ungrouped: show current page count and total from pagination
+  const response = data.value as AlertListResponse
   const rows = displayData.value.length
-  return { rows, alerts: rows }
+  const total = response.pagination?.total || rows
+
+  return { rows, alerts: rows, total }
 })
 
-// Define table data type - includes flattened grouped alerts
-type TableDataItem = FlattenedGroupedAlert | AlertListItem;
+// Define table data type - includes compact grouped alerts
+type TableDataItem = CompactGroupedAlert | AlertListItem;
 
 // Create table instance
 const table = useVueTable({
@@ -269,8 +256,9 @@ const table = useVueTable({
     get pagination() { return pagination.value },
   },
   getRowId: (row) => {
-    if (isGrouped.value && 'total_count' in row) {
-      return `${row.source_ipv4 || 'unknown'}-${row.target_ipv4 || 'unknown'}-${row.classification || 'unknown'}-${row.groupIndex}-${row.alertIndex}`
+    if (isGrouped.value && 'total_count' in row && 'groupIndex' in row) {
+      // Compact grouped alert
+      return `group-${row.source_ipv4 || 'unknown'}-${row.target_ipv4 || 'unknown'}-${row.groupIndex}`
     } else if ('id' in row) {
       return row.id
     }
@@ -383,7 +371,7 @@ if (process.client) {
 // Provide context for child components
 provideAlertTableContext({
   urlState,
-  table,
+  table: table as Table<AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert>,
   isGrouped,
   pending
 })
@@ -480,21 +468,36 @@ onUnmounted(() => {
 
     <!-- Brandenburg-style pagination -->
     <div class="flex items-center justify-between h-12 px-4 border-t border-border bg-muted/20">
-      <div class="flex items-center gap-4">
-        <div class="text-sm text-muted-foreground">
-          <template v-if="!isGrouped && table.getFilteredSelectedRowModel().rows.length > 0">
-            {{ table.getFilteredSelectedRowModel().rows.length }} of
-          </template>
+      <div class="flex items-center gap-6">
+        <!-- Count display -->
+        <div class="flex items-baseline gap-2">
           <template v-if="isGrouped">
-            {{ tableTotals.rows }} rows / {{ tableTotals.alerts }} alerts
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-sm font-semibold text-foreground">{{ tableTotals.rows }}</span>
+              <span class="text-xs text-muted-foreground">groups</span>
+            </div>
+            <span class="text-muted-foreground/40">•</span>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-sm font-semibold text-foreground">{{ tableTotals.alerts }}</span>
+              <span class="text-xs text-muted-foreground">total alerts</span>
+            </div>
           </template>
           <template v-else>
-            {{ tableTotals.rows }} alerts
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-sm font-semibold text-foreground">{{ tableTotals.rows }}</span>
+              <span class="text-xs text-muted-foreground">showing</span>
+            </div>
+            <span class="text-muted-foreground/40">•</span>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-sm font-semibold text-foreground">{{ tableTotals.total.toLocaleString() }}</span>
+              <span class="text-xs text-muted-foreground">total</span>
+            </div>
           </template>
         </div>
-        
+
+        <!-- Page size selector -->
         <div class="flex items-center gap-2">
-          <span class="text-sm text-muted-foreground">Show</span>
+          <span class="text-xs text-muted-foreground">Per page</span>
           <Select
             :model-value="urlState.pageSize.value.toString()"
             @update:model-value="(value) => {
@@ -509,9 +512,9 @@ onUnmounted(() => {
               <SelectItem value="20">20</SelectItem>
               <SelectItem value="50">50</SelectItem>
               <SelectItem value="100">100</SelectItem>
+              <SelectItem value="200">200</SelectItem>
             </SelectContent>
           </Select>
-          <span class="text-sm text-muted-foreground">per page</span>
         </div>
       </div>
       
