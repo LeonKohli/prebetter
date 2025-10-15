@@ -36,9 +36,10 @@ function copyAscii() {
   copyWithFeedback('copy-readable', selected || (props.readable || ''))
 }
 
-function base64ToBytes(b64: string): Uint8Array {
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const bin = atob(b64)
-  const out = new Uint8Array(bin.length)
+  const buffer = new ArrayBuffer(bin.length)
+  const out = new Uint8Array(buffer)
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
   return out
 }
@@ -92,7 +93,7 @@ const hexDump = computed(() => {
     const asciiParts: string[] = []
     for (let i = 0; i < 16; i++) {
       if (i < slice.length) {
-        const b = slice[i]
+        const b = slice[i]!
         hexParts.push(b.toString(16).padStart(2, '0'))
         asciiParts.push(toAscii(b))
       } else {

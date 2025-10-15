@@ -257,11 +257,12 @@ export function useNavigableUrlState(options: NavigableUrlStateOptions = {}): Na
   // Navigate to alert details (always a user action)
   const navigateToDetails = async (details: { sourceIp: string; targetIp: string; classification: string }) => {
     const currentFilters = filters.value
-    
+
     await router.push({
       query: {
         ...route.query,
         view: 'ungrouped',
+        size: '100', // Show 100 alerts by default when viewing group details
         filter: serializeFilters({
           ...currentFilters,
           source_ipv4: details.sourceIp,
