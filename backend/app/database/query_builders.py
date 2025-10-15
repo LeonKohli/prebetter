@@ -193,13 +193,72 @@ def build_grouped_alerts_query(
 
     pair_table = _get_prebetter_pair_table(db)
     if pair_table is not None:
+        # Sisense optimization: When Analyzer join causes Cartesian product,
+        # use nested subquery: DISTINCT in inner query, COUNT in outer query
+        if include_analyzer:
+            # Inner subquery: DISTINCT first to eliminate Analyzer duplicates
+            inner = (
+                select(
+                    pair_table.c._message_ident,
+                    pair_table.c.source_ip,
+                    pair_table.c.target_ip,
+                    pair_table.c.pair_key,
+                    DetectTime.time,
+                    DetectTime.gmtoff,
+                )
+                .distinct()
+                .select_from(DetectTime)
+                .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
+                .outerjoin(
+                    Analyzer,
+                    and_(
+                        Analyzer._message_ident == DetectTime._message_ident,
+                        Analyzer._parent_type == "A",
+                    ),
+                )
+            )
+            if include_impact:
+                inner = inner.add_columns(Impact.severity).outerjoin(
+                    Impact, Impact._message_ident == DetectTime._message_ident
+                )
+            if include_classification:
+                inner = inner.outerjoin(
+                    Classification, Classification._message_ident == DetectTime._message_ident
+                )
+
+            deduped = inner.subquery("deduped")
+
+            # Outer query: Simple COUNT over deduplicated data
+            select_cols = [
+                func.inet_ntoa(deduped.c.source_ip).label("source_ipv4"),
+                func.inet_ntoa(deduped.c.target_ip).label("target_ipv4"),
+                func.timestampadd(
+                    text("SECOND"), func.max(deduped.c.gmtoff), func.max(deduped.c.time)
+                ).label("latest_time"),
+                func.count().label("total_count"),  # No DISTINCT needed!
+            ]
+            if include_impact:
+                select_cols.append(func.max(deduped.c.severity).label("max_severity"))
+
+            pairs_query = select(*select_cols).select_from(deduped).group_by(deduped.c.pair_key)
+
+            return pairs_query, {
+                "pair": pair_table,
+                "source_ip_order_col": func.inet_ntoa(deduped.c.source_ip),
+                "target_ip_order_col": func.inet_ntoa(deduped.c.target_ip),
+                "source_ip_int_col": deduped.c.source_ip,
+                "target_ip_int_col": deduped.c.target_ip,
+            }
+
+        # Standard path: No Analyzer, no Cartesian product
+        # No DISTINCT needed - Classification/Impact are 1:1 with alerts
         select_cols = [
             func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
             func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
             func.timestampadd(
                 text("SECOND"), func.max(DetectTime.gmtoff), func.max(DetectTime.time)
             ).label("latest_time"),
-            func.count(func.distinct(pair_table.c._message_ident)).label("total_count"),
+            func.count(pair_table.c._message_ident).label("total_count"),  # No DISTINCT!
         ]
         if include_impact:
             select_cols.append(func.max(Impact.severity).label("max_severity"))
@@ -217,14 +276,6 @@ def build_grouped_alerts_query(
             pairs_query = pairs_query.outerjoin(
                 Classification,
                 Classification._message_ident == DetectTime._message_ident,
-            )
-        if include_analyzer:
-            pairs_query = pairs_query.outerjoin(
-                Analyzer,
-                and_(
-                    Analyzer._message_ident == DetectTime._message_ident,
-                    Analyzer._parent_type == "A",
-                ),
             )
 
         pairs_query = pairs_query.group_by(pair_table.c.pair_key)
