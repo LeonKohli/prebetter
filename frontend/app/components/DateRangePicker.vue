@@ -40,13 +40,12 @@
         </div>
         
         <div class="p-3">
-          <RangeCalendar 
-            v-model="pickerValue" 
+          <RangeCalendar
+            v-model="pickerValue"
             :number-of-months="2"
             locale="de-DE"
             :week-starts-on="1"
             class="[&_[data-selection-start]:hover]:!bg-primary [&_[data-selection-start]:hover]:!text-primary-foreground [&_[data-selection-end]:hover]:!bg-primary [&_[data-selection-end]:hover]:!text-primary-foreground"
-            @update:start-value="(startDate) => pickerValue.start = startDate"
           />
           
           <div v-if="includeTime" class="border-t pt-3 mt-3">
@@ -87,15 +86,14 @@
 </template>
 
 <script setup lang="ts">
-import type { DateRange } from 'reka-ui'
 import { useNow } from '@vueuse/core'
+import type { DateRange } from 'reka-ui'
 import {
   CalendarDate,
   CalendarDateTime,
   DateFormatter,
   getLocalTimeZone,
   today,
-  now,
   startOfWeek as rekaStartOfWeek,
   startOfMonth as rekaStartOfMonth,
   startOfYear as rekaStartOfYear,
@@ -144,7 +142,7 @@ const emit = defineEmits<{
 const open = ref(false)
 
 // Explicit picker state (avoids feedback loops from computed setter)
-const pickerValue = ref<DateRange>({ start: undefined, end: undefined })
+const pickerValue: Ref<DateRange> = ref({ start: undefined, end: undefined })
 
 // Stable preset tracking: rely on an explicit presetId instead of
 // reverse-matching against a moving "now()" window.

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { AlertListItem, FlattenedGroupedAlert } from '@/types/alerts'
+import type { AlertListItem, FlattenedGroupedAlert, CompactGroupedAlert } from '@/types/alerts'
 
 const props = defineProps<{
-  alert: AlertListItem | FlattenedGroupedAlert
+  alert: AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert
   isGrouped: boolean
 }>()
 
@@ -10,10 +10,21 @@ const emit = defineEmits<{
   viewDetails: [alertId: string]
 }>()
 
+const urlState = useNavigableUrlState()
+const route = useRoute()
+const router = useRouter()
+
 function copyId() {
-  const id = props.isGrouped 
-    ? `${(props.alert as FlattenedGroupedAlert).source_ipv4}-${(props.alert as FlattenedGroupedAlert).target_ipv4}` 
-    : (props.alert as AlertListItem).id
+  let id = ''
+  if (props.isGrouped) {
+    // For grouped rows, use the IP pair as identifier (works for both legacy and compact)
+    const anyAlert = props.alert as any
+    const src = anyAlert?.source_ipv4 || 'unknown'
+    const dst = anyAlert?.target_ipv4 || 'unknown'
+    id = `${src}-${dst}`
+  } else if ('id' in props.alert) {
+    id = props.alert.id
+  }
   navigator.clipboard.writeText(id || '')
 }
 
@@ -22,6 +33,32 @@ function handleViewDetails() {
   if (!props.isGrouped && 'id' in props.alert) {
     emit('viewDetails', props.alert.id)
   }
+}
+
+async function viewAllForPair() {
+  const anyAlert = props.alert as any
+  const sourceIp = anyAlert?.source_ipv4
+  const targetIp = anyAlert?.target_ipv4
+
+  if (!sourceIp || !targetIp) return
+
+  const currentFilters = urlState.filters.value
+  const { classification_text, ...rest } = currentFilters
+
+  await router.push({
+    query: {
+      ...route.query,
+      view: 'ungrouped',
+      page: '1',
+      size: '100',
+      sort: 'detected_at:desc',
+      filter: JSON.stringify({
+        ...rest,
+        source_ipv4: sourceIp,
+        target_ipv4: targetIp,
+      }),
+    },
+  })
 }
 </script>
 
@@ -38,6 +75,10 @@ function handleViewDetails() {
       <DropdownMenuItem v-if="!isGrouped" @click="handleViewDetails">
         <Icon name="lucide:file-text" class="mr-2 h-4 w-4" />
         View details
+      </DropdownMenuItem>
+      <DropdownMenuItem @click="viewAllForPair">
+        <Icon name="lucide:list" class="mr-2 h-4 w-4" />
+        View all from IP pair
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem @click="copyId">
