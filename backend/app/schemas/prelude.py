@@ -208,6 +208,15 @@ class AnalyzerInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TableDeletionStats(BaseModel):
+    """Number of rows deleted per table during alert cleanup."""
+
+    table_name: str = Field(..., description="Name of the Prelude table")
+    rows_deleted: int = Field(..., ge=0, description="Rows removed from the table")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class WebServiceInfo(BaseModel):
     url: str
     cgi: Optional[str] = None
