@@ -46,7 +46,7 @@ app/
 ### Security & Authentication
 
 **Current Implementation:**
-- JWT tokens with HS256 algorithm (30-minute expiration)
+- JWT tokens with HS256 algorithm (8-hour expiration)
 - Bcrypt password hashing (configurable rounds, default 14)
 - Role-based access: superuser and regular user
 - Request tracking via `X-Request-ID` header
@@ -139,7 +139,7 @@ MYSQL_PREBETTER_DB=prebetter
 
 # Security (CRITICAL - Change in production!)
 SECRET_KEY=your-secure-random-key-here  # Used for JWT signing
-ACCESS_TOKEN_EXPIRE_MINUTES=30         # Token expiration time
+ACCESS_TOKEN_EXPIRE_MINUTES=480        # Token expiration time (8 hours)
 
 # Environment & Logging
 ENVIRONMENT=development  # development|production
@@ -176,7 +176,7 @@ BACKEND_CORS_ORIGINS=["http://localhost:3000"]  # Frontend URL
 2. **Token Response**: `{"access_token": "...", "token_type": "bearer"}`
 3. **Protected Requests**: Include header `Authorization: Bearer <token>`
 4. **Token Validation**: Automatic via `get_current_user` dependency
-5. **Expiration**: Tokens expire after 30 minutes (no refresh mechanism)
+5. **Expiration**: Tokens expire after 8 hours (no refresh mechanism)
 
 ## Code Patterns
 
