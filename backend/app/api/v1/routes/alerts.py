@@ -70,6 +70,7 @@ class SortOrder(str, Enum):
     DESC = "desc"
 
 
+@router.get("", response_model=AlertListResponse)
 @router.get("/", response_model=AlertListResponse)
 async def list_alerts(
     page: int = Query(1, ge=1, description="Page number"),
@@ -539,5 +540,59 @@ async def get_alert_detail(
         raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}")
 
 
-# DELETE endpoint removed - Prelude DB is read-only as per architecture design
-# Alert data should only be modified through the Prelude IDS system itself
+# Alert Deletion Endpoint
+
+@router.delete("")
+@router.delete("/")
+async def delete_alerts(
+    ids: Optional[str] = Query(None, description="Alert ID(s) - '123' or '1,2,3'"),
+    source_ip: Optional[str] = Query(None, description="Filter by source IP"),
+    target_ip: Optional[str] = Query(None, description="Filter by target IP"),
+    db: Session = Depends(get_prelude_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Delete alerts by IDs or by IP pair filter.
+
+    Examples:
+    - DELETE /alerts?ids=123
+    - DELETE /alerts?ids=1,2,3
+    - DELETE /alerts?source_ip=192.168.1.1&target_ip=10.0.0.1
+    """
+    from app.services.alert_deletion import AlertDeletionService
+
+    service = AlertDeletionService(db)
+
+    # Delete by IP pair
+    if source_ip and target_ip:
+        result = service.delete_grouped_alerts(source_ip, target_ip, current_user.username)
+
+    # Delete by IDs
+    elif ids:
+        try:
+            alert_ids = [int(i.strip()) for i in ids.split(",") if i.strip()]
+        except ValueError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid alert IDs: all IDs must be numeric. Error: {str(e)}"
+            )
+
+        if len(alert_ids) == 0:
+            raise HTTPException(
+                status_code=422,
+                detail="No valid alert IDs provided after parsing"
+            )
+
+        if len(alert_ids) == 1:
+            result = service.delete_single_alert(alert_ids[0], current_user.username)
+        else:
+            result = service.delete_bulk_alerts(alert_ids, current_user.username)
+
+    else:
+        raise HTTPException(status_code=422, detail="Provide either 'ids' or 'source_ip'+'target_ip'")
+
+    return {
+        "success": True,
+        "deleted": result["total_alerts_deleted"],
+        "rows": result["total_rows_deleted"],
+    }
