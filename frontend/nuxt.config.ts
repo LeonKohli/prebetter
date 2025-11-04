@@ -15,7 +15,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     apiBase: process.env.API_BASE_URL || 'http://localhost:8000',
     session: {
-      maxAge: 60 * 60, // 60 minutes
+      maxAge: 8 * 60 * 60, // 8 hours
       password: process.env.NUXT_SESSION_PASSWORD || '',
       cookie: {
         secure: process.env.NODE_ENV === 'production' && !process.env.DISABLE_SECURE_COOKIES,

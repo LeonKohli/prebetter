@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # JWT / Auth
     SECRET_KEY: str  # Required. Set in environment/.env
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
     BCRYPT_ROUNDS: int = 14
 
     ENVIRONMENT: str = "development"
