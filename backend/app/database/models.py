@@ -53,10 +53,10 @@ def alert_result_to_list_item(result: Row) -> AlertListItem:
 
     create_time_info = None
     if result.create_time:
-        # Timestamp already converted to local time in SQL query
+        # Timestamp is UTC (stored directly from DB without timezone conversion)
         create_time_info = TimeInfo(timestamp=result.create_time)
 
-    # Timestamp already converted to local time in SQL query
+    # Timestamp is UTC (stored directly from DB without timezone conversion)
     detect_time_info = TimeInfo(timestamp=result.detect_time)
 
     alert_item = AlertListItem(
@@ -82,10 +82,11 @@ def grouped_alert_to_response(
     alerts = alerts_map.get(key, [])
 
     # Use the group's overall latest_time for all alerts for consistency
-    # The backend query should handle timezone conversion using TIMESTAMPADD
+    # Must ensure timezone before assigning (Pydantic validators don't run on attribute assignment)
     if hasattr(pair, "latest_time") and pair.latest_time:
+        tz_aware_time = ensure_timezone(pair.latest_time)
         for alert in alerts:
-            alert.detected_at = pair.latest_time
+            alert.detected_at = tz_aware_time
 
     return GroupedAlert(
         source_ipv4=pair.source_ipv4,
@@ -134,7 +135,7 @@ def process_grouped_alerts_details(alerts, max_limit=None):
                     count=a.count,
                     analyzer=analyzers,
                     analyzer_host=analyzer_hosts,
-                    detected_at=a.latest_time,
+                    detected_at=ensure_timezone(a.latest_time),
                 )
             )
             processed_count += 1
