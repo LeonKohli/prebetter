@@ -97,13 +97,9 @@ def build_alert_base_query(db: Session):
         select(
             Alert._ident,
             Alert.messageid,
-            # Apply timezone conversion directly in SQL (all data is CEST/gmtoff=7200)
-            func.timestampadd(text("SECOND"), DetectTime.gmtoff, DetectTime.time).label(
-                "detect_time"
-            ),
-            func.timestampadd(text("SECOND"), CreateTime.gmtoff, CreateTime.time).label(
-                "create_time"
-            ),
+            # Return UTC timestamps directly (gmtoff stored for reference but not applied)
+            DetectTime.time.label("detect_time"),
+            CreateTime.time.label("create_time"),
             Classification.text.label("classification_text"),
             Impact.severity,
             source_addr.address.label("source_ipv4"),
@@ -232,9 +228,7 @@ def build_grouped_alerts_query(
             select_cols = [
                 func.inet_ntoa(deduped.c.source_ip).label("source_ipv4"),
                 func.inet_ntoa(deduped.c.target_ip).label("target_ipv4"),
-                func.timestampadd(
-                    text("SECOND"), func.max(deduped.c.gmtoff), func.max(deduped.c.time)
-                ).label("latest_time"),
+                func.max(deduped.c.time).label("latest_time"),
                 func.count().label("total_count"),  # No DISTINCT needed!
             ]
             if include_impact:
@@ -255,9 +249,7 @@ def build_grouped_alerts_query(
         select_cols = [
             func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
             func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
-            func.timestampadd(
-                text("SECOND"), func.max(DetectTime.gmtoff), func.max(DetectTime.time)
-            ).label("latest_time"),
+            func.max(DetectTime.time).label("latest_time"),
             func.count(pair_table.c._message_ident).label("total_count"),  # No DISTINCT!
         ]
         if include_impact:
@@ -364,11 +356,7 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
                 func.count(func.distinct(pair_table.c._message_ident)).label("count"),
                 func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
                 literal(None).label("analyzer_hosts"),
-                func.timestampadd(
-                    text("SECOND"),
-                    func.max(DetectTime.gmtoff),
-                    func.max(DetectTime.time),
-                ).label("latest_time"),
+                func.max(DetectTime.time).label("latest_time"),
             )
             .select_from(DetectTime)
             .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)

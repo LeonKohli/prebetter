@@ -119,7 +119,7 @@ function handleSelect(node: string, agent: string) {
 }
 
 function formatAbsolute(value: string) {
-  // Use centralized formatter with UTC display
+  // Use centralized formatter with local timezone display
   return formatTimestamp(value, { style: 'short' })
 }
 </script>
