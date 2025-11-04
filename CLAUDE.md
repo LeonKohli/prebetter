@@ -30,11 +30,11 @@ prebetter/
 
 ## Key Architectural Decisions
 
-1. **Authentication Flow**: 
+1. **Authentication Flow**:
    - Backend issues JWT tokens
    - Frontend stores tokens in secure server-side sessions only
    - All API calls proxied through frontend server for token injection
-   - 30-minute session timeout synchronized between systems
+   - 8-hour session timeout synchronized between systems
 
 2. **Security First**:
    - No client-side token storage
@@ -76,7 +76,7 @@ For detailed implementation guidance, refer to:
 3. Backend validates and returns JWT token
 4. Frontend stores token in secure server-side session
 5. All subsequent API calls include token via server proxy
-6. Session expires after 30 minutes (synchronized)
+6. Session expires after 8 hours (synchronized)
 
 ### Error Handling
 - Backend returns standardized error responses
@@ -93,10 +93,10 @@ Both components require environment configuration:
 - JWT secret key
 - CORS origins configuration
 
-### Frontend  
+### Frontend
 - Session password (32+ characters)
 - API base URL configuration
-- Session timeout settings
+- Session timeout: 8 hours (synchronized with backend)
 
 See component-specific CLAUDE.md files for detailed configuration.
 
@@ -105,7 +105,7 @@ See component-specific CLAUDE.md files for detailed configuration.
 - **Zero client-side token exposure**: All JWT tokens stored server-side only
 - **Session-based authentication**: Using encrypted httpOnly cookies
 - **API proxy pattern**: Frontend server handles all backend communication
-- **Synchronized expiration**: 30-minute timeout on both systems
+- **Synchronized expiration**: 8-hour timeout on both systems
 - **Automatic security responses**: 401 errors trigger immediate session cleanup
 
 ## Development Workflow
