@@ -56,7 +56,7 @@ bunx shadcn-vue@latest add <component-name>
    - Client never sees or handles tokens
 
 3. **Session Configuration**:
-   - 30-minute expiration (matches backend JWT)
+   - 8-hour expiration (matches backend JWT)
    - Encrypted with `NUXT_SESSION_PASSWORD`
    - Uses `useUserSession()` composable
 
@@ -191,7 +191,7 @@ NUXT_SESSION_PASSWORD=your-very-secure-password-here-minimum-32-chars
 ```
 
 **In `nuxt.config.ts`:**
-- Session timeout: 30 minutes (matches backend)
+- Session timeout: 8 hours (matches backend)
 - API base URL: `http://localhost:8000`
 - Modules configured: auth, icons, color mode, SEO
 
