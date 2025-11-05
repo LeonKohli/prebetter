@@ -13,8 +13,8 @@
           <CardDescription>Enter your credentials to continue.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Form :initial-values="initialValues" :validation-schema="formSchema" @submit="onSubmit">
-            <div class="grid gap-4">
+          <Form :validation-schema="formSchema" :initial-values="initialValues" v-slot="{ handleSubmit, isSubmitting }">
+            <form class="grid gap-4" @submit.prevent="handleSubmit(submitLoginHandler)">
               <Alert v-if="authError" variant="destructive">
                 <AlertTriangle class="h-4 w-4" aria-hidden="true" />
                 <AlertTitle>Unable to sign in</AlertTitle>
@@ -77,7 +77,7 @@
                 <Icon v-if="isSubmitting" name="lucide:loader-2" class="mr-2 size-4 animate-spin" />
                 {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
               </Button>
-            </div>
+            </form>
           </Form>
         </CardContent>
       </Card>
@@ -88,6 +88,8 @@
 <script setup lang="ts">
 import { AlertTriangle, Eye, EyeOff } from 'lucide-vue-next'
 import { toTypedSchema } from '@vee-validate/zod'
+import type { SubmissionContext, SubmissionHandler } from 'vee-validate'
+import type { z } from 'zod'
 import { Form } from '@/components/ui/form'
 import { loginSchema } from '@/utils/validation'
 
@@ -103,13 +105,14 @@ useHead({
 const session = useUserSession()
 const route = useRoute()
 
+type LoginFormValues = z.infer<typeof loginSchema>
+
 const formSchema = toTypedSchema(loginSchema)
-const initialValues = {
+const initialValues: LoginFormValues = {
   username: '',
   password: '',
 }
 
-const isSubmitting = ref(false)
 const authError = ref('')
 const showPassword = ref(false)
 
@@ -117,12 +120,11 @@ const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value
 }
 
-const onSubmit = async (
-  values: { username: string; password: string },
-  { setFieldError }: { setFieldError: (field: string, message: string) => void },
+const submitLogin: SubmissionHandler<LoginFormValues> = async (
+  values,
+  { setFieldError }: SubmissionContext<LoginFormValues>,
 ) => {
   authError.value = ''
-  isSubmitting.value = true
 
   try {
     await $fetch('/api/auth/login', {
@@ -155,8 +157,8 @@ const onSubmit = async (
       'Invalid username or password. Please try again.'
     authError.value = message
     setFieldError('password', 'Check your credentials and try again.')
-  } finally {
-    isSubmitting.value = false
   }
 }
+
+const submitLoginHandler = submitLogin as SubmissionHandler
 </script>
