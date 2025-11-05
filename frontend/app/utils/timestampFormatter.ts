@@ -24,7 +24,7 @@ function getUserLocale(): string {
 }
 
 /**
- * Format a timestamp with consistent locale and timezone display
+ * Format a timestamp with consistent locale display (defaults to local timezone)
  * @param timestamp - ISO string, Date object, or unix timestamp
  * @param options - Formatting options
  * @returns Formatted timestamp string
@@ -72,18 +72,16 @@ export function formatTimestamp(
     const dateStyle = style === 'full' || style === 'long' ? style : 'medium'
     const timeStyle = style === 'short' ? 'short' : 'medium'
 
-    const formatted = new Intl.DateTimeFormat(locale, {
+    const formatOptions: Intl.DateTimeFormatOptions = {
       dateStyle,
       timeStyle,
-      timeZone: 'UTC', // Always display in UTC for consistency
-    }).format(date)
-
-    // Add timezone indicator if requested
-    if (showTimezone) {
-      return `${formatted} UTC`
     }
 
-    return formatted
+    if (showTimezone) {
+      formatOptions.timeZoneName = 'short'
+    }
+
+    return new Intl.DateTimeFormat(locale, formatOptions).format(date)
   } catch (error) {
     console.error('Error formatting timestamp:', error)
     return 'Invalid date'
@@ -121,49 +119,14 @@ export function getRelativeTime(timestamp: string | Date | number | undefined | 
 }
 
 /**
- * Convert UTC timestamp to local time for display
- * Use this when you need to show local time instead of UTC
+ * Format timestamp explicitly in the viewer's local timezone with abbreviation.
  */
 export function formatTimestampLocal(
   timestamp: string | Date | number | undefined | null,
   options: Omit<TimestampOptions, 'showTimezone'> = {}
 ): string {
-  if (!timestamp) return 'N/A'
-
-  const {
-    locale = getUserLocale(),
-    style = 'medium'
-  } = options
-
-  try {
-    const date = timestamp instanceof Date
-      ? timestamp
-      : new Date(timestamp)
-
-    if (isNaN(date.getTime())) {
-      return 'Invalid date'
-    }
-
-    const dateStyle = style === 'full' || style === 'long' ? style : 'medium'
-    const timeStyle = style === 'short' ? 'short' : 'medium'
-
-    // Format in local timezone
-    const formatted = new Intl.DateTimeFormat(locale, {
-      dateStyle,
-      timeStyle,
-      // No timeZone specified = use browser's local timezone
-    }).format(date)
-
-    // Get timezone abbreviation
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    const tzAbbr = new Date().toLocaleTimeString('en-US', {
-      timeZoneName: 'short',
-      timeZone
-    }).split(' ').pop()
-
-    return `${formatted} ${tzAbbr}`
-  } catch (error) {
-    console.error('Error formatting local timestamp:', error)
-    return 'Invalid date'
-  }
+  return formatTimestamp(timestamp, {
+    ...options,
+    showTimezone: true,
+  })
 }

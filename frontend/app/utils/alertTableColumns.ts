@@ -187,7 +187,7 @@ export const useAlertTableColumns = () => {
 
         if (!dateStr) return h('span', { class: 'text-muted-foreground' }, 'Unknown')
 
-        // Use centralized formatter with UTC display
+        // Use centralized formatter with local timezone display
         const formatted = formatTimestampCompact(dateStr)
         const relative = getRelativeTime(dateStr)
 
@@ -241,7 +241,7 @@ export const useAlertTableColumns = () => {
 
         if (!timestamp) return h('span', { class: 'text-muted-foreground' }, 'Unknown')
 
-        // Use centralized formatter with UTC display
+        // Use centralized formatter with local timezone display
         const formatted = formatTimestampCompact(timestamp)
         const relative = getRelativeTime(timestamp)
 

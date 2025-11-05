@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, MetaData, and_, literal, func
+from sqlalchemy import create_engine, MetaData, and_, literal, func, event
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
 from typing import Generator, Optional
 from datetime import datetime
@@ -28,6 +28,21 @@ prebetter_engine = create_engine(
     echo=settings.ENVIRONMENT == "development" and settings.LOG_LEVEL == "DEBUG",
     future=True,  # Enable 2.0 style behaviors
 )
+
+# Force UTC timezone on every connection using SQLAlchemy events
+@event.listens_for(prelude_engine, "connect")
+def set_prelude_timezone(dbapi_conn, connection_record):
+    """Set MySQL session timezone to UTC for all connections."""
+    cursor = dbapi_conn.cursor()
+    cursor.execute("SET time_zone='+00:00'")
+    cursor.close()
+
+@event.listens_for(prebetter_engine, "connect")
+def set_prebetter_timezone(dbapi_conn, connection_record):
+    """Set MySQL session timezone to UTC for all connections."""
+    cursor = dbapi_conn.cursor()
+    cursor.execute("SET time_zone='+00:00'")
+    cursor.close()
 
 # Create metadata objects
 prelude_metadata = MetaData()

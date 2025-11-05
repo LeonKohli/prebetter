@@ -65,7 +65,7 @@ function copyWithFeedback(key: string, text: string) {
 }
 
 // Timestamp formatting handled by centralized utility
-// Use formatTimestamp for UTC display or formatTimestampLocal for local time
+// Use formatTimestamp for consistent display or formatTimestampLocal to force local timezone
 
 function getSeverityClass(severity?: string): string {
   const severityLower = severity?.toLowerCase()
