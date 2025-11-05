@@ -20,6 +20,7 @@ import { valueUpdater } from '@/utils/utils'
 import { applyDefaultDateFilters } from '@/utils/dateHelpers'
 import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, CompactGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
 import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
+import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 
 // URL state synchronization with proper browser navigation
 const router = useRouter()
@@ -79,13 +80,21 @@ const pagination = computed({
 
 // Local state (not in URL)
 const rowSelection = ref({})
+const relativeRefreshToken = ref(0)
 
 // Compute the fetch URL dynamically based on isGrouped
 const fetchUrl = computed(() => isGrouped.value ? '/api/alerts/groups' : '/api/alerts')
 
+const getActivePresetId = (): DatePresetId | undefined => {
+  const preset = urlState.filters.value.date_preset as string | undefined
+  return isValidPresetId(preset) ? preset : undefined
+}
+
 // Create a comprehensive key that includes ALL reactive state
 const fetchKey = computed(() => {
   // Include all URL state that affects data fetching
+  const presetId = getActivePresetId()
+  const relativeToken = presetId && isRelativePreset(presetId) ? relativeRefreshToken.value : 0
   const stateHash = JSON.stringify({
     view: urlState.view.value,
     page: urlState.page.value,
@@ -93,6 +102,7 @@ const fetchKey = computed(() => {
     sortBy: urlState.sortBy.value,
     sortOrder: urlState.sortOrder.value,
     filters: urlState.filters.value,
+    relativeToken,
     // Don't include hiddenColumns or autoRefresh as they don't affect data
   })
   return `alerts-${btoa(stateHash)}`
@@ -100,6 +110,9 @@ const fetchKey = computed(() => {
 
 // Compute query parameters reactively
 const fetchQuery = computed(() => {
+  const activePreset = getActivePresetId()
+  const relativeToken = activePreset && isRelativePreset(activePreset) ? relativeRefreshToken.value : 0
+
   const mappedSortField = sortFieldMap[urlState.sortBy.value as keyof typeof sortFieldMap] || urlState.sortBy.value || 'detect_time'
   
   // Map filter fields
@@ -108,10 +121,22 @@ const fetchQuery = computed(() => {
       filterFieldMap[key as keyof typeof filterFieldMap] || key,
       value
     ])
-  )
+  ) as Record<string, string | number>
   
-  // Apply today's date filter by default if no dates are specified
-  const finalFilters = (!urlFilters.start_date && !urlFilters.end_date) 
+  const presetId = activePreset ?? (urlFilters.date_preset as string | undefined)
+  if (isValidPresetId(presetId)) {
+    const { from, to } = getPresetRange(presetId)
+    urlFilters.start_date = from.toISOString()
+    if (isRelativePreset(presetId)) {
+      delete urlFilters.end_date
+    } else {
+      urlFilters.end_date = to.toISOString()
+    }
+    delete urlFilters.date_preset
+  }
+  
+  // Apply default if no dates are specified and no preset was used
+  const finalFilters = (!urlFilters.start_date && !urlFilters.end_date)
     ? applyDefaultDateFilters(urlFilters)
     : urlFilters
   
@@ -303,6 +328,12 @@ const handleToggleView = () => {
 const performAutoRefresh = async () => {
   // Skip if already loading or user has active selections
   if (status.value === 'pending' || Object.keys(rowSelection.value).length > 0) return
+  const presetId = getActivePresetId()
+  if (presetId && isRelativePreset(presetId)) {
+    isSilentRefresh.value = true
+    relativeRefreshToken.value = Date.now()
+    return
+  }
   
   try {
     isSilentRefresh.value = true
@@ -340,6 +371,7 @@ watchDebounced(
 watch(status, (newStatus) => {
   if (newStatus === 'success' || newStatus === 'error') {
     isChangingView.value = false
+    isSilentRefresh.value = false
   }
 })
 
@@ -373,7 +405,8 @@ provideAlertTableContext({
   urlState,
   table: table as Table<AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert>,
   isGrouped,
-  pending
+  pending,
+  relativeRefreshToken
 })
 
 // Handle view details event from AlertActions

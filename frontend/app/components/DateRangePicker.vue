@@ -93,35 +93,20 @@ import {
   CalendarDateTime,
   DateFormatter,
   getLocalTimeZone,
-  today,
-  startOfWeek as rekaStartOfWeek,
-  startOfMonth as rekaStartOfMonth,
-  startOfYear as rekaStartOfYear,
-  endOfWeek as rekaEndOfWeek,
-  endOfMonth as rekaEndOfMonth,
-  endOfYear as rekaEndOfYear,
-  toCalendarDateTime,
-  Time,
 } from '@internationalized/date'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RangeCalendar } from '@/components/ui/range-calendar'
+import { DATE_PRESETS, getPresetRange, getPresetLabel, isRelativePreset, isValidPresetId, type DatePreset, type DatePresetId } from '@/utils/datePresets'
 
 
 interface DateRangeValue {
   from: Date | undefined
   to: Date | undefined
   // Track which preset was selected (optional, for stability)
-  presetId?: string
-}
-
-interface QuickPreset {
-  id: string
-  label: string
-  getValue: () => DateRange
-  isRelative?: boolean
+  presetId?: DatePresetId
 }
 
 // Constants
@@ -146,21 +131,24 @@ const pickerValue: Ref<DateRange> = ref({ start: undefined, end: undefined })
 
 // Stable preset tracking: rely on an explicit presetId instead of
 // reverse-matching against a moving "now()" window.
-const selectedPresetId = ref<string | null>(null)
+const selectedPresetId = ref<DatePresetId | null>(null)
 
 // Sync down from v-model if parent provides presetId (do not clear when undefined)
 watch(
   () => props.modelValue?.presetId,
   (id) => {
-    if (id != null) selectedPresetId.value = id
+    if (isValidPresetId(id)) selectedPresetId.value = id
   },
   { immediate: true }
 )
 
-const currentPresetId = computed(() => props.modelValue?.presetId ?? selectedPresetId.value)
-const selectedPreset = computed(() => quickPresets.find(p => p.id === currentPresetId.value) || null)
+const currentPresetId = computed<DatePresetId | null>(() => {
+  const modelPreset = props.modelValue?.presetId
+  if (isValidPresetId(modelPreset)) return modelPreset
+  return selectedPresetId.value
+})
 // Header label: preset label if present, otherwise 'Custom' when user selected a manual range
-const displayLabel = computed(() => selectedPreset.value?.label || (pickerValue.value?.start ? 'Custom' : null))
+const displayLabel = computed(() => currentPresetId.value ? getPresetLabel(currentPresetId.value) : (pickerValue.value?.start ? 'Custom' : null))
 
 // Time state - reactive refs
 const startHour = ref(DEFAULT_START_HOUR)
@@ -309,23 +297,8 @@ watch([startHour, startMinute, endHour, endMinute], () => {
   }
 })
 
-const todayDate = today(getLocalTimeZone())
-
 // Reactive current time using VueUse
 const currentTime = useNow()
-
-// Helper function to create hour-based presets with VueUse
-function createHourPreset(hours: number): () => DateRange {
-  return () => {
-    const now = currentTime.value
-    const hoursAgo = new Date(now.getTime() - hours * 60 * 60 * 1000)
-    
-    return {
-      start: dateToCalendarDateTime(hoursAgo),
-      end: dateToCalendarDateTime(now),
-    } as DateRange
-  }
-}
 
 // Helper function to convert Date to CalendarDateTime
 function dateToCalendarDateTime(date: Date): CalendarDateTime {
@@ -347,110 +320,30 @@ function dateToCalendarDate(date: Date): CalendarDate {
   )
 }
 
-// Helper to create day range presets with consistent times
-function createDayRangePreset(label: string, subtract: any): Omit<QuickPreset, 'id' | 'isRelative'> {
-  return {
-    label,
-    getValue: () => {
-      const start = toCalendarDateTime(todayDate.subtract(subtract))
-      const end = toCalendarDateTime(todayDate, new Time(23, 59, 59))
-      return { start, end } as DateRange
-    }
-  }
-}
-
-const quickPresets: QuickPreset[] = [
-  // Most common presets first
-  {
-    id: 'last-24-hours',
-    label: 'Last 24 Hours',
-    getValue: createHourPreset(24),
-    isRelative: true,
-  },
-  {
-    id: 'today',
-    label: 'Today',
-    getValue: () => ({
-      start: toCalendarDateTime(todayDate),
-      end: toCalendarDateTime(todayDate, new Time(23, 59, 59))
-    } as DateRange),
-    isRelative: false,
-  },
-  // Hour-based presets
-  {
-    id: 'last-1-hour',
-    label: 'Last Hour',
-    getValue: createHourPreset(1),
-    isRelative: true,
-  },
-  {
-    id: 'last-2-hours',
-    label: 'Last 2 Hours',
-    getValue: createHourPreset(2),
-    isRelative: true,
-  },
-  // Current period presets
-  {
-    id: 'this-week',
-    label: 'This Week',
-    getValue: () => ({
-      start: toCalendarDateTime(rekaStartOfWeek(todayDate, 'de-DE')),
-      end: toCalendarDateTime(rekaEndOfWeek(todayDate, 'de-DE'), new Time(23, 59, 59))
-    } as DateRange),
-    isRelative: false,
-  },
-  {
-    id: 'this-month',
-    label: 'This Month',
-    getValue: () => ({
-      start: toCalendarDateTime(rekaStartOfMonth(todayDate)),
-      end: toCalendarDateTime(rekaEndOfMonth(todayDate), new Time(23, 59, 59))
-    } as DateRange),
-    isRelative: false,
-  },
-  {
-    id: 'this-year',
-    label: 'This Year', 
-    getValue: () => ({
-      start: toCalendarDateTime(rekaStartOfYear(todayDate)),
-      end: toCalendarDateTime(rekaEndOfYear(todayDate), new Time(23, 59, 59))
-    } as DateRange),
-    isRelative: false,
-  },
-  // Day-based presets
-  { id: 'last-2-days', ...createDayRangePreset('Last 2 Days', { days: 2 }), isRelative: true },
-  { id: 'last-7-days', ...createDayRangePreset('Last 7 Days', { days: 7 }), isRelative: true },
-  { id: 'last-30-days', ...createDayRangePreset('Last 30 Days', { days: 30 }), isRelative: true },
-  { id: 'last-3-months', ...createDayRangePreset('Last 3 Months', { months: 3 }), isRelative: true },
-  { id: 'last-6-months', ...createDayRangePreset('Last 6 Months', { months: 6 }), isRelative: true },
-  { id: 'last-year', ...createDayRangePreset('Last Year', { years: 1 }), isRelative: true },
-]
+const quickPresets = DATE_PRESETS
 
 // Guard to distinguish preset-driven updates from manual ones
 const isSettingFromPreset = ref(false)
 
-function selectPreset(preset: QuickPreset) {
-  const dateRange = preset.getValue()
+function selectPreset(preset: DatePreset) {
+  const { from, to } = preset.computeRange(currentTime.value)
   selectedPresetId.value = preset.id
-  // Guard subsequent reactive updates from being treated as manual edits
   isSettingFromPreset.value = true
 
-  // Update time refs from the preset's CalendarDateTime objects BEFORE setting picker value
-  if (props.includeTime && dateRange.start && dateRange.start instanceof CalendarDateTime) {
-    startHour.value = String(dateRange.start.hour).padStart(2, '0')
-    startMinute.value = String(dateRange.start.minute || 0).padStart(2, '0')
-  }
-  if (props.includeTime && dateRange.end && dateRange.end instanceof CalendarDateTime) {
-    endHour.value = String(dateRange.end.hour).padStart(2, '0')
-    endMinute.value = String(dateRange.end.minute || 0).padStart(2, '0')
+  if (props.includeTime) {
+    startHour.value = String(from.getHours()).padStart(2, '0')
+    startMinute.value = String(from.getMinutes()).padStart(2, '0')
+    endHour.value = String(to.getHours()).padStart(2, '0')
+    endMinute.value = String(to.getMinutes()).padStart(2, '0')
   }
 
   nextTick(() => {
-    pickerValue.value = dateRange
-    // Emit model with preset preserved
+    pickerValue.value = {
+      start: dateToCalendarDateTime(from),
+      end: dateToCalendarDateTime(to)
+    }
     emitFromPicker(false)
     open.value = false
-    // Allow a couple of flush cycles to settle before re-enabling manual detection
     nextTick(() => { isSettingFromPreset.value = false })
   })
 }
