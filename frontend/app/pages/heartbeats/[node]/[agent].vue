@@ -211,7 +211,7 @@ function handleTimelineHoursChange(value: unknown) {
 }
 
 function formatAbsolute(value: string) {
-  // Use centralized formatter with UTC display
+  // Use centralized formatter for consistent local timezone display
   return formatTimestamp(value, { style: 'short' })
 }
 
