@@ -13,8 +13,13 @@
           <CardDescription>Enter your credentials to continue.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Form :validation-schema="formSchema" :initial-values="initialValues" v-slot="{ handleSubmit, isSubmitting }">
-            <form class="grid gap-4" @submit.prevent="handleSubmit(submitLoginHandler)">
+          <Form
+            :validation-schema="formSchema"
+            :initial-values="initialValues"
+            @submit="submitLoginHandler"
+            class="grid gap-4"
+            v-slot="{ isSubmitting }"
+          >
               <Alert v-if="authError" variant="destructive">
                 <AlertTriangle class="h-4 w-4" aria-hidden="true" />
                 <AlertTitle>Unable to sign in</AlertTitle>
@@ -77,7 +82,6 @@
                 <Icon v-if="isSubmitting" name="lucide:loader-2" class="mr-2 size-4 animate-spin" />
                 {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
               </Button>
-            </form>
           </Form>
         </CardContent>
       </Card>
