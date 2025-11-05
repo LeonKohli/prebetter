@@ -307,7 +307,9 @@ function dateToCalendarDateTime(date: Date): CalendarDateTime {
     date.getMonth() + 1,
     date.getDate(),
     date.getHours(),
-    date.getMinutes()
+    date.getMinutes(),
+    date.getSeconds(),
+    date.getMilliseconds()
   )
 }
 
