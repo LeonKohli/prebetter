@@ -42,7 +42,7 @@ export function isToday(from: Date, to: Date): boolean {
 }
 
 export function applyDefaultDateFilters(filters: Record<string, string | number>): Record<string, string | number> {
-  if (!filters.start_date && !filters.end_date) {
+  if (!filters.date_preset && !filters.start_date && !filters.end_date) {
     const { from, to } = getLast24HoursRange()
     return {
       ...filters,
