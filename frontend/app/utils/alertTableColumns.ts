@@ -333,6 +333,7 @@ export const useAlertTableColumns = () => {
     'target_ipv4': 'target_ip',
     'start_date': 'start_date',
     'end_date': 'end_date',
+    'date_preset': 'date_preset',
   } as const satisfies Record<string, string>
 
   return {

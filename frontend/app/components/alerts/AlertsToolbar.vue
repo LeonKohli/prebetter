@@ -137,14 +137,14 @@
 <script setup lang="ts">
 import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
 import { useDebounceFn } from '@vueuse/core'
-import { getTodayRange, getLast24HoursRange, isToday } from '@/utils/dateHelpers'
+import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import { useAlertTableContext } from '@/composables/useAlertTableContext'
 
 interface DateRangeValue {
   from: Date | undefined
   to: Date | undefined
-  presetId?: string
+  presetId?: DatePresetId
 }
 
 interface Emits {
@@ -155,7 +155,7 @@ interface Emits {
 
 const emit = defineEmits<Emits>()
 
-const { urlState, table, isGrouped, pending } = useAlertTableContext()
+const { urlState, table, isGrouped, pending, relativeRefreshToken } = useAlertTableContext()
 const route = useRoute()
 
 // Detect drilldown: ungrouped view with any of the deep-link filters present
@@ -184,42 +184,61 @@ async function backToGroups() {
 }
 
 
-const selectedPresetId = ref<string | undefined>(undefined)
+const selectedPresetId = ref<DatePresetId | undefined>(undefined)
 
 const dateRange = computed<DateRangeValue>({
   get: () => {
     const filters = urlState.filters.value
-    
-    // Only show "Today" as default in the UI, don't force it into the filters
-    // This allows the backend to apply its own defaults if needed
-    const from = filters.start_date ? new Date(filters.start_date as string) : undefined
-    const to = filters.end_date ? new Date(filters.end_date as string) : undefined
-    
-    // If no dates are in URL, show last 24 hours in the picker UI only
-    if (!from && !to) {
-      const range = getLast24HoursRange()
-      return { ...range, presetId: 'last-24-hours' }
-    }
-    
-    return { from, to, presetId: selectedPresetId.value }
-  },
-  set: (value) => {
-    if (!value.from || !value.to) {
-      const { start_date, end_date, ...otherFilters } = urlState.filters.value
-      urlState.filters.value = otherFilters
-      selectedPresetId.value = undefined
-      return
-    }
-    
-    // Always store dates in URL to preserve them during navigation
-    urlState.filters.value = {
-      ...urlState.filters.value,
-      start_date: value.from.toISOString(),
-      end_date: value.to.toISOString()
+    const presetId = filters.date_preset as string | undefined
+
+    if (isValidPresetId(presetId)) {
+      relativeRefreshToken.value // Track dependency for relative preset updates
+      selectedPresetId.value = presetId
+      const { from, to } = getPresetRange(presetId)
+      return { from, to, presetId }
     }
 
-    // Preserve presetId locally for stable labeling in the picker
-    selectedPresetId.value = value.presetId
+    const from = filters.start_date ? new Date(filters.start_date as string) : undefined
+    const to = filters.end_date ? new Date(filters.end_date as string) : undefined
+
+    if (from && to) {
+      selectedPresetId.value = undefined
+      return { from, to }
+    }
+
+    const { from: defaultFrom, to: defaultTo } = getPresetRange('last-24-hours')
+    return { from: defaultFrom, to: defaultTo, presetId: 'last-24-hours' as DatePresetId }
+  },
+  set: (value: DateRangeValue) => {
+    const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
+
+    delete nextFilters.start_date
+    delete nextFilters.end_date
+    delete nextFilters.date_preset
+
+    if (value.presetId && isValidPresetId(value.presetId)) {
+      const presetId = value.presetId as DatePresetId
+      const { from, to } = getPresetRange(presetId)
+
+      if (isRelativePreset(presetId)) {
+        delete nextFilters.start_date
+        delete nextFilters.end_date
+      } else {
+        nextFilters.start_date = from.toISOString()
+        nextFilters.end_date = to.toISOString()
+      }
+
+      nextFilters.date_preset = presetId
+      selectedPresetId.value = presetId
+    } else if (value.from && value.to) {
+      nextFilters.start_date = value.from.toISOString()
+      nextFilters.end_date = value.to.toISOString()
+      selectedPresetId.value = undefined
+    } else {
+      selectedPresetId.value = undefined
+    }
+
+    urlState.filters.value = nextFilters
   }
 })
 
