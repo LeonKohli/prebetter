@@ -183,9 +183,6 @@ async function backToGroups() {
   await navigateTo({ query: newQuery })
 }
 
-
-const selectedPresetId = ref<DatePresetId | undefined>(undefined)
-
 const dateRange = computed<DateRangeValue>({
   get: () => {
     const filters = urlState.filters.value
@@ -193,7 +190,6 @@ const dateRange = computed<DateRangeValue>({
 
     if (isValidPresetId(presetId)) {
       relativeRefreshToken.value // Track dependency for relative preset updates
-      selectedPresetId.value = presetId
       const { from, to } = getPresetRange(presetId)
       return { from, to, presetId }
     }
@@ -202,7 +198,6 @@ const dateRange = computed<DateRangeValue>({
     const to = filters.end_date ? new Date(filters.end_date as string) : undefined
 
     if (from && to) {
-      selectedPresetId.value = undefined
       return { from, to }
     }
 
@@ -229,13 +224,9 @@ const dateRange = computed<DateRangeValue>({
       }
 
       nextFilters.date_preset = presetId
-      selectedPresetId.value = presetId
     } else if (value.from && value.to) {
       nextFilters.start_date = value.from.toISOString()
       nextFilters.end_date = value.to.toISOString()
-      selectedPresetId.value = undefined
-    } else {
-      selectedPresetId.value = undefined
     }
 
     urlState.filters.value = nextFilters
