@@ -17,7 +17,6 @@ import {
 // Vue imports are auto-imported by Nuxt
 import { useIntervalFn, useDocumentVisibility, watchDebounced } from '@vueuse/core'
 import { valueUpdater } from '@/utils/utils'
-import { applyDefaultDateFilters } from '@/utils/dateHelpers'
 import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, CompactGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
 import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
 import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
@@ -114,7 +113,7 @@ const fetchQuery = computed(() => {
   const relativeToken = activePreset && isRelativePreset(activePreset) ? relativeRefreshToken.value : 0
 
   const mappedSortField = sortFieldMap[urlState.sortBy.value as keyof typeof sortFieldMap] || urlState.sortBy.value || 'detect_time'
-  
+
   // Map filter fields
   const urlFilters = Object.fromEntries(
     Object.entries(urlState.filters.value).map(([key, value]) => [
@@ -122,30 +121,43 @@ const fetchQuery = computed(() => {
       value
     ])
   ) as Record<string, string | number>
-  
-  const presetId = activePreset ?? (urlFilters.date_preset as string | undefined)
+
+  // CRITICAL FIX: Remove date_preset from filters before processing
+  // The preset must be converted to actual dates, never sent to the backend
+  delete urlFilters.date_preset
+
+  // Check if we have a preset ID (from URL state or was in filters)
+  const presetId = activePreset
   if (isValidPresetId(presetId)) {
-    const { from, to } = getPresetRange(presetId)
+    const { from } = getPresetRange(presetId)
     urlFilters.start_date = from.toISOString()
-    if (isRelativePreset(presetId)) {
-      delete urlFilters.end_date
-    } else {
+
+    // For relative presets, server handles "now" automatically when end_date is missing
+    // For fixed presets (today, this-week, etc), send explicit end_date
+    if (!isRelativePreset(presetId)) {
+      const { to } = getPresetRange(presetId)
       urlFilters.end_date = to.toISOString()
+    } else {
+      // Explicitly remove end_date for relative presets so server uses "now"
+      delete urlFilters.end_date
     }
-    delete urlFilters.date_preset
   }
-  
-  // Apply default if no dates are specified and no preset was used
-  const finalFilters = (!urlFilters.start_date && !urlFilters.end_date)
-    ? applyDefaultDateFilters(urlFilters)
-    : urlFilters
-  
+
+  // Apply default date filter ONLY if no dates exist after preset conversion
+  // This ensures we ALWAYS have date filters applied
+  if (!urlFilters.start_date && !urlFilters.end_date) {
+    // Apply last-24-hours as default (relative preset)
+    const { from } = getPresetRange('last-24-hours')
+    urlFilters.start_date = from.toISOString()
+    // Don't set end_date - let server use "now"
+  }
+
   return {
     page: urlState.page.value,
     size: urlState.pageSize.value,
     sort_by: mappedSortField,
     sort_order: urlState.sortOrder.value,
-    ...finalFilters
+    ...urlFilters
   }
 })
 

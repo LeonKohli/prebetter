@@ -66,15 +66,19 @@
               
               <div class="space-y-1.5">
                 <div class="flex items-center justify-between">
-                  <Label class="text-xs font-medium text-muted-foreground">End Time</Label>
+                  <Label class="text-xs font-medium text-muted-foreground">
+                    End Time
+                    <span v-if="currentPresetId && isRelativePreset(currentPresetId)" class="ml-1 text-[10px] opacity-60">(now)</span>
+                  </Label>
                   <span class="text-xs text-muted-foreground">{{ endTime }}</span>
                 </div>
-                <Input 
-                  type="time" 
+                <Input
+                  type="time"
                   v-model="endTime"
                   class="h-8 text-xs"
                   step="60"
                   lang="de-DE"
+                  :disabled="currentPresetId && isRelativePreset(currentPresetId)"
                 />
               </div>
             </div>
@@ -167,7 +171,18 @@ const startTime = computed({
 })
 
 const endTime = computed({
-  get: () => `${endHour.value}:${endMinute.value}`,
+  get: () => {
+    const presetId = currentPresetId.value
+    if (presetId && isRelativePreset(presetId)) {
+      // For relative presets, show current time (updates automatically)
+      currentTime.value // Track dependency
+      const now = new Date()
+      const h = String(now.getHours()).padStart(2, '0')
+      const m = String(now.getMinutes()).padStart(2, '0')
+      return `${h}:${m}`
+    }
+    return `${endHour.value}:${endMinute.value}`
+  },
   set: (value: string) => {
     const [h, m] = value.split(':')
     endHour.value = h || DEFAULT_END_HOUR
@@ -193,15 +208,26 @@ const dtf = new DateFormatter('de-DE', {
 
 const formattedDateRange = computed(() => {
   if (!pickerValue.value?.start) return null
-  
+
   const formatter = props.includeTime ? dtf : df
   const startStr = formatter.format(pickerValue.value.start.toDate(getLocalTimeZone()))
-  
+
   if (!pickerValue.value.end) {
     return startStr
   }
-  
-  const endStr = formatter.format(pickerValue.value.end.toDate(getLocalTimeZone()))
+
+  // For relative presets, always show current time as end time
+  // This ensures the display updates even when the actual end time is computed server-side
+  const presetId = currentPresetId.value
+  let endDate = pickerValue.value.end.toDate(getLocalTimeZone())
+
+  if (presetId && isRelativePreset(presetId)) {
+    // Use current time for display (triggers reactivity via currentTime)
+    currentTime.value // Track dependency
+    endDate = new Date() // Always show "now" for relative presets
+  }
+
+  const endStr = formatter.format(endDate)
   return `${startStr} - ${endStr}`
 })
 
