@@ -69,16 +69,19 @@ export function formatTimestamp(
     }
 
     // Format with locale and timezone
-    const dateStyle = style === 'full' || style === 'long' ? style : 'medium'
-    const timeStyle = style === 'short' ? 'short' : 'medium'
-
-    const formatOptions: Intl.DateTimeFormatOptions = {
-      dateStyle,
-      timeStyle,
-    }
-
-    if (showTimezone) {
-      formatOptions.timeZoneName = 'short'
+    // Note: Cannot use dateStyle/timeStyle with timeZoneName
+    // Must use component options instead
+    const formatOptions: Intl.DateTimeFormatOptions = showTimezone ? {
+      year: 'numeric',
+      month: style === 'short' ? 'numeric' : '2-digit',
+      day: style === 'short' ? 'numeric' : '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: style === 'short' ? undefined : '2-digit',
+      timeZoneName: 'short'
+    } : {
+      dateStyle: style === 'full' || style === 'long' ? style : 'medium',
+      timeStyle: style === 'short' ? 'short' : 'medium',
     }
 
     return new Intl.DateTimeFormat(locale, formatOptions).format(date)

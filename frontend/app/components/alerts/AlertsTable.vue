@@ -14,11 +14,11 @@ import {
   getSortedRowModel,
   useVueTable,
 } from '@tanstack/vue-table'
-// Vue imports are auto-imported by Nuxt
-import { useIntervalFn, useDocumentVisibility, watchDebounced } from '@vueuse/core'
-import { valueUpdater } from '@/utils/utils'
-import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, CompactGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
+import { useIntervalFn, useDocumentVisibility, useEventListener, watchDebounced } from '@vueuse/core'
+import type { FetchError } from 'ofetch'
 import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
+import AlertsSelectionBar from '@/components/alerts/AlertsSelectionBar.vue'
+import { valueUpdater } from '@/utils/utils'
 import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 
 // URL state synchronization with proper browser navigation
@@ -47,6 +47,12 @@ function handleViewAlertDetails(details: { sourceIp: string; targetIp: string; c
   
   // Use navigateToDetails which properly creates a history entry
   urlState.navigateToDetails(details)
+}
+
+function openDeleteDialog(state: DeleteState) {
+  deleteState.value = state
+  deleteError.value = null
+  deleteDialogOpen.value = true
 }
 
 // Get column definitions from composable
@@ -78,8 +84,24 @@ const pagination = computed({
 })
 
 // Local state (not in URL)
-const rowSelection = ref({})
+const rowSelection = ref<Record<string, boolean>>({})
 const relativeRefreshToken = ref(0)
+
+interface DeleteResponse {
+  success: boolean
+  deleted: number
+  rows: number
+}
+
+type DeleteState =
+  | { mode: 'single'; alert: AlertListItem }
+  | { mode: 'bulk'; alerts: AlertListItem[] }
+  | { mode: 'grouped'; sourceIp: string; targetIp: string; totalCount: number }
+
+const deleteDialogOpen = ref(false)
+const deleteState = ref<DeleteState | null>(null)
+const deletePending = ref(false)
+const deleteError = ref<string | null>(null)
 
 // Compute the fetch URL dynamically based on isGrouped
 const fetchUrl = computed(() => isGrouped.value ? '/api/alerts/groups' : '/api/alerts')
@@ -422,9 +444,92 @@ provideAlertTableContext({
 })
 
 // Handle view details event from AlertActions
-function handleViewDetailsEvent(event: CustomEvent) {
+function handleViewDetailsEvent(event: WindowEventMap['viewAlertDetails']) {
   selectedAlertId.value = event.detail.alertId
   detailsDialogOpen.value = true
+}
+
+function handleDeletionRequest(event: WindowEventMap['alertDeletionRequest']) {
+  const detail = event.detail
+  if (!detail) return
+
+  if (detail.mode === 'single' && detail.alert) {
+    openDeleteDialog({ mode: 'single', alert: detail.alert })
+  } else if (detail.mode === 'grouped' && detail.sourceIp && detail.targetIp) {
+    openDeleteDialog({
+      mode: 'grouped',
+      sourceIp: detail.sourceIp,
+      targetIp: detail.targetIp,
+      totalCount: detail.totalCount ?? 0,
+    })
+  }
+}
+
+const handleBulkDelete = () => {
+  if (isGrouped.value) return
+  const selectedRows = table.getSelectedRowModel().rows
+  const alerts = selectedRows
+    .map((row) => row.original)
+    .filter((item): item is AlertListItem => item !== undefined && typeof item === 'object' && 'id' in item)
+
+  if (!alerts.length) {
+    return
+  }
+
+  openDeleteDialog({ mode: 'bulk', alerts })
+}
+
+const deleteActionLabel = computed(() => {
+  if (!deleteState.value) return 'Delete'
+  if (deleteState.value.mode === 'single') return 'Delete alert'
+  if (deleteState.value.mode === 'bulk') return `Delete ${deleteState.value.alerts.length} alert${deleteState.value.alerts.length === 1 ? '' : 's'}`
+  return 'Delete group'
+})
+
+async function confirmDeletion() {
+  if (!deleteState.value) return
+
+  deletePending.value = true
+  deleteError.value = null
+
+  try {
+    if (deleteState.value.mode === 'grouped') {
+      await $fetch<DeleteResponse>('/api/alerts', {
+        method: 'DELETE',
+        query: {
+          source_ip: deleteState.value.sourceIp,
+          target_ip: deleteState.value.targetIp,
+        },
+      })
+    } else {
+      const ids = deleteState.value.mode === 'single'
+        ? [deleteState.value.alert.id]
+        : deleteState.value.alerts.map((alert) => alert.id)
+
+      await $fetch<DeleteResponse>('/api/alerts', {
+        method: 'DELETE',
+        query: {
+          ids: ids.join(','),
+        },
+      })
+    }
+
+    deleteDialogOpen.value = false
+    deleteState.value = null
+    rowSelection.value = {}
+
+    await refresh()
+  } catch (error) {
+    const fetchError = error as FetchError & { data?: { detail?: string } }
+    deleteError.value = fetchError?.data?.detail || fetchError?.message || 'Failed to delete alerts.'
+  } finally {
+    deletePending.value = false
+  }
+}
+
+if (process.client) {
+  useEventListener(window, 'viewAlertDetails', handleViewDetailsEvent)
+  useEventListener(window, 'alertDeletionRequest', handleDeletionRequest)
 }
 
 // Start auto-refresh on mount
@@ -432,87 +537,84 @@ onMounted(() => {
   if (autoRefreshEnabled.value) {
     startAutoRefresh()
   }
-  
-  // Listen for view details events
-  window.addEventListener('viewAlertDetails', handleViewDetailsEvent as EventListener)
 })
 
 // Cleanup on unmount
 onUnmounted(() => {
   stopAutoRefresh()
-  
-  // Remove event listener
-  window.removeEventListener('viewAlertDetails', handleViewDetailsEvent as EventListener)
 })
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col space-y-2">
+  <div class="w-full h-full flex flex-col">
     <!-- Toolbar -->
     <AlertsToolbar
       @toggleView="handleToggleView"
       @startAutoRefresh="startAutoRefresh"
       @stopAutoRefresh="stopAutoRefresh"
+      @bulkDelete="handleBulkDelete"
     />
 
-    <!-- Table with Brandenburg-style design -->
-    <div 
-      class="flex-1 min-h-0 rounded-lg bg-card shadow-sm table-scroll-container relative overflow-hidden"
+    <!-- Table + Pagination unified card -->
+    <div
+      class="flex-1 min-h-0 mt-2 rounded-lg bg-card shadow-sm overflow-hidden flex flex-col"
     >
-      <Table class="table-compact table-inner-borders table-zebra" role="table" aria-label="Security alerts table">
-        <TableHeader class="sticky top-0 z-10 bg-muted">
-          <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id" class="h-10">
-            <TableHead v-for="header in headerGroup.headers" :key="header.id" class="py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header" :props="header.getContext()" />
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody class="relative">
-          <!-- Loading overlay - show when loading after initial load -->
-          <Transition name="fade">
-            <div 
-              v-if="showLoadingOverlay" 
-              class="absolute inset-0 bg-background/40 z-10 pointer-events-none"
-              role="status"
-              aria-live="polite"
-              aria-busy="true"
-              aria-label="Loading alerts"
-            />
-          </Transition>
-          
-          <!-- Show skeleton on initial load or when changing views -->
-          <template v-if="status === 'idle' || (status === 'pending' && !data) || isChangingView">
-            <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-0">
-              <TableCell v-for="j in columns.length" :key="`skeleton-${i}-${j}`" class="py-2 px-4">
-                <div class="h-4 bg-muted animate-pulse rounded" />
-              </TableCell>
+      <!-- Table area (scrollable) -->
+      <div class="flex-1 overflow-auto relative">
+        <TableFlat class="table-inner-borders table-zebra" role="table" aria-label="Security alerts table">
+          <TableHeader class="sticky top-0 z-10">
+            <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id" class="h-10">
+              <TableHead v-for="header in headerGroup.headers" :key="header.id" class="sticky top-0 z-10 bg-muted py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header" :props="header.getContext()" />
+              </TableHead>
             </TableRow>
-          </template>
-          <!-- Show data when available -->
-          <template v-else-if="table.getRowModel().rows?.length">
-            <template v-for="row in table.getRowModel().rows" :key="row.id">
-              <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-0 hover:bg-muted/30 transition-colors duration-150">
-                <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="py-2 px-4 text-sm font-normal">
-                  <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+          </TableHeader>
+          <TableBody class="relative">
+            <!-- Loading overlay - show when loading after initial load -->
+            <Transition name="fade">
+              <div
+                v-if="showLoadingOverlay"
+                class="absolute inset-0 bg-background/40 z-10 pointer-events-none"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
+                aria-label="Loading alerts"
+              />
+            </Transition>
+
+            <!-- Show skeleton on initial load or when changing views -->
+            <template v-if="status === 'idle' || (status === 'pending' && !data) || isChangingView">
+              <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-0">
+                <TableCell v-for="j in columns.length" :key="`skeleton-${i}-${j}`" class="py-2 px-4">
+                  <div class="h-4 bg-muted animate-pulse rounded" />
                 </TableCell>
               </TableRow>
             </template>
-          </template>
-          <!-- Empty state - only show when not changing views, not loading, and truly no data -->
-          <TableRow v-else-if="!isChangingView && status !== 'pending' && (status === 'success' || status === 'error')">
-            <TableCell :colspan="columns.length" class="h-24 text-center">
-              <div role="status" aria-live="polite">
-                <span v-if="displayError">Error loading alerts. Please try again.</span>
-                <span v-else>No alerts found.</span>
-              </div>
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </div>
+            <!-- Show data when available -->
+            <template v-else-if="table.getRowModel().rows?.length">
+              <template v-for="row in table.getRowModel().rows" :key="row.id">
+                <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-0 hover:bg-muted/30 transition-colors duration-150">
+                  <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="py-2 px-4 text-sm font-normal">
+                    <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+                  </TableCell>
+                </TableRow>
+              </template>
+            </template>
+            <!-- Empty state - only show when not changing views, not loading, and truly no data -->
+            <TableRow v-else-if="!isChangingView && status !== 'pending' && (status === 'success' || status === 'error')">
+              <TableCell :colspan="columns.length" class="h-24 text-center">
+                <div role="status" aria-live="polite">
+                  <span v-if="displayError">Error loading alerts. Please try again.</span>
+                  <span v-else>No alerts found.</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </TableFlat>
+      </div>
 
-    <!-- Brandenburg-style pagination -->
-    <div class="flex items-center justify-between h-12 px-4 border-t border-border bg-muted/20">
+      <!-- Pagination footer (integrated, inherits bottom radius) -->
+      <div class="flex items-center justify-between h-12 px-4 border-t border-border bg-muted/20 shrink-0">
       <div class="flex items-center gap-6">
         <!-- Count display -->
         <div class="flex items-baseline gap-2">
@@ -596,27 +698,112 @@ onUnmounted(() => {
           <Icon name="lucide:chevron-right" class="ml-1 h-3.5 w-3.5" />
         </Button>
       </div>
+      </div>
     </div>
-    
+
     <!-- Alert Details Dialog -->
     <AlertDetailsDialog 
       v-model:open="detailsDialogOpen"
       :alert-id="selectedAlertId"
     />
+
+    <AlertDialog v-model:open="deleteDialogOpen">
+    <AlertDialogContent class="w-full max-w-[520px] space-y-6">
+      <AlertDialogHeader class="space-y-3">
+        <div class="flex items-center gap-2 text-destructive">
+          <Icon name="lucide:shield-alert" class="h-5 w-5" aria-hidden="true" />
+          <AlertDialogTitle class="text-base font-semibold">
+            <span class="sr-only">Warning:</span>
+            <template v-if="deleteState?.mode === 'grouped'">
+              Delete grouped alerts
+            </template>
+            <template v-else-if="deleteState?.mode === 'bulk'">
+              Delete selected alerts
+            </template>
+            <template v-else>
+              Delete alert
+            </template>
+          </AlertDialogTitle>
+        </div>
+        <AlertDialogDescription class="text-sm leading-relaxed text-muted-foreground">
+          <span class="font-semibold text-destructive">Warning:</span>
+          This action cannot be undone and permanently removes alert data from the Prelude database.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+
+      <div v-if="deleteState?.mode === 'single'" class="space-y-4 rounded-lg border border-border/70 bg-muted/40 p-4">
+        <dl class="space-y-3 text-sm">
+          <div class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Alert ID</dt>
+            <dd class="font-mono text-sm">#{{ deleteState.alert.id }}</dd>
+          </div>
+          <div v-if="deleteState.alert.classification_text" class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Classification</dt>
+            <dd class="rounded-md bg-muted px-2 py-1 text-xs font-medium leading-snug text-foreground/80 break-words">
+              {{ deleteState.alert.classification_text }}
+            </dd>
+          </div>
+          <div class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Source → Target</dt>
+            <dd class="font-mono text-xs text-foreground">
+              {{ deleteState.alert.source_ipv4 || '—' }} → {{ deleteState.alert.target_ipv4 || '—' }}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <div v-else-if="deleteState?.mode === 'bulk'" class="space-y-3 rounded-lg border border-border/70 bg-muted/40 p-4 text-sm">
+        <p class="font-medium">{{ deleteState.alerts.length }} alerts selected</p>
+        <p class="text-muted-foreground">
+          All selected alerts and their related records will be erased immediately.
+        </p>
+      </div>
+
+      <div v-else-if="deleteState?.mode === 'grouped'" class="space-y-4 rounded-lg border border-border/70 bg-muted/40 p-4">
+        <dl class="space-y-3 text-sm">
+          <div class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Source IP</dt>
+            <dd class="font-mono text-xs break-all">{{ deleteState.sourceIp }}</dd>
+          </div>
+          <div class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Target IP</dt>
+            <dd class="font-mono text-xs break-all">{{ deleteState.targetIp }}</dd>
+          </div>
+          <p class="text-muted-foreground">
+            {{ deleteState.totalCount }} alert{{ deleteState.totalCount === 1 ? '' : 's' }} referencing this IP pair will be removed across all related tables.
+          </p>
+        </dl>
+      </div>
+
+      <p v-if="deleteError" class="text-sm text-destructive">
+        {{ deleteError }}
+      </p>
+
+      <AlertDialogFooter class="flex items-center justify-between gap-2">
+        <AlertDialogCancel :disabled="deletePending" class="border-border">
+          Cancel
+        </AlertDialogCancel>
+        <AlertDialogAction
+          class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          :disabled="deletePending"
+          @click="confirmDeletion"
+        >
+          <span v-if="deletePending" class="mr-2 inline-flex h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+          {{ deleteActionLabel }}
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- Floating Selection Bar -->
+    <AlertsSelectionBar
+      v-if="!isGrouped"
+      @bulkDelete="handleBulkDelete"
+    />
   </div>
 </template>
 
 <style scoped>
-/* Make the Table component's internal container fill height */
-.table-scroll-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.table-scroll-container > div {
-  height: 100%;
-}
-
 /* Fade transition for loading overlay */
 .fade-enter-active,
 .fade-leave-active {
