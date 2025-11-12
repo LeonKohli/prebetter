@@ -151,7 +151,7 @@ import { useHeartbeatStatus, useHeartbeatTimeline } from '@/composables/useHeart
 import HeartbeatSummaryGrid from '@/components/heartbeats/HeartbeatSummaryGrid.vue'
 import HeartbeatNodeList from '@/components/heartbeats/HeartbeatNodeList.vue'
 import HeartbeatTimelineTable from '@/components/heartbeats/HeartbeatTimelineTable.vue'
-import type { HeartbeatNode } from '@/types/heartbeats'
+import type { HeartbeatNode } from '~~/shared/types/heartbeats'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'

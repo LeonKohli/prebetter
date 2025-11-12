@@ -1,6 +1,6 @@
 import type { ColumnDef, Column } from '@tanstack/vue-table'
 import { Icon } from '#components'
-import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert, CompactGroupedAlert } from '@/types/alerts'
+import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert, CompactGroupedAlert } from '~~/shared/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
 import ClassificationBadges from '@/components/alerts/ClassificationBadges.vue'
 import { Button } from '@/components/ui/button'
@@ -47,6 +47,40 @@ export const useAlertTableColumns = () => {
   const handleViewDetails = (alertId: string) => {
     // This will be handled by the parent component
     const event = new CustomEvent('viewAlertDetails', { detail: { alertId } })
+    window.dispatchEvent(event)
+  }
+
+  const handleRequestDeleteSingle = (alert: AlertListItem) => {
+    const event = new CustomEvent('alertDeletionRequest', {
+      detail: {
+        mode: 'single' as const,
+        alert,
+      },
+    })
+    window.dispatchEvent(event)
+  }
+
+  const handleRequestDeleteGroup = (group: CompactGroupedAlert | FlattenedGroupedAlert) => {
+    const sourceIp = 'source_ipv4' in group ? group.source_ipv4 || '' : ''
+    const targetIp = 'target_ipv4' in group ? group.target_ipv4 || '' : ''
+    let totalCount = 0
+    if ('total_count' in group) {
+      const value = (group as CompactGroupedAlert).total_count ?? 0
+      totalCount = typeof value === 'number' ? value : Number(value) || 0
+    } else if ('count' in group) {
+      const value = (group as FlattenedGroupedAlert).count ?? 0
+      totalCount = typeof value === 'number' ? value : Number(value) || 0
+    }
+
+    const event = new CustomEvent('alertDeletionRequest', {
+      detail: {
+        mode: 'grouped' as const,
+        group,
+        sourceIp,
+        targetIp,
+        totalCount,
+      },
+    })
     window.dispatchEvent(event)
   }
 
@@ -117,7 +151,8 @@ export const useAlertTableColumns = () => {
       cell: ({ row }) => h(AlertActions, {
         alert: row.original,
         isGrouped: true,
-        onViewDetails: handleViewDetails
+        onViewDetails: handleViewDetails,
+        onRequestDeleteGroup: handleRequestDeleteGroup
       }),
       size: 60,
     },
@@ -203,7 +238,8 @@ export const useAlertTableColumns = () => {
       cell: ({ row }) => h(AlertActions, {
         alert: row.original,
         isGrouped: true,
-        onViewDetails: handleViewDetails
+        onViewDetails: handleViewDetails,
+        onRequestDeleteGroup: handleRequestDeleteGroup
       }),
     },
   ]
@@ -309,7 +345,8 @@ export const useAlertTableColumns = () => {
       cell: ({ row }) => h(AlertActions, {
         alert: row.original,
         isGrouped: false,
-        onViewDetails: handleViewDetails
+        onViewDetails: handleViewDetails,
+        onRequestDeleteSingle: handleRequestDeleteSingle
       }),
     },
   ]
