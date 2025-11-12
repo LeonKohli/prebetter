@@ -15,10 +15,21 @@ import {
   useVueTable,
 } from '@tanstack/vue-table'
 // Vue imports are auto-imported by Nuxt
-import { useIntervalFn, useDocumentVisibility, watchDebounced } from '@vueuse/core'
+import { useIntervalFn, useDocumentVisibility, useEventListener, watchDebounced } from '@vueuse/core'
 import { valueUpdater } from '@/utils/utils'
 import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, CompactGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
 import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import type { FetchError } from 'ofetch'
 import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 
 // URL state synchronization with proper browser navigation
@@ -47,6 +58,12 @@ function handleViewAlertDetails(details: { sourceIp: string; targetIp: string; c
   
   // Use navigateToDetails which properly creates a history entry
   urlState.navigateToDetails(details)
+}
+
+function openDeleteDialog(state: DeleteState) {
+  deleteState.value = state
+  deleteError.value = null
+  deleteDialogOpen.value = true
 }
 
 // Get column definitions from composable
@@ -78,8 +95,24 @@ const pagination = computed({
 })
 
 // Local state (not in URL)
-const rowSelection = ref({})
+const rowSelection = ref<Record<string, boolean>>({})
 const relativeRefreshToken = ref(0)
+
+interface DeleteResponse {
+  success: boolean
+  deleted: number
+  rows: number
+}
+
+type DeleteState =
+  | { mode: 'single'; alert: AlertListItem }
+  | { mode: 'bulk'; alerts: AlertListItem[] }
+  | { mode: 'grouped'; sourceIp: string; targetIp: string; totalCount: number }
+
+const deleteDialogOpen = ref(false)
+const deleteState = ref<DeleteState | null>(null)
+const deletePending = ref(false)
+const deleteError = ref<string | null>(null)
 
 // Compute the fetch URL dynamically based on isGrouped
 const fetchUrl = computed(() => isGrouped.value ? '/api/alerts/groups' : '/api/alerts')
@@ -422,9 +455,92 @@ provideAlertTableContext({
 })
 
 // Handle view details event from AlertActions
-function handleViewDetailsEvent(event: CustomEvent) {
+function handleViewDetailsEvent(event: WindowEventMap['viewAlertDetails']) {
   selectedAlertId.value = event.detail.alertId
   detailsDialogOpen.value = true
+}
+
+function handleDeletionRequest(event: WindowEventMap['alertDeletionRequest']) {
+  const detail = event.detail
+  if (!detail) return
+
+  if (detail.mode === 'single' && detail.alert) {
+    openDeleteDialog({ mode: 'single', alert: detail.alert })
+  } else if (detail.mode === 'grouped' && detail.sourceIp && detail.targetIp) {
+    openDeleteDialog({
+      mode: 'grouped',
+      sourceIp: detail.sourceIp,
+      targetIp: detail.targetIp,
+      totalCount: detail.totalCount ?? 0,
+    })
+  }
+}
+
+const handleBulkDelete = () => {
+  if (isGrouped.value) return
+  const selectedRows = table.getSelectedRowModel().rows
+  const alerts = selectedRows
+    .map((row) => row.original)
+    .filter((item): item is AlertListItem => item !== undefined && typeof item === 'object' && 'id' in item)
+
+  if (!alerts.length) {
+    return
+  }
+
+  openDeleteDialog({ mode: 'bulk', alerts })
+}
+
+const deleteActionLabel = computed(() => {
+  if (!deleteState.value) return 'Delete'
+  if (deleteState.value.mode === 'single') return 'Delete alert'
+  if (deleteState.value.mode === 'bulk') return `Delete ${deleteState.value.alerts.length} alert${deleteState.value.alerts.length === 1 ? '' : 's'}`
+  return 'Delete group'
+})
+
+async function confirmDeletion() {
+  if (!deleteState.value) return
+
+  deletePending.value = true
+  deleteError.value = null
+
+  try {
+    if (deleteState.value.mode === 'grouped') {
+      await $fetch<DeleteResponse>('/api/alerts', {
+        method: 'DELETE',
+        query: {
+          source_ip: deleteState.value.sourceIp,
+          target_ip: deleteState.value.targetIp,
+        },
+      })
+    } else {
+      const ids = deleteState.value.mode === 'single'
+        ? [deleteState.value.alert.id]
+        : deleteState.value.alerts.map((alert) => alert.id)
+
+      await $fetch<DeleteResponse>('/api/alerts', {
+        method: 'DELETE',
+        query: {
+          ids: ids.join(','),
+        },
+      })
+    }
+
+    deleteDialogOpen.value = false
+    deleteState.value = null
+    rowSelection.value = {}
+
+    await refresh()
+  } catch (error) {
+    const fetchError = error as FetchError & { data?: { detail?: string } }
+    deleteError.value = fetchError?.data?.detail || fetchError?.message || 'Failed to delete alerts.'
+  } finally {
+    deletePending.value = false
+  }
+}
+
+if (process.client) {
+  useEventListener(window, 'viewAlertDetails', handleViewDetailsEvent)
+  useEventListener(window, 'alertDeletionRequest', handleDeletionRequest)
 }
 
 // Start auto-refresh on mount
@@ -432,17 +548,11 @@ onMounted(() => {
   if (autoRefreshEnabled.value) {
     startAutoRefresh()
   }
-  
-  // Listen for view details events
-  window.addEventListener('viewAlertDetails', handleViewDetailsEvent as EventListener)
 })
 
 // Cleanup on unmount
 onUnmounted(() => {
   stopAutoRefresh()
-  
-  // Remove event listener
-  window.removeEventListener('viewAlertDetails', handleViewDetailsEvent as EventListener)
 })
 </script>
 
@@ -453,6 +563,7 @@ onUnmounted(() => {
       @toggleView="handleToggleView"
       @startAutoRefresh="startAutoRefresh"
       @stopAutoRefresh="stopAutoRefresh"
+      @bulkDelete="handleBulkDelete"
     />
 
     <!-- Table with Brandenburg-style design -->
@@ -603,6 +714,94 @@ onUnmounted(() => {
       v-model:open="detailsDialogOpen"
       :alert-id="selectedAlertId"
     />
+
+    <AlertDialog v-model:open="deleteDialogOpen">
+    <AlertDialogContent class="w-full max-w-[520px] space-y-6">
+      <AlertDialogHeader class="space-y-3">
+        <div class="flex items-center gap-2 text-destructive">
+          <Icon name="lucide:shield-alert" class="h-5 w-5" aria-hidden="true" />
+          <AlertDialogTitle class="text-base font-semibold">
+            <span class="sr-only">Warning:</span>
+            <template v-if="deleteState?.mode === 'grouped'">
+              Delete grouped alerts
+            </template>
+            <template v-else-if="deleteState?.mode === 'bulk'">
+              Delete selected alerts
+            </template>
+            <template v-else>
+              Delete alert
+            </template>
+          </AlertDialogTitle>
+        </div>
+        <AlertDialogDescription class="text-sm leading-relaxed text-muted-foreground">
+          <span class="font-semibold text-destructive">Warning:</span>
+          This action cannot be undone and permanently removes alert data from the Prelude database.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+
+      <div v-if="deleteState?.mode === 'single'" class="space-y-4 rounded-lg border border-border/70 bg-muted/40 p-4">
+        <dl class="space-y-3 text-sm">
+          <div class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Alert ID</dt>
+            <dd class="font-mono text-sm">#{{ deleteState.alert.id }}</dd>
+          </div>
+          <div v-if="deleteState.alert.classification_text" class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Classification</dt>
+            <dd class="rounded-md bg-muted px-2 py-1 text-xs font-medium leading-snug text-foreground/80 break-words">
+              {{ deleteState.alert.classification_text }}
+            </dd>
+          </div>
+          <div class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Source → Target</dt>
+            <dd class="font-mono text-xs text-foreground">
+              {{ deleteState.alert.source_ipv4 || '—' }} → {{ deleteState.alert.target_ipv4 || '—' }}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <div v-else-if="deleteState?.mode === 'bulk'" class="space-y-3 rounded-lg border border-border/70 bg-muted/40 p-4 text-sm">
+        <p class="font-medium">{{ deleteState.alerts.length }} alerts selected</p>
+        <p class="text-muted-foreground">
+          All selected alerts and their related records will be erased immediately.
+        </p>
+      </div>
+
+      <div v-else-if="deleteState?.mode === 'grouped'" class="space-y-4 rounded-lg border border-border/70 bg-muted/40 p-4">
+        <dl class="space-y-3 text-sm">
+          <div class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Source IP</dt>
+            <dd class="font-mono text-xs break-all">{{ deleteState.sourceIp }}</dd>
+          </div>
+          <div class="space-y-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Target IP</dt>
+            <dd class="font-mono text-xs break-all">{{ deleteState.targetIp }}</dd>
+          </div>
+          <p class="text-muted-foreground">
+            {{ deleteState.totalCount }} alert{{ deleteState.totalCount === 1 ? '' : 's' }} referencing this IP pair will be removed across all related tables.
+          </p>
+        </dl>
+      </div>
+
+      <p v-if="deleteError" class="text-sm text-destructive">
+        {{ deleteError }}
+      </p>
+
+      <AlertDialogFooter class="flex items-center justify-between gap-2">
+        <AlertDialogCancel :disabled="deletePending" class="border-border">
+          Cancel
+        </AlertDialogCancel>
+        <AlertDialogAction
+          class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          :disabled="deletePending"
+          @click="confirmDeletion"
+        >
+          <span v-if="deletePending" class="mr-2 inline-flex h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+          {{ deleteActionLabel }}
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>
 

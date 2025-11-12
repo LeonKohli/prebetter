@@ -8,6 +8,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   viewDetails: [alertId: string]
+  requestDeleteSingle: [alert: AlertListItem]
+  requestDeleteGroup: [alert: FlattenedGroupedAlert | CompactGroupedAlert]
 }>()
 
 const urlState = useNavigableUrlState()
@@ -32,6 +34,16 @@ function handleViewDetails() {
   // For ungrouped view, use the alert ID directly
   if (!props.isGrouped && 'id' in props.alert) {
     emit('viewDetails', props.alert.id)
+  }
+}
+
+const deleteLabel = computed(() => (props.isGrouped ? 'Delete IP pair' : 'Delete alert'))
+
+function handleDelete() {
+  if (props.isGrouped) {
+    emit('requestDeleteGroup', props.alert as FlattenedGroupedAlert | CompactGroupedAlert)
+  } else if ('id' in props.alert) {
+    emit('requestDeleteSingle', props.alert as AlertListItem)
   }
 }
 
@@ -79,6 +91,11 @@ async function viewAllForPair() {
       <DropdownMenuItem @click="viewAllForPair">
         <Icon name="lucide:list" class="mr-2 h-4 w-4" />
         View all from IP pair
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem class="text-destructive focus:text-destructive" @click="handleDelete">
+        <Icon name="lucide:trash-2" class="mr-2 h-4 w-4" />
+        {{ deleteLabel }}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem @click="copyId">

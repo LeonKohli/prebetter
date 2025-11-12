@@ -130,6 +130,21 @@
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Button
+        v-if="!isGrouped"
+        variant="destructive"
+        size="sm"
+        class="h-8 px-3 text-xs font-medium"
+        :disabled="!canBulkDelete || pending"
+        @click="$emit('bulkDelete')"
+      >
+        <Icon name="lucide:trash-2" class="mr-2 h-3.5 w-3.5" />
+        Delete selected
+        <span v-if="selectionCount" class="ml-2 rounded bg-destructive-foreground/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive-foreground">
+          {{ selectionCount }}
+        </span>
+      </Button>
     </div>
   </div>
 </template>
@@ -151,6 +166,7 @@ interface Emits {
   toggleView: []
   startAutoRefresh: []
   stopAutoRefresh: []
+  bulkDelete: []
 }
 
 const emit = defineEmits<Emits>()
@@ -163,6 +179,11 @@ const isDrilldown = computed(() => {
   const f = urlState.filters.value
   return !isGrouped.value && (Boolean(f.classification_text) || Boolean(f.source_ipv4) || Boolean(f.target_ipv4))
 })
+
+// Use TanStack Table's built-in selection API
+const selectionCount = computed(() => table.getSelectedRowModel().rows.length)
+
+const canBulkDelete = computed(() => !isGrouped.value && selectionCount.value > 0)
 
 async function backToGroups() {
   // Build a single navigation update to avoid racing URL pushes
