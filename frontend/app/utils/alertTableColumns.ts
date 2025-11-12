@@ -1,6 +1,6 @@
 import type { ColumnDef, Column } from '@tanstack/vue-table'
 import { Icon } from '#components'
-import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert, CompactGroupedAlert } from '@/types/alerts'
+import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert, CompactGroupedAlert } from '~~/shared/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
 import ClassificationBadges from '@/components/alerts/ClassificationBadges.vue'
 import { Button } from '@/components/ui/button'

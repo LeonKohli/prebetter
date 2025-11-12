@@ -1,7 +1,7 @@
 // Global event type declarations for CustomEvents
 // This provides type safety for window.addEventListener and useEventListener
 
-import type { AlertListItem, FlattenedGroupedAlert, CompactGroupedAlert } from '@/types/alerts'
+import type { AlertListItem, FlattenedGroupedAlert, CompactGroupedAlert } from '~~/shared/types/alerts'
 
 // Extend WindowEventMap to add custom events
 declare global {
