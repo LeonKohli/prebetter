@@ -14,22 +14,11 @@ import {
   getSortedRowModel,
   useVueTable,
 } from '@tanstack/vue-table'
-// Vue imports are auto-imported by Nuxt
 import { useIntervalFn, useDocumentVisibility, useEventListener, watchDebounced } from '@vueuse/core'
-import { valueUpdater } from '@/utils/utils'
-import type { AlertListItem, GroupedAlert, FlattenedGroupedAlert, CompactGroupedAlert, AlertListResponse, GroupedAlertResponse, PaginatedResponse } from '@/types/alerts'
-import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import type { FetchError } from 'ofetch'
+import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
+import AlertsSelectionBar from '@/components/alerts/AlertsSelectionBar.vue'
+import { valueUpdater } from '@/utils/utils'
 import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 
 // URL state synchronization with proper browser navigation
@@ -557,7 +546,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col space-y-2">
+  <div class="w-full h-full flex flex-col">
     <!-- Toolbar -->
     <AlertsToolbar
       @toggleView="handleToggleView"
@@ -566,64 +555,66 @@ onUnmounted(() => {
       @bulkDelete="handleBulkDelete"
     />
 
-    <!-- Table with Brandenburg-style design -->
-    <div 
-      class="flex-1 min-h-0 rounded-lg bg-card shadow-sm table-scroll-container relative overflow-hidden"
+    <!-- Table + Pagination unified card -->
+    <div
+      class="flex-1 min-h-0 mt-2 rounded-lg bg-card shadow-sm overflow-hidden flex flex-col"
     >
-      <Table class="table-compact table-inner-borders table-zebra" role="table" aria-label="Security alerts table">
-        <TableHeader class="sticky top-0 z-10 bg-muted">
-          <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id" class="h-10">
-            <TableHead v-for="header in headerGroup.headers" :key="header.id" class="py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header" :props="header.getContext()" />
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody class="relative">
-          <!-- Loading overlay - show when loading after initial load -->
-          <Transition name="fade">
-            <div 
-              v-if="showLoadingOverlay" 
-              class="absolute inset-0 bg-background/40 z-10 pointer-events-none"
-              role="status"
-              aria-live="polite"
-              aria-busy="true"
-              aria-label="Loading alerts"
-            />
-          </Transition>
-          
-          <!-- Show skeleton on initial load or when changing views -->
-          <template v-if="status === 'idle' || (status === 'pending' && !data) || isChangingView">
-            <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-0">
-              <TableCell v-for="j in columns.length" :key="`skeleton-${i}-${j}`" class="py-2 px-4">
-                <div class="h-4 bg-muted animate-pulse rounded" />
-              </TableCell>
+      <!-- Table area (scrollable) -->
+      <div class="flex-1 overflow-auto relative">
+        <TableFlat class="table-inner-borders table-zebra" role="table" aria-label="Security alerts table">
+          <TableHeader class="sticky top-0 z-10">
+            <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id" class="h-10">
+              <TableHead v-for="header in headerGroup.headers" :key="header.id" class="sticky top-0 z-10 bg-muted py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header" :props="header.getContext()" />
+              </TableHead>
             </TableRow>
-          </template>
-          <!-- Show data when available -->
-          <template v-else-if="table.getRowModel().rows?.length">
-            <template v-for="row in table.getRowModel().rows" :key="row.id">
-              <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-0 hover:bg-muted/30 transition-colors duration-150">
-                <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="py-2 px-4 text-sm font-normal">
-                  <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+          </TableHeader>
+          <TableBody class="relative">
+            <!-- Loading overlay - show when loading after initial load -->
+            <Transition name="fade">
+              <div
+                v-if="showLoadingOverlay"
+                class="absolute inset-0 bg-background/40 z-10 pointer-events-none"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
+                aria-label="Loading alerts"
+              />
+            </Transition>
+
+            <!-- Show skeleton on initial load or when changing views -->
+            <template v-if="status === 'idle' || (status === 'pending' && !data) || isChangingView">
+              <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-0">
+                <TableCell v-for="j in columns.length" :key="`skeleton-${i}-${j}`" class="py-2 px-4">
+                  <div class="h-4 bg-muted animate-pulse rounded" />
                 </TableCell>
               </TableRow>
             </template>
-          </template>
-          <!-- Empty state - only show when not changing views, not loading, and truly no data -->
-          <TableRow v-else-if="!isChangingView && status !== 'pending' && (status === 'success' || status === 'error')">
-            <TableCell :colspan="columns.length" class="h-24 text-center">
-              <div role="status" aria-live="polite">
-                <span v-if="displayError">Error loading alerts. Please try again.</span>
-                <span v-else>No alerts found.</span>
-              </div>
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </div>
+            <!-- Show data when available -->
+            <template v-else-if="table.getRowModel().rows?.length">
+              <template v-for="row in table.getRowModel().rows" :key="row.id">
+                <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-0 hover:bg-muted/30 transition-colors duration-150">
+                  <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="py-2 px-4 text-sm font-normal">
+                    <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+                  </TableCell>
+                </TableRow>
+              </template>
+            </template>
+            <!-- Empty state - only show when not changing views, not loading, and truly no data -->
+            <TableRow v-else-if="!isChangingView && status !== 'pending' && (status === 'success' || status === 'error')">
+              <TableCell :colspan="columns.length" class="h-24 text-center">
+                <div role="status" aria-live="polite">
+                  <span v-if="displayError">Error loading alerts. Please try again.</span>
+                  <span v-else>No alerts found.</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </TableFlat>
+      </div>
 
-    <!-- Brandenburg-style pagination -->
-    <div class="flex items-center justify-between h-12 px-4 border-t border-border bg-muted/20">
+      <!-- Pagination footer (integrated, inherits bottom radius) -->
+      <div class="flex items-center justify-between h-12 px-4 border-t border-border bg-muted/20 shrink-0">
       <div class="flex items-center gap-6">
         <!-- Count display -->
         <div class="flex items-baseline gap-2">
@@ -707,8 +698,9 @@ onUnmounted(() => {
           <Icon name="lucide:chevron-right" class="ml-1 h-3.5 w-3.5" />
         </Button>
       </div>
+      </div>
     </div>
-    
+
     <!-- Alert Details Dialog -->
     <AlertDetailsDialog 
       v-model:open="detailsDialogOpen"
@@ -802,20 +794,16 @@ onUnmounted(() => {
       </AlertDialogFooter>
     </AlertDialogContent>
     </AlertDialog>
+
+    <!-- Floating Selection Bar -->
+    <AlertsSelectionBar
+      v-if="!isGrouped"
+      @bulkDelete="handleBulkDelete"
+    />
   </div>
 </template>
 
 <style scoped>
-/* Make the Table component's internal container fill height */
-.table-scroll-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.table-scroll-container > div {
-  height: 100%;
-}
-
 /* Fade transition for loading overlay */
 .fade-enter-active,
 .fade-leave-active {
