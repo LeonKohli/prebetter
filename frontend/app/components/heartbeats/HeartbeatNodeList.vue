@@ -91,7 +91,7 @@
 
 <script setup lang="ts">
 import type { PropType } from 'vue'
-import type { HeartbeatNode } from '@/types/heartbeats'
+import type { HeartbeatNode } from '~~/shared/types/heartbeats'
 import HeartbeatStatusBadge from '@/components/heartbeats/HeartbeatStatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

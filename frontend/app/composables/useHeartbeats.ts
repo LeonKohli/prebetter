@@ -1,12 +1,4 @@
-import { onBeforeUnmount, computed, ref, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
-import type {
-  HeartbeatNode,
-  HeartbeatTreeResponse,
-  HeartbeatStatusSummary,
-  PaginatedHeartbeatTimelineResponse,
-  HeartbeatTimelineItem,
-} from '@/types/heartbeats'
 
 const WELL_KNOWN_STATUSES = ['active', 'inactive', 'offline', 'unknown'] as const
 

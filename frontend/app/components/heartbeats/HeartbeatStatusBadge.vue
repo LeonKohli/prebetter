@@ -15,9 +15,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { HeartbeatStatus } from '@/types/heartbeats'
-
 interface Props {
   status: HeartbeatStatus
 }

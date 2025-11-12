@@ -151,6 +151,7 @@ interface Emits {
   toggleView: []
   startAutoRefresh: []
   stopAutoRefresh: []
+  bulkDelete: []
 }
 
 const emit = defineEmits<Emits>()
