@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { GroupedAlertDetail } from '@/types/alerts'
-
 interface Props {
   classifications: GroupedAlertDetail[]
   sourceIp: string

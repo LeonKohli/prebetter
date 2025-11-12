@@ -1,6 +1,4 @@
-import { provide, inject, type InjectionKey, type ComputedRef, type Ref } from 'vue'
 import type { Table } from '@tanstack/vue-table'
-import type { AlertListItem, FlattenedGroupedAlert, CompactGroupedAlert } from '~/types/alerts'
 import type { useNavigableUrlState } from './useNavigableUrlState'
 
 export interface AlertTableContext {

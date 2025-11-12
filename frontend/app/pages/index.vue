@@ -1,5 +1,5 @@
 <template>
-  <div class="h-[calc(100vh-3rem)] p-2 md:p-4">
+  <div class="h-[calc(100vh-3rem)] px-2 md:px-4 pt-2 md:pt-4">
     <AuthState v-slot="{ loggedIn }">
       <div v-if="loggedIn" class="h-full">
         <AlertsTable />
