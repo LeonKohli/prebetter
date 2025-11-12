@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { AlertListItem, FlattenedGroupedAlert, CompactGroupedAlert } from '@/types/alerts'
-
 const props = defineProps<{
   alert: AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert
   isGrouped: boolean
