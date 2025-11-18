@@ -27,7 +27,7 @@
           <h4 class="text-sm font-semibold mb-2">Quick Select</h4>
           <div class="grid gap-1 overflow-y-auto pr-2 -mr-2 max-h-[370px]">
             <Button
-              v-for="preset in quickPresets"
+              v-for="preset in DATE_PRESETS"
               :key="preset.id"
               :variant="currentPresetId === preset.id ? 'default' : 'ghost'"
               size="sm"
@@ -55,9 +55,9 @@
                   <Label class="text-xs font-medium text-muted-foreground">Start Time</Label>
                   <span class="text-xs text-muted-foreground">{{ startTime }}</span>
                 </div>
-                <Input 
-                  type="time" 
-                  v-model="startTime"
+                <Input
+                  type="time"
+                  v-model.lazy="startTime"
                   class="h-8 text-xs"
                   step="60"
                   lang="de-DE"
@@ -74,7 +74,7 @@
                 </div>
                 <Input
                   type="time"
-                  v-model="endTime"
+                  v-model.lazy="endTime"
                   class="h-8 text-xs"
                   step="60"
                   lang="de-DE"
@@ -103,13 +103,12 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RangeCalendar } from '@/components/ui/range-calendar'
-import { DATE_PRESETS, getPresetRange, getPresetLabel, isRelativePreset, isValidPresetId, type DatePreset, type DatePresetId } from '@/utils/datePresets'
+import { DATE_PRESETS, getPresetLabel, isRelativePreset, isValidPresetId, type DatePreset, type DatePresetId } from '@/utils/datePresets'
 
 
 interface DateRangeValue {
   from: Date | undefined
   to: Date | undefined
-  // Track which preset was selected (optional, for stability)
   presetId?: DatePresetId
 }
 
@@ -164,9 +163,12 @@ const endMinute = ref(DEFAULT_END_MINUTE)
 const startTime = computed({
   get: () => `${startHour.value}:${startMinute.value}`,
   set: (value: string) => {
+    if (!value) return
     const [h, m] = value.split(':')
-    startHour.value = h || DEFAULT_START_HOUR
-    startMinute.value = m || DEFAULT_START_MINUTE
+    if (h && m) {
+      startHour.value = h.padStart(2, '0')
+      startMinute.value = m.padStart(2, '0')
+    }
   }
 })
 
@@ -184,9 +186,12 @@ const endTime = computed({
     return `${endHour.value}:${endMinute.value}`
   },
   set: (value: string) => {
+    if (!value) return
     const [h, m] = value.split(':')
-    endHour.value = h || DEFAULT_END_HOUR
-    endMinute.value = m || DEFAULT_END_MINUTE
+    if (h && m) {
+      endHour.value = h.padStart(2, '0')
+      endMinute.value = m.padStart(2, '0')
+    }
   }
 })
 
@@ -238,24 +243,20 @@ function syncFromModel() {
   const from = props.modelValue?.from
   const to = props.modelValue?.to
 
-  // Update time inputs from model when provided
-  if (props.includeTime && from) {
+  if (from) {
     startHour.value = String(from.getHours()).padStart(2, '0')
     startMinute.value = String(from.getMinutes()).padStart(2, '0')
   }
-  if (props.includeTime && to) {
+  if (to) {
     endHour.value = String(to.getHours()).padStart(2, '0')
     endMinute.value = String(to.getMinutes()).padStart(2, '0')
   }
 
-  // Build calendar values for the picker
   pickerValue.value = {
     start: from ? (props.includeTime ? dateToCalendarDateTime(from) : dateToCalendarDate(from)) : undefined,
     end: to ? (props.includeTime ? dateToCalendarDateTime(to) : dateToCalendarDate(to)) : undefined,
   }
 
-  // Defer turning off the sync guard until the next tick so
-  // any watchers observing pickerValue see the guard as active
   nextTick(() => { isSyncingFromModel.value = false })
 }
 
@@ -280,12 +281,7 @@ function emitFromPicker(clearPreset = true) {
     const base = startVal.toDate(getLocalTimeZone())
     if (props.includeTime) {
       from = new Date(base)
-      const hasTimeInfo = 'hour' in startVal
-      if (hasTimeInfo && startVal instanceof CalendarDateTime) {
-        from.setHours(startVal.hour, startVal.minute || 0, 0, 0)
-      } else {
-        from.setHours(parseInt(startHour.value), parseInt(startMinute.value), 0, 0)
-      }
+      from.setHours(Number(startHour.value), Number(startMinute.value), 0, 0)
     } else {
       from = base
     }
@@ -295,18 +291,13 @@ function emitFromPicker(clearPreset = true) {
     const base = endVal.toDate(getLocalTimeZone())
     if (props.includeTime) {
       to = new Date(base)
-      const hasTimeInfo = 'hour' in endVal
-      if (hasTimeInfo && endVal instanceof CalendarDateTime) {
-        to.setHours(endVal.hour, endVal.minute || 0, 59, 999)
-      } else {
-        to.setHours(parseInt(endHour.value), parseInt(endMinute.value), 59, 999)
-      }
+      to.setHours(Number(endHour.value), Number(endMinute.value), 59, 999)
     } else {
       to = base
     }
   }
 
-  emit('update:modelValue', { from, to, presetId: selectedPresetId.value || undefined })
+  emit('update:modelValue', { from, to, presetId: selectedPresetId.value ?? undefined })
 }
 
 // Emit when user changes calendar selection
@@ -316,12 +307,13 @@ watch(pickerValue, () => {
   }
 }, { deep: true })
 
+// Watch time inputs
 watch([startHour, startMinute, endHour, endMinute], () => {
-  if (props.includeTime && pickerValue.value.start && !isSyncingFromModel.value) {
-    // Do not clear preset when the time inputs were set by a preset
-    emitFromPicker(!isSettingFromPreset.value)
+  if (!isSyncingFromModel.value && !isSettingFromPreset.value && pickerValue.value.start) {
+    emitFromPicker(true)
   }
 })
+
 
 // Reactive current time using VueUse
 const currentTime = useNow()
@@ -348,9 +340,6 @@ function dateToCalendarDate(date: Date): CalendarDate {
   )
 }
 
-const quickPresets = DATE_PRESETS
-
-// Guard to distinguish preset-driven updates from manual ones
 const isSettingFromPreset = ref(false)
 
 function selectPreset(preset: DatePreset) {
@@ -358,23 +347,18 @@ function selectPreset(preset: DatePreset) {
   selectedPresetId.value = preset.id
   isSettingFromPreset.value = true
 
-  if (props.includeTime) {
-    startHour.value = String(from.getHours()).padStart(2, '0')
-    startMinute.value = String(from.getMinutes()).padStart(2, '0')
-    endHour.value = String(to.getHours()).padStart(2, '0')
-    endMinute.value = String(to.getMinutes()).padStart(2, '0')
+  startHour.value = String(from.getHours()).padStart(2, '0')
+  startMinute.value = String(from.getMinutes()).padStart(2, '0')
+  endHour.value = String(to.getHours()).padStart(2, '0')
+  endMinute.value = String(to.getMinutes()).padStart(2, '0')
+
+  pickerValue.value = {
+    start: props.includeTime ? dateToCalendarDateTime(from) : dateToCalendarDate(from),
+    end: props.includeTime ? dateToCalendarDateTime(to) : dateToCalendarDate(to)
   }
 
-  nextTick(() => {
-    pickerValue.value = {
-      start: dateToCalendarDateTime(from),
-      end: dateToCalendarDateTime(to)
-    }
-    emitFromPicker(false)
-    open.value = false
-    nextTick(() => { isSettingFromPreset.value = false })
-  })
+  emitFromPicker(false)
+  open.value = false
+  nextTick(() => { isSettingFromPreset.value = false })
 }
-
-// No complex watchers needed - the computed property handles everything!
 </script>

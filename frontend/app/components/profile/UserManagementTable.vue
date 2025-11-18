@@ -142,7 +142,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(100)
 const selectedUser = ref<UserWithTimestamps | null>(null)
 const userToDelete = ref<UserWithTimestamps | null>(null)
 const userToReset = ref<UserWithTimestamps | null>(null)
