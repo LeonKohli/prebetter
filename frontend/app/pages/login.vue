@@ -2,8 +2,8 @@
   <div class="flex min-h-screen items-center justify-center bg-background px-4">
     <div class="w-full max-w-sm space-y-6">
       <div class="space-y-2 text-center">
-        <span class="text-xs font-medium uppercase tracking-wide text-primary/80">Prebetter</span>
-        <h1 class="text-2xl font-semibold tracking-tight text-foreground">Prebetter Login</h1>
+        <span class="font-display text-xs font-medium uppercase tracking-wider text-primary/80">Prebetter</span>
+        <h1 class="font-display text-3xl font-bold text-foreground">Prebetter Login</h1>
         <p class="text-sm text-muted-foreground">Sign in to access your security dashboard.</p>
       </div>
 

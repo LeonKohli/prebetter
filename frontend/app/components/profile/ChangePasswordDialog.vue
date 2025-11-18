@@ -48,9 +48,11 @@
         </div>
         
         <DialogFooter>
-          <Button type="button" variant="outline" @click="handleCancel" :disabled="isSubmitting">
-            Cancel
-          </Button>
+          <DialogClose as-child>
+            <Button type="button" variant="outline" :disabled="isSubmitting">
+              Cancel
+            </Button>
+          </DialogClose>
           <Button type="submit" :disabled="isSubmitting">
             <Icon v-if="isSubmitting" name="lucide:loader-2" class="mr-2 size-4 animate-spin" />
             {{ isSubmitting ? 'Changing...' : 'Change Password' }}
@@ -82,12 +84,6 @@ const initialValues = {
   currentPassword: '',
   newPassword: '',
   confirmPassword: '',
-}
-
-
-
-const handleCancel = () => {
-  isOpen.value = false
 }
 
 const onSubmit = async (values: any, { setFieldError }: any) => {
@@ -125,4 +121,3 @@ const onSubmit = async (values: any, { setFieldError }: any) => {
   }
 }
 </script>
-
