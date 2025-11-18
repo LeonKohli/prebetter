@@ -312,12 +312,12 @@ const model = computed({
 - Extract reusable logic into composables
 - Create factory functions to reduce repetitive patterns
 
-### Performance Considerations
+### Performance Patterns
 
-- Use `lazy: true` for non-critical data fetches
-- Add `deep: false` to `useFetch` for large datasets
-- Implement conditional fetching with computed properties
-- Use proper key management for caching
+- `lazy: true` for non-critical fetches
+- `deep: false` for large datasets
+- Conditional fetching with computed
+- `shallowRef` for large objects
 
 ## Security Implementation
 
@@ -335,96 +335,52 @@ const model = computed({
 
 ## Performance Optimization
 
-**Currently Implemented:**
+**Implemented:**
 - SSR for initial page load
 - Auto-imports reduce bundle size
 - Tailwind CSS tree-shaking
 
-**Recommended Optimizations:**
-- Add `lazy: true` to non-critical data fetches
-- Implement virtual scrolling for large lists
-- Use `useState` to cache reference data
-- Use `deep: false` for large datasets
-- Implement proper loading states with `status` instead of just `pending`
+**Recommendations:**
+- Virtual scrolling for large lists
+- `useState` to cache reference data
+- Loading states with `status` not just `pending`
 
 ## Testing
 
 **Current Status:**
-- Vitest configured but no tests implemented
+- Vitest configured with 2 test files (date utilities only)
+- **⚠️ Critical Gap**: ~5% coverage - no component, page, or integration tests
 - Type checking via `bun run typecheck`
 
 **Testing Commands:**
 ```bash
-bun run test        # Run tests (when implemented)
+bun run test        # Run tests (currently only 2 utility test files)
 bun run typecheck   # Check TypeScript types
 ```
+
+**Missing Test Coverage:**
+- ❌ All Vue components (30+ components untested)
+- ❌ All pages (login, dashboard, profile, etc.)
+- ❌ Authentication flow
+- ❌ Form validation and submission
+- ❌ API communication
+- ❌ State management
+- ❌ Route navigation
+- **Priority**: HIGH - Add component and integration tests
 
 ## Common Development Tasks
 
 ### Adding a Protected Page
-```vue
-<!-- app/pages/newpage.vue -->
-<template>
-  <div>Protected content here</div>
-</template>
-
-<script setup lang="ts">
-definePageMeta({
-  requiresAuth: true
-})
-
-const { user } = useUserSession()
-const { data } = await useFetch('/api/protected-data')
-</script>
-```
+Use `definePageMeta({ requiresAuth: true })` - see existing pages for examples.
 
 ### Creating a Reusable Component
-```vue
-<script setup lang="ts">
-// Define props with TypeScript
-interface Props {
-  data: YourDataType
-}
-
-const props = defineProps<Props>()
-
-// Use computed properties for derived state
-const displayValue = computed(() => 
-  // Transform data declaratively
-  props.data.someTransformation()
-)
-
-// Group related state
-const uiState = reactive({
-  isExpanded: false,
-  selectedItem: null
-})
-</script>
-```
+- Define props with TypeScript interfaces
+- Use `computed()` for derived state
+- Group related state in `reactive()` objects
+- See `components/` directory for patterns
 
 ### Handling Forms
-```vue
-<script setup lang="ts">
-const form = reactive({
-  email: '',
-  message: ''
-})
-
-const { $fetch } = useNuxtApp()
-
-async function submitForm() {
-  try {
-    await $fetch('/api/contact', {
-      method: 'POST', 
-      body: form
-    })
-    // Success handling
-  } catch (error) {
-    // Error handling
-  }
-}
-</script>
-```
+Use `reactive()` for form data + vee-validate with Zod schemas - see `pages/login.vue` for reference.
 
 ## Important Conventions
 
@@ -434,6 +390,18 @@ async function submitForm() {
 - **API Calls**: Always use proxy routes (`/api/*`)
 - **Type Safety**: TypeScript is enforced throughout
 - **Git Commits**: Never include "Co-Authored-By: Claude"
+
+## Known Issues & Limitations
+
+1. **Minimal Test Coverage** (~5%)
+   - Only date utility functions tested
+   - No component, page, or integration tests
+   - **Priority**: HIGH - Implement component testing
+
+2. **Empty Admin Directory**
+   - `/app/pages/admin/` exists but is empty
+   - Admin features currently in `/profile.vue`
+   - Consider populating or removing directory
 
 ## Critical: Dynamic URL Switching with useFetch
 

@@ -16,9 +16,9 @@
         Reset Password
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <DropdownMenuItem 
+      <DropdownMenuItem
+        class="text-destructive focus:text-destructive focus:bg-destructive/10"
         @click="$emit('delete', user)"
-        class="text-destructive"
         :disabled="user.id === currentUserId || (user.is_superuser && isLastSuperuser)"
       >
         <Icon name="lucide:trash" class="mr-2 size-4" />

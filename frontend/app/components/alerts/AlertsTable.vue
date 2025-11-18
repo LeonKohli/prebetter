@@ -26,7 +26,7 @@ const router = useRouter()
 const route = useRoute()
 const urlState = useNavigableUrlState({
   defaultView: 'grouped',
-  defaultPageSize: 20, // Changed: 20 groups per page instead of 100 alerts
+  defaultPageSize: 100, // Universal default: 100 items per page
   defaultSortBy: 'detected_at',
   defaultSortOrder: 'desc',
   defaultGroupedSortBy: 'total_count',
@@ -659,7 +659,6 @@ onUnmounted(() => {
               <SelectItem value="20">20</SelectItem>
               <SelectItem value="50">50</SelectItem>
               <SelectItem value="100">100</SelectItem>
-              <SelectItem value="200">200</SelectItem>
             </SelectContent>
           </Select>
         </div>

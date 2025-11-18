@@ -138,8 +138,10 @@ MYSQL_PRELUDE_DB=prelude
 MYSQL_PREBETTER_DB=prebetter
 
 # Security (CRITICAL - Change in production!)
-SECRET_KEY=your-secure-random-key-here  # Used for JWT signing
-ACCESS_TOKEN_EXPIRE_MINUTES=480        # Token expiration time (8 hours)
+SECRET_KEY=your-secure-random-key-here  # Used for JWT signing (32+ characters)
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=480        # 8 hours (MUST match frontend session maxAge)
+BCRYPT_ROUNDS=14
 
 # Environment & Logging
 ENVIRONMENT=development  # development|production
@@ -149,7 +151,10 @@ LOG_LEVEL=INFO          # DEBUG|INFO|WARNING|ERROR
 BACKEND_CORS_ORIGINS=["http://localhost:3000"]  # Frontend URL
 ```
 
-**Note**: The codebase uses `SECRET_KEY` for JWT signing (not `JWT_SECRET_KEY`). Ensure a strong, unique value in production.
+**Critical Notes**:
+- The codebase uses `SECRET_KEY` for JWT signing (NOT `JWT_SECRET_KEY`)
+- `ACCESS_TOKEN_EXPIRE_MINUTES=480` (8 hours) MUST match frontend session timeout
+- Ensure a strong, unique `SECRET_KEY` value (32+ characters) in production
 
 ## API Endpoints
 
@@ -182,113 +187,28 @@ BACKEND_CORS_ORIGINS=["http://localhost:3000"]  # Frontend URL
 
 ### Query Construction Pattern
 
-When creating new endpoints that query the database, follow this pattern:
+When creating new endpoints that query the database:
 
-1. Use query builders from `database/query_builders.py` to construct base queries
-2. Apply standard filters using `apply_standard_alert_filters` function
-3. Apply sorting using the `apply_sorting` helper function
-4. Use model conversion utilities from `database/models.py` to transform results
+1. Use query builders from `database/query_builders.py` (e.g., `build_alert_base_query`)
+2. Apply filters using `apply_standard_alert_filters`
+3. Apply sorting using `apply_sorting` helper
+4. Convert results using `database/models.py` converters (e.g., `alert_result_to_list_item`)
 
-Example:
-
-```python
-# Get base query from query builder
-query, models = build_alert_base_query(db)
-
-# Apply standard filters
-query = apply_standard_alert_filters(
-    query=query,
-    severity=severity,
-    classification=classification,
-    start_date=start_date,
-    end_date=end_date,
-    source_ip=source_ip,
-    target_ip=target_ip,
-    analyzer_model=analyzer_model,
-    **models,
-    Impact=Impact,
-    Classification=Classification,
-    DetectTime=DetectTime,
-    Analyzer=Analyzer
-)
-
-# Apply sorting - always use string keys in sort_options
-sort_options = {
-    "detect_time": DetectTime.time,
-    "severity": Impact.severity,
-    "classification": Classification.text,
-    # ... other options
-}
-query = apply_sorting(query, sort_by, sort_order, sort_options, default_column=Alert._ident)
-
-# Process results
-items = [alert_result_to_list_item(result) for result in results]
-```
+See `api/v1/routes/alerts.py` for reference implementations.
 
 ### Creating New Query Builders
 
-When adding new query functionality:
-
-1. Define a function in `database/query_builders.py`
-2. Return both the query and any model aliases used
-3. Document parameters and return values
-
-Example:
-
-```python
-def build_new_query(db: Session, param1: str):
-    """
-    Build a query for some new functionality.
-    
-    Args:
-        db: SQLAlchemy database session
-        param1: Some parameter
-        
-    Returns:
-        SQLAlchemy query object and a dict of model aliases
-    """
-    # Create model aliases
-    some_alias = aliased(SomeModel)
-    
-    # Build query
-    query = (
-        db.query(
-            # ... query fields
-        )
-        .join(...)
-        .outerjoin(...)
-    )
-    
-    return query, {"some_alias": some_alias}
-```
+Pattern for `database/query_builders.py`:
+- Return tuple: `(query, model_dict)` where model_dict contains aliases
+- Document all parameters and return values
+- Use `outerjoin` for optional relationships
 
 ### Adding Model Converters
 
-When adding new model conversion functions to `database/models.py`:
-
-1. Create strongly-typed functions with comprehensive docstrings
-2. Handle edge cases (None values, missing attributes)
-3. Follow naming pattern: `*_to_*` or `build_*`
-
-Example:
-
-```python
-def some_result_to_schema(result: Row) -> SomeSchema:
-    """
-    Convert a query result to a schema object.
-    
-    Args:
-        result: Query result row
-        
-    Returns:
-        Populated schema object
-    """
-    return SomeSchema(
-        id=result.id,
-        name=result.name,
-        # ... other fields
-    )
-```
+Pattern for `database/models.py`:
+- Strong typing: `def result_to_schema(result: Row) -> Schema`
+- Handle None/missing values
+- Naming: `*_to_*` or `build_*`
 
 ## Common Utilities
 
@@ -317,68 +237,31 @@ For operations that process a large number of records, always consider:
 3. For raw data export, use generators like in `generate_csv()` function
 4. Consider adding early exit conditions in processing functions
 
-## Troubleshooting Common Issues
+## Troubleshooting
 
 ### Query Performance
-
-If queries are slow:
-
-1. Check if the correct indexes are being used in MySQL (use `EXPLAIN`)
-2. Consider if the query can be optimized (fewer joins, more specific conditions)
-3. Look at fetching only the specific columns needed
-4. Add appropriate limits to queries:
-   ```python
-   # Limit results to a reasonable number
-   query = query.limit(1000)
-   ```
-5. Use `.distinct()` to eliminate duplicate rows
-6. For grouped data, ensure that group_by clauses come before limit/offset clauses
-7. For exports and large datasets, use `yield_per()` to process in batches:
-   ```python
-   # Process in batches instead of loading all at once
-   results = query.yield_per(1000)
-   ```
+- Use MySQL `EXPLAIN` to check indexes
+- Always add `.limit()` to queries (max 100 for pagination)
+- Use `.distinct()` to eliminate duplicates from joins
+- Use `yield_per(1000)` for exports/large datasets
 
 ### SQLAlchemy Join Conditions
-
-For complex join conditions, remember the pattern:
-
+Use `and_()` for complex joins:
 ```python
-.outerjoin(
-    Entity,
-    and_(
-        Entity._message_ident == Parent._message_ident,
-        Entity._parent_type == "A",
-        # Additional conditions...
-    ),
-)
+.outerjoin(Entity, and_(
+    Entity._message_ident == Parent._message_ident,
+    Entity._parent_type == "A"
+))
 ```
 
 ### Enum Handling
-
-When working with Enum values:
-
-1. Always use string keys in dictionaries, not Enum values:
+⚠️ Always use string keys in sort_options dictionaries, not Enum values:
 ```python
 # Correct
-sort_options = {
-    "detect_time": DetectTime.time,
-    "severity": Impact.severity,
-}
+sort_options = {"detect_time": DetectTime.time}
 
-# Incorrect - will lead to errors
-sort_options = {
-    SortField.DETECT_TIME: DetectTime.time,
-    SortField.SEVERITY: Impact.severity,
-}
-```
-
-2. Convert Enum values to strings when using as keys:
-```python
-# Extract string value from enum
-sort_key = sort_by
-if hasattr(sort_by, "value"):
-    sort_key = sort_by.value
+# Wrong - will fail
+sort_options = {SortField.DETECT_TIME: DetectTime.time}
 ```
 
 ## API Documentation
@@ -405,7 +288,11 @@ if hasattr(sort_by, "value"):
 - **Password Hashing**: Bcrypt with configurable rounds (default 14)
 - **JWT Claims**: Currently only `sub`, `exp`, `iat`, `jti`
 - **CORS**: Restricted by default via `BACKEND_CORS_ORIGINS`
-- **No Rate Limiting**: Consider implementing for login endpoints
+- **⚠️ No Rate Limiting**: Login endpoint vulnerable to brute force
+  - **Priority**: HIGH - Implement before production
+  - **Solution**: Add slowapi library with `@limiter.limit("5/minute")`
+- **⚠️ No Token Revocation**: Tokens valid until expiration, logout only clears frontend
+  - **Mitigation**: 8-hour window + server-side storage reduces risk
 
 ### Operational Details
 - **Timezone Handling**: All datetimes use UTC via `datetime_utils.ensure_timezone()`
@@ -415,42 +302,23 @@ if hasattr(sort_by, "value"):
 
 ### Testing
 - **Test Coverage**: Run `uv run pytest --cov`
+- **Test Suite**: 112 tests across 12 test modules
 - **Test Databases**: Uses separate test databases
 - **Fixtures**: Database sessions provided via `conftest.py`
+- **⚠️ CI/CD Gap**: Tests exist but don't run in GitHub Actions
+  - **Priority**: URGENT - Add pytest step to CI pipeline
 
 ## Common Development Tasks
 
 ### Adding a New Protected Endpoint
-```python
-from fastapi import APIRouter, Depends
-from app.api.v1.routes.auth import get_current_user
-
-router = APIRouter()
-
-@router.get("/protected")
-async def protected_route(current_user = Depends(get_current_user)):
-    return {"user": current_user.username}
-```
+Use `Depends(get_current_user)` dependency - see `api/v1/routes/*.py` for examples.
 
 ### Creating a Query with Filters
 ```python
-from app.database.query_builders import build_alert_base_query
-from app.database.utils import apply_standard_alert_filters
-
 query, models = build_alert_base_query(db)
 query = apply_standard_alert_filters(query=query, severity="high", **models)
 results = query.limit(100).all()
 ```
 
 ### Adding a New User
-```python
-from app.services.users import UserService
-
-user_service = UserService(db)
-new_user = user_service.create(
-    username="newuser",
-    email="user@example.com", 
-    password="securepassword",
-    is_superuser=False
-)
-```
+Use `UserService.create()` - see `api/v1/routes/users.py` for implementation.

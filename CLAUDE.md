@@ -90,7 +90,8 @@ Both components require environment configuration:
 
 ### Backend
 - MySQL connection details
-- JWT secret key
+- `SECRET_KEY` - JWT signing key (32+ characters, NOT JWT_SECRET_KEY)
+- `ACCESS_TOKEN_EXPIRE_MINUTES=480` - 8 hours (synchronized with frontend)
 - CORS origins configuration
 
 ### Frontend
@@ -135,3 +136,38 @@ When backend is running:
 - **Functional Programming**: Preferred over OOP, especially in frontend
 - **Type Safety**: Enforce TypeScript and Python type hints
 - **Component Isolation**: Backend and frontend are independently deployable
+
+## Known Issues & Limitations
+
+### Security
+1. **No Rate Limiting**: Login endpoint (`/api/v1/auth/token`) has no rate limiting
+   - **Risk**: Vulnerable to brute force attacks
+   - **Priority**: HIGH - Implement before production deployment
+   - **Solution**: Add slowapi or similar rate limiting library
+
+2. **No Token Revocation**: JWTs valid until expiration (8 hours)
+   - Logout only clears frontend session
+   - Compromised tokens cannot be invalidated
+   - **Mitigation**: Short 8-hour window + httpOnly storage reduces risk
+
+### Testing & CI/CD
+1. **Tests Not Running in CI**: 112 backend tests exist but don't execute in GitHub Actions
+   - **Priority**: URGENT - Enable pytest in CI pipeline
+   - Current CI only runs Ruff linting
+
+2. **Frontend Testing Gap**: Minimal test coverage (~5%)
+   - Only utility functions tested
+   - No component, page, or integration tests
+   - **Priority**: HIGH - Add component tests
+
+## Session & Token Management
+
+### Synchronized Expiration (8 Hours)
+- **Backend**: `ACCESS_TOKEN_EXPIRE_MINUTES=480` in `.env`
+- **Frontend**: `maxAge: 8 * 60 * 60` (28800 seconds) in `nuxt.config.ts`
+- **Critical**: Both values MUST match for consistent behavior
+
+### Token Security
+- JWT tokens stored server-side only (never exposed to client)
+- Session cookies are httpOnly, secure (production), and encrypted
+- `SECRET_KEY` environment variable used for JWT signing (NOT JWT_SECRET_KEY)

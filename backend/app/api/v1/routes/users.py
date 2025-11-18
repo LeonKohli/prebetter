@@ -53,7 +53,7 @@ async def list_users(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: UserService = Depends(get_user_service),
     page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
+    size: int = Query(100, ge=1, le=100),
 ) -> PaginatedUserResponse:
     """
     List all users with pagination (superusers only).

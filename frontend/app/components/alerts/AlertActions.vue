@@ -91,7 +91,7 @@ async function viewAllForPair() {
         View all from IP pair
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <DropdownMenuItem class="text-destructive focus:text-destructive" @click="handleDelete">
+      <DropdownMenuItem class="text-destructive focus:text-destructive focus:bg-destructive/10" @click="handleDelete">
         <Icon name="lucide:trash-2" class="mr-2 h-4 w-4" />
         {{ deleteLabel }}
       </DropdownMenuItem>

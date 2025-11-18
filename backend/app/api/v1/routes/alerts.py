@@ -74,7 +74,7 @@ class SortOrder(str, Enum):
 @router.get("/", response_model=AlertListResponse)
 async def list_alerts(
     page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    size: int = Query(100, ge=1, le=100, description="Number of items per page"),
     sort_by: SortField = Query(SortField.DETECT_TIME, description="Field to sort by"),
     sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
     severity: Optional[str] = None,
@@ -154,8 +154,10 @@ async def list_alerts(
 @router.get("/groups", response_model=GroupedAlertResponse)
 async def get_grouped_alerts(
     page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(20, ge=1, le=100, description="Number of groups per page (default: 20)"),
-    sort_by: SortField = Query(SortField.TOTAL_COUNT, description="Field to sort by (default: total_count)"),
+    size: int = Query(100, ge=1, le=100, description="Number of groups per page"),
+    sort_by: SortField = Query(
+        SortField.TOTAL_COUNT, description="Field to sort by (default: total_count)"
+    ),
     sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
     severity: Optional[str] = None,
     classification: Optional[str] = None,
@@ -243,7 +245,7 @@ async def get_grouped_alerts(
             "source_ip": source_order_col,
             "target_ip": target_order_col,
             "analyzer": func.max(Analyzer.name),
-            # Keep sort functions aligned with the aggregation strategy used in the builder
+            # Keep sort functions aligned with aggregation strategy in builder
             "alert_id": count_expr,
             "total_count": count_expr,
         }
@@ -262,8 +264,8 @@ async def get_grouped_alerts(
         alerts_query, alert_models = build_grouped_alerts_detail_query(db, pairs)
 
         # Apply ONLY safe filters that don't require additional table joins
-        # Classification and date filters are safe (tables already in the query)
-        # Severity/analyzer filters cause Cartesian products (need Impact/Analyzer joins)
+        # Classification and date filters are safe (already in the query)
+        # Severity/analyzer filters cause Cartesian products (Impact/Analyzer)
         alerts_query = apply_standard_alert_filters(
             query=alerts_query,
             severity=None,  # Skip - causes Cartesian product
@@ -565,7 +567,9 @@ async def delete_alerts(
 
     # Delete by IP pair
     if source_ip and target_ip:
-        result = service.delete_grouped_alerts(source_ip, target_ip, current_user.username)
+        result = service.delete_grouped_alerts(
+            source_ip, target_ip, current_user.username
+        )
 
     # Delete by IDs
     elif ids:
@@ -589,7 +593,9 @@ async def delete_alerts(
             result = service.delete_bulk_alerts(alert_ids, current_user.username)
 
     else:
-        raise HTTPException(status_code=422, detail="Provide either 'ids' or 'source_ip'+'target_ip'")
+        raise HTTPException(
+            status_code=422, detail="Provide either 'ids' or 'source_ip'+'target_ip'"
+        )
 
     return {
         "success": True,
