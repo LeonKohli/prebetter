@@ -9,8 +9,8 @@
           <NuxtLink to="/" class="flex items-center space-x-2 group" aria-label="Home">
             <Icon name="lucide:shield-alert" class="h-5 w-5 text-primary" />
             <div class="flex items-baseline space-x-1">
-              <span class="font-semibold text-sm tracking-tight">Prebetter</span>
-              <span class="text-xs text-muted-foreground hidden lg:inline">IDS</span>
+              <span class="font-display font-semibold text-sm tracking-tight">Prebetter</span>
+              <span class="font-mono text-xs text-muted-foreground hidden lg:inline">IDS</span>
             </div>
           </NuxtLink>
 

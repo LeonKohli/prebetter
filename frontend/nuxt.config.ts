@@ -11,6 +11,7 @@ export default defineNuxtConfig({
     '@nuxtjs/color-mode',
     '@nuxtjs/seo',
     'nuxt-auth-utils',
+    '@nuxt/fonts',
   ],
   runtimeConfig: {
     apiBase: process.env.API_BASE_URL || 'http://localhost:8000',
@@ -39,6 +40,34 @@ export default defineNuxtConfig({
     classSuffix: '',
     preference: 'system', // Default to auto (respects OS theme)
     fallback: 'light'    // Fallback if system preference can't be detected
+  },
+  fonts: {
+    families: [
+      // Display font for headings and emphasis
+      {
+        name: 'Space Grotesk',
+        provider: 'google',
+        weights: [400, 500, 600, 700],
+        subsets: ['latin'],
+        display: 'swap'
+      },
+      // Body font for UI and general content
+      {
+        name: 'Inter',
+        provider: 'google',
+        weights: [400, 500, 600, 700],
+        subsets: ['latin'],
+        display: 'swap'
+      },
+      // Monospace font for data, IPs, hashes, timestamps
+      {
+        name: 'Geist Mono',
+        provider: 'google',
+        weights: [400, 500, 600],
+        subsets: ['latin'],
+        display: 'swap'
+      },
+    ],
   },
   vite: {
     plugins: [

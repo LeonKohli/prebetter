@@ -38,9 +38,11 @@
         </div>
         
         <DialogFooter>
-          <Button type="button" variant="outline" @click="handleCancel" :disabled="isSubmitting">
-            Cancel
-          </Button>
+          <DialogClose as-child>
+            <Button type="button" variant="outline" :disabled="isSubmitting">
+              Cancel
+            </Button>
+          </DialogClose>
           <Button type="submit" :disabled="isSubmitting">
             <Icon v-if="isSubmitting" name="lucide:loader-2" class="mr-2 size-4 animate-spin" />
             {{ isSubmitting ? 'Resetting...' : 'Reset Password' }}
@@ -92,10 +94,6 @@ const generatePassword = (setFieldValue: any) => {
     password += chars.charAt(Math.floor(Math.random() * chars.length))
   }
   setFieldValue('newPassword', password)
-}
-
-const handleCancel = () => {
-  isOpen.value = false
 }
 
 const onSubmit = async (values: any) => {

@@ -17,7 +17,7 @@
     <Card>
       <CardHeader class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <CardTitle class="text-xl font-semibold">{{ decodedAgent }}</CardTitle>
+          <CardTitle class="font-display text-xl font-semibold">{{ decodedAgent }}</CardTitle>
           <CardDescription>Node {{ decodedNode }}</CardDescription>
         </div>
         <HeartbeatStatusBadge v-if="agentInfo" :status="agentInfo.status" />

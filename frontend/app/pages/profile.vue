@@ -1,6 +1,6 @@
 <template>
   <div class="container mx-auto py-6 space-y-6">
-    <h1 class="text-3xl font-bold">Profile</h1>
+    <h1 class="font-display text-3xl font-bold">Profile</h1>
     
     <Card>
       <CardHeader class="flex flex-row items-center justify-between">

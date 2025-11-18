@@ -24,7 +24,7 @@
     <PopoverContent class="w-auto p-0" align="start">
       <div class="flex">
         <div class="flex flex-col p-4 border-r min-w-[180px]">
-          <h4 class="text-sm font-semibold mb-2">Quick Select</h4>
+          <h4 class="font-display text-sm font-semibold mb-2">Quick Select</h4>
           <div class="grid gap-1 overflow-y-auto pr-2 -mr-2 max-h-[370px]">
             <Button
               v-for="preset in DATE_PRESETS"

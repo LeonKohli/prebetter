@@ -2,7 +2,7 @@
   <section aria-labelledby="heartbeat-nodes-heading" class="space-y-4">
     <header class="flex items-center justify-between">
       <div>
-        <h2 id="heartbeat-nodes-heading" class="text-lg font-semibold">Nodes &amp; Agents</h2>
+        <h2 id="heartbeat-nodes-heading" class="font-display text-lg font-semibold">Nodes &amp; Agents</h2>
         <p class="text-sm text-muted-foreground">Click an agent to view its heartbeat timeline and metadata.</p>
       </div>
       <div class="text-sm text-muted-foreground">

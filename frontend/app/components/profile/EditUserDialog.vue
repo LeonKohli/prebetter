@@ -57,9 +57,11 @@
         </div>
         
         <DialogFooter>
-          <Button type="button" variant="outline" @click="handleCancel" :disabled="isSubmitting">
-            Cancel
-          </Button>
+          <DialogClose as-child>
+            <Button type="button" variant="outline" :disabled="isSubmitting">
+              Cancel
+            </Button>
+          </DialogClose>
           <Button type="submit" :disabled="isSubmitting || !meta.dirty">
             <Icon v-if="isSubmitting" name="lucide:loader-2" class="mr-2 size-4 animate-spin" />
             {{ isSubmitting ? 'Saving...' : 'Save changes' }}
@@ -98,10 +100,6 @@ const initialValues = computed(() => ({
   fullName: props.user?.full_name || '',
   isSuperuser: props.user?.is_superuser || false,
 }))
-
-const handleCancel = () => {
-  isOpen.value = false
-}
 
 const onSubmit = async (values: any, { setFieldError }: any) => {
   if (!props.user) return

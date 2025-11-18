@@ -16,18 +16,18 @@
         <!-- Clear selection -->
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           @click="clearSelection"
-          class="h-8 w-8 p-0 shrink-0"
+          class="size-8 shrink-0 p-0"
           aria-label="Clear selection"
         >
-          <Icon name="lucide:x" class="h-4 w-4" />
+          <Icon name="lucide:x" class="size-4" />
         </Button>
 
         <!-- Selection indicator -->
         <div class="flex items-center gap-2 shrink-0">
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
-            <Icon name="lucide:check-square" class="h-4 w-4 text-primary" />
+            <Icon name="lucide:check-square" class="size-4 text-primary" />
           </div>
           <div class="flex flex-col">
             <span class="text-sm font-semibold leading-none">
@@ -53,7 +53,7 @@
             disabled
             title="Export feature coming soon"
           >
-            <Icon name="lucide:download" class="mr-2 h-3.5 w-3.5" />
+            <Icon name="lucide:download" class="mr-2 size-4" />
             Export
           </Button>
 
@@ -65,7 +65,7 @@
             class="h-8 px-3 text-xs font-medium"
             :disabled="pending"
           >
-            <Icon name="lucide:trash-2" class="mr-2 h-3.5 w-3.5" />
+            <Icon name="lucide:trash-2" class="mr-2 size-4" />
             Delete
           </Button>
         </div>

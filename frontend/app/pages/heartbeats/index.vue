@@ -2,7 +2,7 @@
   <div class="p-4 md:p-6 space-y-6">
     <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Heartbeat Monitor</h1>
+        <h1 class="font-display text-2xl font-semibold">Heartbeat Monitor</h1>
         <p class="text-sm text-muted-foreground max-w-2xl">
           Monitor analyzer heartbeats across every node. Use the filters to locate agents that are late or offline and drill into their detailed timeline.
         </p>

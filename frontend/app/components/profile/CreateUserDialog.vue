@@ -72,9 +72,11 @@
         </div>
         
         <DialogFooter>
-          <Button type="button" variant="outline" @click="handleCancel(resetForm)" :disabled="isSubmitting">
-            Cancel
-          </Button>
+          <DialogClose as-child>
+            <Button type="button" variant="outline" @click="handleCancel(resetForm)" :disabled="isSubmitting">
+              Cancel
+            </Button>
+          </DialogClose>
           <Button type="submit" :disabled="isSubmitting">
             <Icon v-if="isSubmitting" name="lucide:loader-2" class="mr-2 size-4 animate-spin" />
             {{ isSubmitting ? 'Creating...' : 'Create User' }}
@@ -110,9 +112,8 @@ const initialValues = {
 }
 
 
-const handleCancel = (resetForm: any) => {
+const handleCancel = (resetForm: () => void) => {
   resetForm()
-  isOpen.value = false
 }
 
 const onSubmit = async (values: any, { resetForm, setFieldError }: any) => {
