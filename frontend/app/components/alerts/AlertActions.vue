@@ -75,29 +75,35 @@ async function viewAllForPair() {
 <template>
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
-      <Button variant="ghost" class="h-8 w-8 p-0">
+      <Button
+        variant="ghost"
+        size="icon"
+        class="size-8 p-0 text-muted-foreground hover:text-foreground"
+        aria-label="Open actions menu"
+      >
+        <Icon name="lucide:more-horizontal" class="size-4" />
         <span class="sr-only">Open menu</span>
-        <Icon name="lucide:more-horizontal" class="h-4 w-4" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end">
       <DropdownMenuLabel>Actions</DropdownMenuLabel>
+      <DropdownMenuSeparator />
       <DropdownMenuItem v-if="!isGrouped" @click="handleViewDetails">
-        <Icon name="lucide:file-text" class="mr-2 h-4 w-4" />
+        <Icon name="lucide:file-text" class="mr-2 size-4" />
         View details
       </DropdownMenuItem>
       <DropdownMenuItem @click="viewAllForPair">
-        <Icon name="lucide:list" class="mr-2 h-4 w-4" />
+        <Icon name="lucide:list" class="mr-2 size-4" />
         View all from IP pair
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem class="text-destructive focus:text-destructive focus:bg-destructive/10" @click="handleDelete">
-        <Icon name="lucide:trash-2" class="mr-2 h-4 w-4" />
+        <Icon name="lucide:trash-2" class="mr-2 size-4" />
         {{ deleteLabel }}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem @click="copyId">
-        <Icon name="lucide:copy" class="mr-2 h-4 w-4" />
+        <Icon name="lucide:copy" class="mr-2 size-4" />
         Copy {{ isGrouped ? 'IP pair' : 'alert ID' }}
       </DropdownMenuItem>
     </DropdownMenuContent>

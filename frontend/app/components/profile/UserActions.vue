@@ -1,12 +1,19 @@
 <template>
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
-      <Button variant="ghost" size="sm" class="size-8 p-0">
+      <Button
+        variant="ghost"
+        size="icon"
+        class="size-8 p-0 text-muted-foreground hover:text-foreground"
+        aria-label="Open actions menu"
+      >
         <Icon name="lucide:more-horizontal" class="size-4" />
         <span class="sr-only">Open menu</span>
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end">
+      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+      <DropdownMenuSeparator />
       <DropdownMenuItem @click="$emit('edit', user)">
         <Icon name="lucide:edit" class="mr-2 size-4" />
         Edit
