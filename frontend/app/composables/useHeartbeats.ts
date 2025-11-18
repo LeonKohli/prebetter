@@ -143,7 +143,7 @@ export function useHeartbeatStatus(options: HeartbeatStatusOptions = {}) {
 export function useHeartbeatTimeline(options: HeartbeatTimelineOptions = {}) {
   const hours = ref(options.hours ?? 24)
   const page = ref(1)
-  const pageSize = ref(options.pageSize ?? 25)
+  const pageSize = ref(options.pageSize ?? 100)
 
   const fetchKey = computed(() => `heartbeat-timeline-${hours.value}-${page.value}-${pageSize.value}`)
   const fetchQuery = computed(() => ({
