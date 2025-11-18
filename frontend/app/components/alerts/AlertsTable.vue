@@ -613,91 +613,17 @@ onUnmounted(() => {
         </TableFlat>
       </div>
 
-      <!-- Pagination footer (integrated, inherits bottom radius) -->
-      <div class="flex items-center justify-between h-12 px-4 border-t border-border bg-muted/20 shrink-0">
-      <div class="flex items-center gap-6">
-        <!-- Count display -->
-        <div class="flex items-baseline gap-2">
-          <template v-if="isGrouped">
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-sm font-semibold text-foreground">{{ tableTotals.rows }}</span>
-              <span class="text-xs text-muted-foreground">groups</span>
-            </div>
-            <span class="text-muted-foreground/40">•</span>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-sm font-semibold text-foreground">{{ tableTotals.alerts }}</span>
-              <span class="text-xs text-muted-foreground">total alerts</span>
-            </div>
-          </template>
-          <template v-else>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-sm font-semibold text-foreground">{{ tableTotals.rows }}</span>
-              <span class="text-xs text-muted-foreground">showing</span>
-            </div>
-            <span class="text-muted-foreground/40">•</span>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-sm font-semibold text-foreground">{{ tableTotals.total.toLocaleString() }}</span>
-              <span class="text-xs text-muted-foreground">total</span>
-            </div>
-          </template>
-        </div>
-
-        <!-- Page size selector -->
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-muted-foreground">Per page</span>
-          <Select
-            :model-value="urlState.pageSize.value.toString()"
-            @update:model-value="(value) => {
-              urlState.pageSize.value = Number(value)
-            }"
-          >
-            <SelectTrigger class="h-8 w-[70px] text-xs border-border">
-              <SelectValue placeholder="100" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="20">20</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      
-      <div class="flex items-center space-x-2">
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="urlState.page.value === 1 || pending"
-          @click="() => {
-            urlState.page.value = Math.max(1, urlState.page.value - 1)
-          }"
-          class="h-8 px-3 text-xs font-medium border-border hover:bg-background disabled:opacity-50 transition-all"
-        >
-          <Icon name="lucide:chevron-left" class="mr-1 h-3.5 w-3.5" />
-          Previous
-        </Button>
-        
-        <div class="flex items-center gap-1">
-          <span class="text-sm">
-            Page {{ urlState.page.value }} of {{ paginationInfo.pages || 1 }}
-          </span>
-        </div>
-        
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="urlState.page.value >= paginationInfo.pages || pending"
-          @click="() => {
-            urlState.page.value = Math.min(paginationInfo.pages, urlState.page.value + 1)
-          }"
-          class="h-8 px-3 text-xs font-medium border-border hover:bg-background disabled:opacity-50 transition-all"
-        >
-          Next
-          <Icon name="lucide:chevron-right" class="ml-1 h-3.5 w-3.5" />
-        </Button>
-      </div>
-      </div>
+      <AlertsTableFooter
+        class="shrink-0"
+        :is-grouped="isGrouped"
+        :totals="tableTotals"
+        :pagination="paginationInfo"
+        :current-page="urlState.page.value"
+        :page-size="urlState.pageSize.value"
+        :pending="pending"
+        @update:page="(page) => { urlState.page.value = page }"
+        @update:page-size="(size) => { urlState.pageSize.value = size }"
+      />
     </div>
 
     <!-- Alert Details Dialog -->

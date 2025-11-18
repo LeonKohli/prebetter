@@ -2,12 +2,12 @@
   <section aria-labelledby="heartbeat-summary-heading" class="space-y-2">
     <div class="flex items-center justify-between gap-2">
       <div>
-        <h2 id="heartbeat-summary-heading" class="text-lg font-semibold">Heartbeat Overview</h2>
+        <h2 id="heartbeat-summary-heading" class="font-display text-lg font-semibold">Heartbeat Overview</h2>
         <p class="text-sm text-muted-foreground">
           Snapshot of connected nodes and analyzer agents.
         </p>
       </div>
-      <div class="text-xs text-muted-foreground whitespace-nowrap" data-allow-mismatch="children">
+      <div class="font-mono text-xs text-muted-foreground whitespace-nowrap" data-allow-mismatch="children">
         <span v-if="lastUpdated">Updated {{ formatTimestamp(lastUpdated, { style: 'short', showTimezone: true }) }}</span>
       </div>
     </div>
@@ -16,14 +16,14 @@
       <Card>
         <CardHeader class="space-y-1">
           <CardTitle class="text-sm font-medium text-muted-foreground">Total Nodes</CardTitle>
-          <div class="text-3xl font-semibold">{{ totalNodes }}</div>
+          <div class="font-mono text-3xl font-semibold tabular-nums">{{ totalNodes }}</div>
         </CardHeader>
       </Card>
 
       <Card>
         <CardHeader class="space-y-1">
           <CardTitle class="text-sm font-medium text-muted-foreground">Total Agents</CardTitle>
-          <div class="text-3xl font-semibold">{{ totalAgents }}</div>
+          <div class="font-mono text-3xl font-semibold tabular-nums">{{ totalAgents }}</div>
         </CardHeader>
       </Card>
 
@@ -34,7 +34,7 @@
       >
         <CardHeader class="space-y-1">
           <HeartbeatStatusBadge :status="item.status" />
-          <div class="text-2xl font-semibold">{{ item.count }}</div>
+          <div class="font-mono text-2xl font-semibold tabular-nums">{{ item.count }}</div>
         </CardHeader>
       </Card>
     </div>

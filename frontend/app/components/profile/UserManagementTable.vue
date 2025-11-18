@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between">
-      <h3 class="text-lg font-semibold">User Management</h3>
+      <h3 class="font-display text-lg font-semibold">User Management</h3>
       <ProfileCreateUserDialog @create-success="handleUserCreated" />
     </div>
 

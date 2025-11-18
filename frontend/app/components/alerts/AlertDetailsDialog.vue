@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AlertDetail } from '~~/shared/types/alerts'
 import HexAsciiPayload from '@/components/alerts/HexAsciiPayload.vue'
-import { formatTimestamp, formatTimestampLocal } from '@/utils/timestampFormatter'
+import { formatTimestamp } from '@/utils/timestampFormatter'
 
 const props = defineProps<{
   alertId?: string | null
@@ -24,18 +24,21 @@ const dialogOpen = computed({
   set: (value) => emit('update:open', value)
 })
 
-// Fetch alert details when dialog opens
-watch(() => props.alertId, async (newId) => {
-  if (newId && props.open) {
-    await fetchAlertDetails(newId)
-  }
-})
+const hasIpPair = computed(() => Boolean(
+  alertData.value?.source?.address && alertData.value?.target?.address,
+))
 
-watch(dialogOpen, async (isOpen) => {
-  if (isOpen && props.alertId) {
-    await fetchAlertDetails(props.alertId)
-  }
-})
+// Fetch alert details when dialog opens or alert changes
+watch(
+  [() => props.alertId, () => dialogOpen.value],
+  async ([id, isOpen]) => {
+    if (!id || !isOpen) {
+      return
+    }
+    await fetchAlertDetails(id)
+  },
+  { immediate: true },
+)
 
 async function fetchAlertDetails(id: string) {
   loading.value = true
@@ -65,7 +68,6 @@ function copyWithFeedback(key: string, text: string) {
 }
 
 // Timestamp formatting handled by centralized utility
-// Use formatTimestamp for consistent display or formatTimestampLocal to force local timezone
 
 function getSeverityClass(severity?: string): string {
   const severityLower = severity?.toLowerCase()
@@ -139,7 +141,7 @@ function formatHttpLikePayload(raw: string): string {
 
 <template>
   <Dialog v-model:open="dialogOpen">
-    <DialogContent class="w-[min(100vw-2rem,1200px)] sm:max-w-5xl md:max-w-6xl max-h-[85vh] overflow-hidden flex flex-col">
+    <DialogContent class="sm:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] overflow-hidden flex flex-col">
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
           <Icon name="lucide:shield" class="h-5 w-5 text-primary" />
@@ -545,43 +547,50 @@ function formatHttpLikePayload(raw: string): string {
                 </CardHeader>
                 <CardContent>
                   <div v-if="Object.keys(alertData.additional_data).length > 0" class="space-y-2">
-                    <div v-for="(value, key) in alertData.additional_data" :key="key" class="grid grid-cols-[180px_1fr] gap-x-4 gap-y-2 text-sm">
+                    <div
+                      v-for="(value, key) in alertData.additional_data"
+                      :key="key"
+                      class="grid grid-cols-[180px_minmax(0,_1fr)] gap-x-4 gap-y-2 text-sm items-start"
+                    >
                       <span class="font-mono text-muted-foreground break-words">{{ key }}</span>
-                      
-                      <!-- Dual-format payload (readable + original base64) -->
-                      <HexAsciiPayload
-                        v-if="value && typeof value === 'object' && ('readable' in (value as any) || 'original' in (value as any))"
-                        :readable="(value as any).readable"
-                        :original="(value as any).original"
-                        :name="`${String(key)}.bin`"
-                      />
 
-                      <!-- HTTP-like payloads nicely formatted -->
-                      <div v-else-if="typeof value === 'string' && isHttpLikePayload(key, value)" class="relative">
-                        <pre class="rounded border p-3 text-xs overflow-auto max-h-64 leading-relaxed whitespace-pre-wrap pr-10"><code>{{ formatHttpLikePayload(value) }}</code></pre>
-                        <div class="absolute top-2 right-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            class="h-7 px-2"
-                            aria-label="Copy payload"
-                            @click="copyWithFeedback(`payload-${String(key)}`, formatHttpLikePayload(value))"
-                          >
-                            <Icon v-if="copied[`payload-${String(key)}`]" name="lucide:check" class="h-3.5 w-3.5 text-primary" />
-                            <Icon v-else name="lucide:copy" class="h-3.5 w-3.5" />
-                            <span class="sr-only">Copy payload</span>
-                          </Button>
+                      <div class="min-w-0">
+                        <!-- Dual-format payload (readable + original base64) -->
+                        <HexAsciiPayload
+                          v-if="value && typeof value === 'object' && ('readable' in (value as any) || 'original' in (value as any))"
+                          :readable="(value as any).readable"
+                          :original="(value as any).original"
+                          :name="`${String(key)}.bin`"
+                          class="max-w-full"
+                        />
+
+                        <!-- HTTP-like payloads nicely formatted -->
+                        <div v-else-if="typeof value === 'string' && isHttpLikePayload(key, value)" class="relative min-w-0">
+                          <pre class="rounded border p-3 text-xs overflow-auto max-h-64 max-w-full leading-relaxed whitespace-pre-wrap pr-10"><code>{{ formatHttpLikePayload(value) }}</code></pre>
+                          <div class="absolute top-2 right-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              class="h-7 px-2"
+                              aria-label="Copy payload"
+                              @click="copyWithFeedback(`payload-${String(key)}`, formatHttpLikePayload(value))"
+                            >
+                              <Icon v-if="copied[`payload-${String(key)}`]" name="lucide:check" class="h-3.5 w-3.5 text-primary" />
+                              <Icon v-else name="lucide:copy" class="h-3.5 w-3.5" />
+                              <span class="sr-only">Copy payload</span>
+                            </Button>
+                          </div>
                         </div>
+
+                        <!-- Plain strings -->
+                        <span v-else-if="typeof value === 'string'" class="break-words whitespace-pre-wrap block">{{ value }}</span>
+
+                        <!-- Objects pretty-printed -->
+                        <pre v-else-if="typeof value === 'object'" class="rounded border p-3 text-xs overflow-auto max-h-64 max-w-full whitespace-pre"><code>{{ JSON.stringify(value, null, 2) }}</code></pre>
+
+                        <!-- Fallback for other primitive types -->
+                        <span v-else class="break-words block">{{ String(value) }}</span>
                       </div>
-
-                      <!-- Plain strings -->
-                      <span v-else-if="typeof value === 'string'" class="break-words whitespace-pre-wrap">{{ value }}</span>
-
-                      <!-- Objects pretty-printed -->
-                      <pre v-else-if="typeof value === 'object'" class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ JSON.stringify(value, null, 2) }}</code></pre>
-
-                      <!-- Fallback for other primitive types -->
-                      <span v-else class="break-words">{{ String(value) }}</span>
                     </div>
                   </div>
                   <div v-else class="text-sm text-muted-foreground">
@@ -612,21 +621,26 @@ function formatHttpLikePayload(raw: string): string {
         </div>
       </div>
 
-      <DialogFooter class="mt-4 border-t pt-4">
-        <div class="flex items-center justify-between w-full">
-          <Button
-            v-if="alertData?.source?.address && alertData?.target?.address"
-            variant="outline"
-            @click="viewAllFromPair"
-          >
-            <Icon name="lucide:list" class="mr-2 h-4 w-4" />
-            View all from IP pair
-          </Button>
-          <div v-else></div>
-          <Button variant="outline" @click="dialogOpen = false">
+      <DialogFooter
+        :class="[
+          'mt-4 border-t pt-4 gap-2 flex-col sm:flex-row sm:items-center',
+          hasIpPair ? 'sm:justify-between' : 'sm:justify-end',
+        ]"
+      >
+        <Button
+          v-if="hasIpPair"
+          variant="outline"
+          class="w-full sm:w-auto"
+          @click="viewAllFromPair"
+        >
+          <Icon name="lucide:list" class="mr-2 size-4" />
+          View all from IP pair
+        </Button>
+        <DialogClose as-child>
+          <Button variant="outline" class="w-full sm:w-auto">
             Close
           </Button>
-        </div>
+        </DialogClose>
       </DialogFooter>
     </DialogContent>
   </Dialog>
