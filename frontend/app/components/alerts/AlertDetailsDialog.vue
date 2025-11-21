@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { AlertDetail } from '~~/shared/types/alerts'
 import HexAsciiPayload from '@/components/alerts/HexAsciiPayload.vue'
 import { formatTimestamp } from '@/utils/timestampFormatter'
 

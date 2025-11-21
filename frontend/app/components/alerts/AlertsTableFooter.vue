@@ -61,7 +61,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { PaginatedResponse } from '@/shared/types/alerts'
 
 interface TableTotals {
   rows: number
@@ -136,8 +135,8 @@ function updatePage(nextPage: number) {
   }
 }
 
-function handleUpdatePageSize(value: string) {
-  if (props.pending) return
+function handleUpdatePageSize(value: string | number | bigint | Record<string, any> | null) {
+  if (props.pending || !value) return
   const size = Number(value)
   if (!Number.isNaN(size) && size > 0) {
     emit('update:pageSize', size)
