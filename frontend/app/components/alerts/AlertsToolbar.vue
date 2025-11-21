@@ -1,115 +1,115 @@
 <template>
   <div class="flex items-center justify-between pb-2">
     <div class="flex items-center gap-3">
-      <!-- Back to groups when drilled into ungrouped filtered view -->
-      <Button
-        v-if="isDrilldown"
-        variant="ghost"
-        size="sm"
-        class="-ml-1 px-2"
-        aria-label="Back to groups"
-        @click="backToGroups"
-      >
-        <Icon name="lucide:arrow-left" class="mr-1 size-4" />
-        Back to groups
-      </Button>
+        <!-- Back to groups when drilled into ungrouped filtered view -->
+        <Button
+          v-if="isDrilldown"
+          variant="ghost"
+          size="sm"
+          class="-ml-1 px-2"
+          aria-label="Back to groups"
+          @click="backToGroups"
+        >
+          <Icon name="lucide:arrow-left" class="mr-1 size-4" />
+          Back to groups
+        </Button>
       <div class="relative">
-        <Icon name="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input
+          <Icon name="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
           class="h-9 w-72 pl-9 pr-3 border-border bg-background/50 focus:bg-background transition-colors"
-          placeholder="Filter alerts by classification..."
-          :model-value="urlState.filters.value.classification_text || ''"
-          @update:model-value="handleSearchFilter"
+            placeholder="Filter alerts by classification..."
+            :model-value="urlState.filters.value.classification_text || ''"
+            @update:model-value="handleSearchFilter"
+          />
+        </div>
+        
+        <DateRangePicker
+          v-model="dateRange"
+          :includeTime="true"
         />
       </div>
       
-      <DateRangePicker
-        v-model="dateRange"
-        :includeTime="true"
-      />
-    </div>
-    
-    <div class="flex items-center gap-2">
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button
-            variant="outline"
-            size="sm"
-            class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
-          >
-            <Icon 
-              :name="autoRefreshEnabled ? 'lucide:clock' : 'lucide:pause'" 
-              class="mr-2 size-4"
-            />
-            {{ autoRefreshDisplayText }}
-            <Icon name="lucide:chevron-down" class="ml-1 h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Auto-refresh interval</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuRadioGroup
-            :model-value="autoRefreshModel"
-            @update:model-value="handleAutoRefreshChange"
-          >
-            <DropdownMenuRadioItem
-              v-for="option in autoRefreshOptions"
-              :key="option.value"
-              :value="option.value"
-              class="flex items-center"
+      <div class="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="outline"
+              size="sm"
+              class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
             >
-              <Icon :name="option.icon" class="mr-2 size-4" />
-              {{ option.label }}
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      
-      <ClientOnly>
-        <Button
-          variant="outline"
-          size="sm"
-          @click="$emit('toggleView')"
-          class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
-          :disabled="pending"
-        >
-          <Icon v-if="!isGrouped" name="lucide:users" class="mr-2 size-4" />
-          <Icon v-else name="lucide:list" class="mr-2 size-4" />
-          {{ isGrouped ? 'Show Individual' : 'Group by IP' }}
-        </Button>
-        <template #fallback>
+              <Icon 
+                :name="autoRefreshEnabled ? 'lucide:clock' : 'lucide:pause'" 
+                class="mr-2 size-4"
+              />
+              {{ autoRefreshDisplayText }}
+              <Icon name="lucide:chevron-down" class="ml-1 h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Auto-refresh interval</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioGroup
+              :model-value="autoRefreshModel"
+              @update:model-value="handleAutoRefreshChange"
+            >
+              <DropdownMenuRadioItem
+                v-for="option in autoRefreshOptions"
+                :key="option.value"
+                :value="option.value"
+                class="flex items-center"
+              >
+                <Icon :name="option.icon" class="mr-2 size-4" />
+                {{ option.label }}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        
+        <ClientOnly>
           <Button
             variant="outline"
             size="sm"
+            @click="$emit('toggleView')"
             class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
+            :disabled="pending"
           >
             <Icon v-if="!isGrouped" name="lucide:users" class="mr-2 size-4" />
             <Icon v-else name="lucide:list" class="mr-2 size-4" />
             {{ isGrouped ? 'Show Individual' : 'Group by IP' }}
           </Button>
-        </template>
-      </ClientOnly>
-      
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button variant="outline" size="sm" class="h-8 px-3 text-xs font-medium border-border hover:bg-background">
-            <Icon name="lucide:columns" class="mr-2 size-4" />
-            Columns <Icon name="lucide:chevron-down" class="ml-1 h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuCheckboxItem
-            v-for="column in table.getAllColumns().filter((column) => column.getCanHide())"
-            :key="column.id"
-            class="capitalize"
-            :model-value="column.getIsVisible()"
-            @update:model-value="(value) => column.toggleVisibility(!!value)"
-          >
-            {{ column.id }}
-          </DropdownMenuCheckboxItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+          <template #fallback>
+            <Button
+              variant="outline"
+              size="sm"
+              class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
+            >
+              <Icon v-if="!isGrouped" name="lucide:users" class="mr-2 size-4" />
+              <Icon v-else name="lucide:list" class="mr-2 size-4" />
+              {{ isGrouped ? 'Show Individual' : 'Group by IP' }}
+            </Button>
+          </template>
+        </ClientOnly>
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button variant="outline" size="sm" class="h-8 px-3 text-xs font-medium border-border hover:bg-background">
+              <Icon name="lucide:columns" class="mr-2 size-4" />
+              Columns <Icon name="lucide:chevron-down" class="ml-1 h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuCheckboxItem
+              v-for="column in table.getAllColumns().filter((column) => column.getCanHide())"
+              :key="column.id"
+              class="capitalize"
+              :model-value="column.getIsVisible()"
+              @update:model-value="(value) => column.toggleVisibility(!!value)"
+            >
+              {{ column.id }}
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
   </div>
 </template>
 
@@ -150,7 +150,7 @@ async function backToGroups() {
   const newQuery: Record<string, any> = {
     ...route.query,
     view: 'grouped',
-    sort: 'total_count:desc',
+    sort: 'detected_at:desc', // Changed from 'total_count:desc' to match default sort order
     page: '1',
     filter: Object.keys(rest).length > 0 ? JSON.stringify(rest) : undefined,
   }
