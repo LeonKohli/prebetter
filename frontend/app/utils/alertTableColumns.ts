@@ -1,5 +1,4 @@
 import type { ColumnDef } from '@tanstack/vue-table'
-import type { AlertListItem, GroupedAlert, GroupedAlertDetail, TimeInfo, AnalyzerInfo, FlattenedGroupedAlert, CompactGroupedAlert } from '~~/shared/types/alerts'
 import AlertActions from '@/components/alerts/AlertActions.vue'
 import ClassificationBadges from '@/components/alerts/ClassificationBadges.vue'
 import DataTableColumnHeader from '@/components/alerts/DataTableColumnHeader.vue'
