@@ -51,7 +51,7 @@ export function useNavigableUrlState(options: NavigableUrlStateOptions = {}): Na
     pageSize: (options.defaultPageSize || 100) as PageSize,
     sortBy: options.defaultSortBy || 'detected_at',
     sortOrder: (options.defaultSortOrder || 'desc') as SortOrder,
-    groupedSortBy: options.defaultGroupedSortBy || 'total_count',
+    groupedSortBy: options.defaultGroupedSortBy || 'detected_at',
     ungroupedSortBy: options.defaultUngroupedSortBy || 'detected_at',
   } as const
 
@@ -121,6 +121,11 @@ export function useNavigableUrlState(options: NavigableUrlStateOptions = {}): Na
     set: (value) => updateUrl({ view: value }, true) // User changing view
   })
 
+  const getDefaultSortString = () => {
+    const field = view.value === 'grouped' ? defaults.groupedSortBy : defaults.ungroupedSortBy
+    return `${field}:${defaults.sortOrder}`
+  }
+
   const page = computed<number>({
     get: () => Math.max(1, parseInt(String(route.query.page || 1))),
     set: (value) => updateUrl({ page: String(value) }, true) // User changing page
@@ -133,7 +138,7 @@ export function useNavigableUrlState(options: NavigableUrlStateOptions = {}): Na
 
   const sortBy = computed<string>({
     get: () => {
-      const sortValue = route.query.sort as string || `${defaults.sortBy}:${defaults.sortOrder}`
+      const sortValue = route.query.sort as string || getDefaultSortString()
       const [field] = sortValue.split(':')
       return field || defaults.sortBy
     },
@@ -145,7 +150,7 @@ export function useNavigableUrlState(options: NavigableUrlStateOptions = {}): Na
 
   const sortOrder = computed<'asc' | 'desc'>({
     get: () => {
-      const sortValue = route.query.sort as string || `${defaults.sortBy}:${defaults.sortOrder}`
+      const sortValue = route.query.sort as string || getDefaultSortString()
       const [, order] = sortValue.split(':')
       return validateSortOrder(order || defaults.sortOrder)
     },
