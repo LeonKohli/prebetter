@@ -29,7 +29,7 @@ const urlState = useNavigableUrlState({
   defaultPageSize: 100, // Universal default: 100 items per page
   defaultSortBy: 'detected_at',
   defaultSortOrder: 'desc',
-  defaultGroupedSortBy: 'total_count',
+  defaultGroupedSortBy: 'detected_at',
   defaultUngroupedSortBy: 'detected_at'
 })
 
