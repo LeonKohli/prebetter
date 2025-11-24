@@ -13,15 +13,17 @@
           <Icon name="lucide:arrow-left" class="mr-1 size-4" />
           Back to groups
         </Button>
-      <div class="relative">
-          <Icon name="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-          class="h-9 w-72 pl-9 pr-3 border-border bg-background/50 focus:bg-background transition-colors"
-            placeholder="Filter alerts by classification..."
-            :model-value="urlState.filters.value.classification_text || ''"
-            @update:model-value="handleSearchFilter"
-          />
-        </div>
+      <InputGroup class="w-72 h-8">
+        <InputGroupAddon>
+          <Icon name="lucide:search" class="size-4" />
+        </InputGroupAddon>
+        <InputGroupInput
+          class="text-xs"
+          placeholder="Filter alerts by classification..."
+          :model-value="urlState.filters.value.classification_text || ''"
+          @update:model-value="handleSearchFilter"
+        />
+      </InputGroup>
         
         <DateRangePicker
           v-model="dateRange"
@@ -35,7 +37,7 @@
             <Button
               variant="outline"
               size="sm"
-              class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
+              class="h-8 px-3 text-xs font-medium"
             >
               <Icon 
                 :name="autoRefreshEnabled ? 'lucide:clock' : 'lucide:pause'" 
@@ -70,7 +72,7 @@
             variant="outline"
             size="sm"
             @click="$emit('toggleView')"
-            class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
+            class="h-8 px-3 text-xs font-medium"
             :disabled="pending"
           >
             <Icon v-if="!isGrouped" name="lucide:users" class="mr-2 size-4" />
@@ -81,7 +83,7 @@
             <Button
               variant="outline"
               size="sm"
-              class="h-8 px-3 text-xs font-medium border-border hover:bg-background transition-all"
+              class="h-8 px-3 text-xs font-medium"
             >
               <Icon v-if="!isGrouped" name="lucide:users" class="mr-2 size-4" />
               <Icon v-else name="lucide:list" class="mr-2 size-4" />
@@ -92,7 +94,7 @@
         
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
-            <Button variant="outline" size="sm" class="h-8 px-3 text-xs font-medium border-border hover:bg-background">
+            <Button variant="outline" size="sm" class="h-8 px-3 text-xs font-medium">
               <Icon name="lucide:columns" class="mr-2 size-4" />
               Columns <Icon name="lucide:chevron-down" class="ml-1 h-3.5 w-3.5" />
             </Button>
@@ -119,6 +121,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import { useAlertTableContext } from '@/composables/useAlertTableContext'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 
 interface DateRangeValue {
   from: Date | undefined

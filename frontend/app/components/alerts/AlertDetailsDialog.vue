@@ -190,12 +190,12 @@ function formatHttpLikePayload(raw: string): string {
         </div>
 
         <!-- Correlation Description (if present) -->
-        <div v-if="alertData?.correlation_description" class="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-4 py-3 mb-4">
+        <div v-if="alertData?.correlation_description" class="rounded-md bg-accent/50 border border-accent px-4 py-3 mb-4">
           <div class="flex items-start gap-2">
-            <Icon name="lucide:activity" class="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            <Icon name="lucide:activity" class="h-5 w-5 text-accent-foreground shrink-0 mt-0.5" />
             <div class="flex-1 min-w-0">
-              <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">Correlation Analysis</h4>
-              <p class="text-sm text-blue-800 dark:text-blue-200">{{ alertData.correlation_description }}</p>
+              <h4 class="text-sm font-semibold text-accent-foreground mb-1">Correlation Analysis</h4>
+              <p class="text-sm text-accent-foreground/80">{{ alertData.correlation_description }}</p>
             </div>
           </div>
         </div>

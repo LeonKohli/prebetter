@@ -557,14 +557,22 @@ onUnmounted(() => {
 
     <!-- Table + Pagination unified card -->
     <div
-      class="flex-1 min-h-0 mt-2 rounded-lg bg-card shadow-sm overflow-hidden flex flex-col"
+      class="flex-1 min-h-0 mt-2 rounded-lg border overflow-hidden flex flex-col"
     >
       <!-- Table area (scrollable) -->
-      <div class="flex-1 overflow-auto relative">
-        <TableFlat class="table-inner-borders table-zebra" role="table" aria-label="Security alerts table">
+      <div class="flex-1 overflow-auto relative overscroll-none">
+        <TableFlat role="table" aria-label="Security alerts table">
           <TableHeader class="sticky top-0 z-10">
             <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id" class="h-10">
-              <TableHead v-for="header in headerGroup.headers" :key="header.id" class="sticky top-0 z-10 bg-muted py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <TableHead
+                v-for="(header, index) in headerGroup.headers"
+                :key="header.id"
+                :class="[
+                  'bg-muted py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider',
+                  index === 0 ? '' : 'border-r',
+                  index === headerGroup.headers.length - 1 ? '' : ''
+                ]"
+              >
                 <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header" :props="header.getContext()" />
               </TableHead>
             </TableRow>
@@ -584,8 +592,12 @@ onUnmounted(() => {
 
             <!-- Show skeleton on initial load or when changing views -->
             <template v-if="status === 'idle' || (status === 'pending' && !data) || isChangingView">
-              <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-0">
-                <TableCell v-for="j in columns.length" :key="`skeleton-${i}-${j}`" class="py-2 px-4">
+              <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-b border-border/40 hover:bg-muted/50">
+                <TableCell
+                  v-for="(j, index) in columns.length"
+                  :key="`skeleton-${i}-${j}`"
+                  :class="['py-2 px-4', index === 0 ? '' : 'border-r', index === columns.length - 1 ? '' : '']"
+                >
                   <div class="h-4 bg-muted animate-pulse rounded" />
                 </TableCell>
               </TableRow>
@@ -593,8 +605,16 @@ onUnmounted(() => {
             <!-- Show data when available -->
             <template v-else-if="table.getRowModel().rows?.length">
               <template v-for="row in table.getRowModel().rows" :key="row.id">
-                <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-0 hover:bg-muted/30 transition-colors duration-150">
-                  <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="py-2 px-4 text-sm font-normal">
+                <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-b border-border/40 hover:bg-muted/50 transition-colors">
+                  <TableCell
+                    v-for="(cell, index) in row.getVisibleCells()"
+                    :key="cell.id"
+                    :class="[
+                      'py-2 px-4 text-sm font-normal',
+                      index === 0 ? '' : 'border-r',
+                      index === row.getVisibleCells().length - 1 ? '' : ''
+                    ]"
+                  >
                     <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
                   </TableCell>
                 </TableRow>
@@ -633,91 +653,113 @@ onUnmounted(() => {
     />
 
     <AlertDialog v-model:open="deleteDialogOpen">
-    <AlertDialogContent class="w-full max-w-[520px] space-y-6">
-      <AlertDialogHeader class="space-y-3">
-        <div class="flex items-center gap-2 text-destructive">
-          <Icon name="lucide:shield-alert" class="h-5 w-5" aria-hidden="true" />
-          <AlertDialogTitle class="text-base font-semibold">
-            <span class="sr-only">Warning:</span>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle class="flex items-center gap-2">
+            <Icon name="lucide:trash-2" class="h-5 w-5 text-destructive" />
             <template v-if="deleteState?.mode === 'grouped'">
-              Delete grouped alerts
+              Delete Grouped Alerts
             </template>
             <template v-else-if="deleteState?.mode === 'bulk'">
-              Delete selected alerts
+              Delete Selected Alerts
             </template>
             <template v-else>
-              Delete alert
+              Delete Alert
             </template>
           </AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete the alert data from the Prelude database.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <!-- Single Alert Details -->
+        <div v-if="deleteState?.mode === 'single'" class="rounded-lg border bg-muted/50 p-4">
+          <dl class="space-y-3 text-sm">
+            <div class="flex items-start justify-between gap-4">
+              <dt class="text-xs font-medium text-muted-foreground">Alert ID</dt>
+              <dd class="font-mono text-sm">#{{ deleteState.alert.id }}</dd>
+            </div>
+            <div v-if="deleteState.alert.classification_text" class="flex items-start justify-between gap-4">
+              <dt class="text-xs font-medium text-muted-foreground">Classification</dt>
+              <dd class="text-right text-sm break-words max-w-[60%]">
+                {{ deleteState.alert.classification_text }}
+              </dd>
+            </div>
+            <div class="flex items-start justify-between gap-4">
+              <dt class="text-xs font-medium text-muted-foreground">Source</dt>
+              <dd class="font-mono text-xs">{{ deleteState.alert.source_ipv4 || '—' }}</dd>
+            </div>
+            <div class="flex items-start justify-between gap-4">
+              <dt class="text-xs font-medium text-muted-foreground">Target</dt>
+              <dd class="font-mono text-xs">{{ deleteState.alert.target_ipv4 || '—' }}</dd>
+            </div>
+          </dl>
         </div>
-        <AlertDialogDescription class="text-sm leading-relaxed text-muted-foreground">
-          <span class="font-semibold text-destructive">Warning:</span>
-          This action cannot be undone and permanently removes alert data from the Prelude database.
-        </AlertDialogDescription>
-      </AlertDialogHeader>
 
-      <div v-if="deleteState?.mode === 'single'" class="space-y-4 rounded-lg border border-border/70 bg-muted/40 p-4">
-        <dl class="space-y-3 text-sm">
-          <div class="space-y-1">
-            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Alert ID</dt>
-            <dd class="font-mono text-sm">#{{ deleteState.alert.id }}</dd>
+        <!-- Bulk Selection Info -->
+        <div v-else-if="deleteState?.mode === 'bulk'" class="rounded-lg border bg-muted/50 p-4">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+              <Icon name="lucide:layers" class="h-5 w-5 text-destructive" />
+            </div>
+            <div class="flex-1 space-y-1">
+              <p class="text-sm font-medium">
+                {{ deleteState.alerts.length }} alert{{ deleteState.alerts.length === 1 ? '' : 's' }} selected
+              </p>
+              <p class="text-xs text-muted-foreground">
+                All related records will be permanently removed
+              </p>
+            </div>
           </div>
-          <div v-if="deleteState.alert.classification_text" class="space-y-1">
-            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Classification</dt>
-            <dd class="rounded-md bg-muted px-2 py-1 text-xs font-medium leading-snug text-foreground/80 break-words">
-              {{ deleteState.alert.classification_text }}
-            </dd>
-          </div>
-          <div class="space-y-1">
-            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Source → Target</dt>
-            <dd class="font-mono text-xs text-foreground">
-              {{ deleteState.alert.source_ipv4 || '—' }} → {{ deleteState.alert.target_ipv4 || '—' }}
-            </dd>
-          </div>
-        </dl>
-      </div>
+        </div>
 
-      <div v-else-if="deleteState?.mode === 'bulk'" class="space-y-3 rounded-lg border border-border/70 bg-muted/40 p-4 text-sm">
-        <p class="font-medium">{{ deleteState.alerts.length }} alerts selected</p>
-        <p class="text-muted-foreground">
-          All selected alerts and their related records will be erased immediately.
-        </p>
-      </div>
-
-      <div v-else-if="deleteState?.mode === 'grouped'" class="space-y-4 rounded-lg border border-border/70 bg-muted/40 p-4">
-        <dl class="space-y-3 text-sm">
-          <div class="space-y-1">
-            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Source IP</dt>
-            <dd class="font-mono text-xs break-all">{{ deleteState.sourceIp }}</dd>
+        <!-- Grouped Alerts Info -->
+        <div v-else-if="deleteState?.mode === 'grouped'" class="rounded-lg border bg-muted/50 p-4">
+          <div class="space-y-4">
+            <div class="flex items-center gap-3">
+              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Icon name="lucide:network" class="h-5 w-5 text-destructive" />
+              </div>
+              <div class="flex-1 space-y-1">
+                <p class="text-sm font-medium">IP Pair Group</p>
+                <p class="text-xs text-muted-foreground">
+                  {{ deleteState.totalCount }} alert{{ deleteState.totalCount === 1 ? '' : 's' }} affected
+                </p>
+              </div>
+            </div>
+            <dl class="space-y-2 text-sm border-t pt-3">
+              <div class="flex items-center justify-between gap-4">
+                <dt class="text-xs font-medium text-muted-foreground">Source IP</dt>
+                <dd class="font-mono text-xs">{{ deleteState.sourceIp }}</dd>
+              </div>
+              <div class="flex items-center justify-between gap-4">
+                <dt class="text-xs font-medium text-muted-foreground">Target IP</dt>
+                <dd class="font-mono text-xs">{{ deleteState.targetIp }}</dd>
+              </div>
+            </dl>
           </div>
-          <div class="space-y-1">
-            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground/80">Target IP</dt>
-            <dd class="font-mono text-xs break-all">{{ deleteState.targetIp }}</dd>
-          </div>
-          <p class="text-muted-foreground">
-            {{ deleteState.totalCount }} alert{{ deleteState.totalCount === 1 ? '' : 's' }} referencing this IP pair will be removed across all related tables.
-          </p>
-        </dl>
-      </div>
+        </div>
 
-      <p v-if="deleteError" class="text-sm text-destructive">
-        {{ deleteError }}
-      </p>
+        <!-- Error Display -->
+        <div v-if="deleteError" class="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+          <Icon name="lucide:alert-circle" class="h-4 w-4 shrink-0 text-destructive" />
+          <p class="text-sm text-destructive">{{ deleteError }}</p>
+        </div>
 
-      <AlertDialogFooter class="flex items-center justify-between gap-2">
-        <AlertDialogCancel :disabled="deletePending" class="border-border">
-          Cancel
-        </AlertDialogCancel>
-        <AlertDialogAction
-          class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          :disabled="deletePending"
-          @click="confirmDeletion"
-        >
-          <span v-if="deletePending" class="mr-2 inline-flex h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
-          {{ deleteActionLabel }}
-        </AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
+        <AlertDialogFooter>
+          <AlertDialogCancel as-child>
+            <Button variant="outline" :disabled="deletePending">
+              Cancel
+            </Button>
+          </AlertDialogCancel>
+          <AlertDialogAction as-child>
+            <Button variant="destructive" :disabled="deletePending" @click="confirmDeletion">
+              <Icon v-if="deletePending" name="lucide:loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              {{ deleteActionLabel }}
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
     </AlertDialog>
 
     <!-- Floating Selection Bar -->
