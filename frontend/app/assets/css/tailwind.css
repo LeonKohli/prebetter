@@ -15,19 +15,19 @@
   --secondary: oklch(0.9491 0 0);
   --secondary-foreground: oklch(0.2002 0 0);
   --muted: oklch(0.9491 0 0);
-  --muted-foreground: oklch(0.5520 0.0153 285.8863);
+  --muted-foreground: oklch(0.45 0.0153 27.6751);
   --accent: oklch(0.9491 0 0);
   --accent-foreground: oklch(0.2002 0 0);
   --destructive: oklch(0.5481 0.1720 27.6751);
-  --destructive-foreground: oklch(1.0000 0 0);
-  --border: oklch(0.8500 0 0);
-  --input: oklch(0.8500 0 0);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.85 0 0);
+  --input: oklch(0.85 0 0);
   --ring: oklch(0.5481 0.1720 27.6751);
-  --chart-1: oklch(0.5481 0.1720 27.6751);
-  --chart-2: oklch(0.3211 0 0);
-  --chart-3: oklch(0.5103 0 0);
-  --chart-4: oklch(0.6830 0 0);
-  --chart-5: oklch(0.8452 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: oklch(1.0000 0 0);
   --sidebar-foreground: oklch(0.2002 0 0);
   --sidebar-primary: oklch(0.5481 0.1720 27.6751);
@@ -36,10 +36,16 @@
   --sidebar-accent-foreground: oklch(0.2002 0 0);
   --sidebar-border: oklch(0.9491 0 0);
   --sidebar-ring: oklch(0.5481 0.1720 27.6751);
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "Geist Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   --radius: 0.5rem;
+  --shadow-x: 0px;
+  --shadow-y: 1px;
+  --shadow-blur: 2px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.05;
+  --shadow-color: hsl(0, 0%, 0%);
   --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.03);
   --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.03);
   --shadow-sm: 0px 1px 2px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
@@ -59,7 +65,7 @@
   --card-foreground: oklch(0.9310 0 0);
   --popover: oklch(0.2645 0 0);
   --popover-foreground: oklch(0.9310 0 0);
-  --primary: oklch(0.6271 0.1919 27.4078);
+  --primary: oklch(0.58 0.1919 27.4078);
   --primary-foreground: oklch(1.0000 0 0);
   --secondary: oklch(0.2850 0 0);
   --secondary-foreground: oklch(1.0000 0 0);
@@ -67,28 +73,31 @@
   --muted-foreground: oklch(0.7058 0 0);
   --accent: oklch(0.3523 0 0);
   --accent-foreground: oklch(1.0000 0 0);
-  --destructive: oklch(0.5481 0.1720 27.6751);
-  --destructive-foreground: oklch(1.0000 0 0);
-  --border: oklch(0.4500 0 0);
-  --input: oklch(0.4000 0 0);
-  --ring: oklch(0.6271 0.1919 27.4078);
-  --chart-1: oklch(0.7099 0.1826 26.5967);
-  --chart-2: oklch(0.8359 0.1190 220.4000);
-  --chart-3: oklch(0.8914 0.1421 90.4819);
-  --chart-4: oklch(0.8904 0.2042 149.4302);
-  --chart-5: oklch(0.6795 0.2329 310.8500);
+  --destructive: oklch(0.58 0.1919 27.4078);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.35 0 0);
+  --input: oklch(0.35 0 0);
+  --ring: oklch(0.58 0.1919 27.4078);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.2178 0 0);
   --sidebar-foreground: oklch(0.9310 0 0);
-  --sidebar-primary: oklch(0.6271 0.1919 27.4078);
+  --sidebar-primary: oklch(0.58 0.1919 27.4078);
   --sidebar-primary-foreground: oklch(1.0000 0 0);
   --sidebar-accent: oklch(0.2850 0 0);
   --sidebar-accent-foreground: oklch(0.9310 0 0);
   --sidebar-border: oklch(0.3211 0 0);
-  --sidebar-ring: oklch(0.6271 0.1919 27.4078);
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  --sidebar-ring: oklch(0.58 0.1919 27.4078);
   --radius: 0.5rem;
+  --shadow-x: 0px;
+  --shadow-y: 1px;
+  --shadow-blur: 2px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.05;
+  --shadow-color: hsl(0, 0%, 0%);
   --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.03);
   --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.03);
   --shadow-sm: 0px 1px 2px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
@@ -133,9 +142,9 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-display: var(--font-display);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -152,117 +161,23 @@
   --shadow-2xl: var(--shadow-2xl);
 }
 
-@layer components {
-  /* Inner gridlines only (no outer border) */
-  .table-inner-borders {
-    border-collapse: separate; /* we control cell borders individually */
-    border-spacing: 0;         /* remove gaps */
-  }
-
-  /* Draw gridlines on cells, not on the table element */
-  .table-inner-borders :is(th, td) {
-    border-right: 1px solid oklch(from var(--foreground) l c h / 0.15);
-    border-bottom: 1px solid oklch(from var(--foreground) l c h / 0.15);
-  }
-
-  /* Kill the outer right edge */
-  .table-inner-borders tr > :last-child {
-    border-right: 0;
-  }
-
-  /* Kill the outer bottom edge */
-  .table-inner-borders tr:last-child > :is(th, td) {
-    border-bottom: 0;
-  }
-
-  /* Subtle zebra striping for body rows only */
-  .table-zebra tbody tr:nth-child(even) {
-    background-color: oklch(from var(--muted) l c h / 0.4);
-  }
-}
 
 @layer base {
   * {
-    border-color: var(--border);
-    outline-color: oklch(from var(--ring) l c h / 0.5);
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    /* Prevent elastic bounce/overscroll on the entire page */
+    overscroll-behavior: none;
   }
 
   body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: var(--font-sans);
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    @apply bg-background text-foreground;
+    /* Essential for data tables - makes numbers fixed-width for perfect alignment */
     font-variant-numeric: tabular-nums;
-    overscroll-behavior: none;
+    /* Standard font rendering quality improvements */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-  }
-
-  /* Typography scale for security dashboard */
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-display);
-    font-weight: 600;
-    letter-spacing: -0.025em;
-    line-height: 1.2;
-  }
-
-  h1 {
-    font-size: 2.25rem;
-    font-weight: 700;
-    letter-spacing: -0.035em;
-  }
-
-  h2 {
-    font-size: 1.875rem;
-    letter-spacing: -0.03em;
-  }
-
-  h3 {
-    font-size: 1.5rem;
-  }
-
-  h4 {
-    font-size: 1.25rem;
-    font-weight: 500;
-  }
-
-  code, kbd, samp, pre {
-    font-family: var(--font-mono);
-    font-feature-settings: "liga" 1, "calt" 1, "zero" 1;
-  }
-
-  /* Enhanced readability for data tables and monospace content */
-  .font-mono {
-    font-feature-settings: "liga" 1, "calt" 1, "zero" 1;
-    letter-spacing: -0.01em;
-  }
-
-  /* Display font utility */
-  .font-display {
-    font-family: var(--font-display);
-    font-weight: 600;
-    letter-spacing: -0.025em;
-  }
-  
-  /* Disable overscroll bounce on all scrollable elements */
-  * {
-    overscroll-behavior: contain;
-  }
-  
-  /* Ensure the root html element also prevents overscroll */
-  html {
-    overscroll-behavior: none;
-  }
-  
-  /* Keep smooth scrolling but prevent elastic bounce */
-  [data-slot="table-container"],
-  .overflow-auto,
-  .overflow-y-auto,
-  .overflow-x-auto,
-  .overflow-scroll {
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: none;
-    /* Smooth scrolling without bounce */
-    scroll-behavior: smooth;
   }
 }

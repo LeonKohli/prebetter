@@ -104,16 +104,45 @@
     <AlertDialog v-model:open="isDeleteDialogOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete User</AlertDialogTitle>
+          <AlertDialogTitle class="flex items-center gap-2">
+            <Icon name="lucide:trash-2" class="h-5 w-5 text-destructive" />
+            Delete User
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete <strong>{{ userToDelete?.username }}</strong>? 
-            This action cannot be undone.
+            This action cannot be undone. This will permanently delete the user account for <strong>{{ userToDelete?.username }}</strong>.
           </AlertDialogDescription>
         </AlertDialogHeader>
+
+        <div v-if="userToDelete" class="rounded-lg border bg-muted/50 p-4">
+          <dl class="space-y-3 text-sm">
+            <div class="flex items-start justify-between gap-4">
+              <dt class="text-xs font-medium text-muted-foreground">Username</dt>
+              <dd class="font-mono text-sm">{{ userToDelete.username }}</dd>
+            </div>
+            <div class="flex items-start justify-between gap-4">
+              <dt class="text-xs font-medium text-muted-foreground">Email</dt>
+              <dd class="text-sm">{{ userToDelete.email }}</dd>
+            </div>
+            <div v-if="userToDelete.is_superuser" class="flex items-start justify-between gap-4">
+              <dt class="text-xs font-medium text-muted-foreground">Role</dt>
+              <dd class="flex items-center gap-1.5 text-sm">
+                <Icon name="lucide:shield-check" class="h-3.5 w-3.5 text-primary" />
+                Superuser
+              </dd>
+            </div>
+          </dl>
+        </div>
+
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction @click="confirmDelete" class="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-            Delete
+          <AlertDialogCancel as-child>
+            <Button variant="outline">
+              Cancel
+            </Button>
+          </AlertDialogCancel>
+          <AlertDialogAction as-child>
+            <Button variant="destructive" @click="confirmDelete">
+              Delete User
+            </Button>
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
