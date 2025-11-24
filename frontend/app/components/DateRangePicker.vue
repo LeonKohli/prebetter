@@ -3,7 +3,7 @@
     <PopoverTrigger as-child>
       <Button
         variant="outline"
-        class="min-w-[320px] justify-start text-left font-normal h-8 px-3 text-xs border-border hover:bg-background transition-all"
+        class="min-w-[320px] justify-start text-left font-normal h-8 px-3 text-xs"
       >
         <Icon name="lucide:calendar" class="mr-2 h-3.5 w-3.5 flex-shrink-0" />
         <div class="flex items-center gap-2 flex-1">
@@ -45,7 +45,6 @@
             :number-of-months="2"
             locale="de-DE"
             :week-starts-on="1"
-            class="[&_[data-selection-start]:hover]:!bg-primary [&_[data-selection-start]:hover]:!text-primary-foreground [&_[data-selection-end]:hover]:!bg-primary [&_[data-selection-end]:hover]:!text-primary-foreground"
           />
           
           <div v-if="includeTime" class="border-t pt-3 mt-3">
