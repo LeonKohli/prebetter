@@ -59,7 +59,10 @@ def _get_prebetter_pair_table(db: Session):
         return _PAIR_TABLE
     try:
         metadata = MetaData()
-        _PAIR_TABLE = Table("Prebetter_Pair", metadata, autoload_with=db.get_bind())
+        # Use engine for reflection (not connection) - handles test sessions bound to connections
+        bind = db.get_bind()
+        engine = bind.engine if hasattr(bind, "engine") else bind
+        _PAIR_TABLE = Table("Prebetter_Pair", metadata, autoload_with=engine)
         return _PAIR_TABLE
     except Exception:
         _PAIR_TABLE = None

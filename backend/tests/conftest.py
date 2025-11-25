@@ -1,22 +1,31 @@
+"""
+Test fixtures with dual-database transaction rollback isolation.
+
+Both Prelude (IDS data) and Prebetter (users) databases are wrapped in
+transactions that rollback after each test - no real data is ever modified.
+"""
+
 import pytest
 import uuid
 from typing import Generator
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env.test file BEFORE importing app
+# Load .env.test BEFORE importing app
 env_file = Path(__file__).parent.parent / ".env.test"
 load_dotenv(env_file)
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from sqlalchemy import select, delete
 from app.main import app
 from app.models.users import User
 from app.core.security import get_password_hash
+from app.core.config import get_settings
+from app.database.config import get_prebetter_db, get_prelude_db
 
 
-# Global test data
+# Test data
 TEST_USER = {
     "username": "testuser",
     "password": "testpassword",
@@ -25,43 +34,68 @@ TEST_USER = {
 
 TEST_SUPERUSER = {
     "username": "admin",
-    "password": "admin",  # Must match what you have in your initialization (init_db.py)
+    "password": "admin",
     "email": "admin@example.com",
     "full_name": "Admin User",
 }
 
 
-@pytest.fixture
-def client() -> TestClient:
-    """Return a TestClient instance for the FastAPI app."""
-    return TestClient(app)
+# =============================================================================
+# Database Engines and Connections (session-scoped)
+# =============================================================================
+
+@pytest.fixture(scope="session")
+def prebetter_db_engine():
+    """Prebetter database engine - created once per test session."""
+    settings = get_settings()
+    engine = create_engine(settings.PREBETTER_DATABASE_URL, pool_pre_ping=True)
+    yield engine
+    engine.dispose()
 
 
-@pytest.fixture
-def test_db() -> Generator[Session, None, None]:
-    """
-    Provide a SQLAlchemy session with a clean test user database.
-    This fixture cleans up non-admin users before and after each test.
-    """
-    from app.database.config import get_prebetter_db
+@pytest.fixture(scope="session")
+def prelude_db_engine():
+    """Prelude database engine - created once per test session."""
+    settings = get_settings()
+    engine = create_engine(settings.PRELUDE_DATABASE_URL, pool_pre_ping=True)
+    yield engine
+    engine.dispose()
 
-    db = next(get_prebetter_db())
 
-    # Clean up: Remove all users except admin before test
-    db.execute(delete(User).where(User.username != "admin"))
-    db.commit()
+@pytest.fixture(scope="session")
+def prebetter_db_connection(prebetter_db_engine):
+    """Single Prebetter connection reused across all tests."""
+    connection = prebetter_db_engine.connect()
+    yield connection
+    connection.close()
 
-    # Ensure admin exists with correct password and superuser status
-    admin = db.execute(
-        select(User).where(User.username == "admin")
-    ).scalar_one_or_none()
-    if admin:
-        admin.hashed_password = get_password_hash("admin")  # type: ignore[assignment]
-        admin.is_superuser = True  # type: ignore[assignment]
-        db.commit()
-        db.refresh(admin)
-    else:
-        # Optionally, create an admin if not exists (depending on your init logic)
+
+@pytest.fixture(scope="session")
+def prelude_db_connection(prelude_db_engine):
+    """Single Prelude connection reused across all tests."""
+    connection = prelude_db_engine.connect()
+    yield connection
+    connection.close()
+
+
+# =============================================================================
+# Database Sessions with Transaction Rollback (function-scoped)
+# =============================================================================
+
+@pytest.fixture(scope="function")
+def test_db(prebetter_db_connection) -> Generator[Session, None, None]:
+    """Prebetter DB session - sets up users, rolls back after test."""
+    transaction = prebetter_db_connection.begin()
+    session = Session(bind=prebetter_db_connection, join_transaction_mode="create_savepoint")
+
+    def override():
+        yield session
+
+    app.dependency_overrides[get_prebetter_db] = override
+
+    # Setup admin
+    admin = session.query(User).filter(User.username == "admin").first()
+    if not admin:
         admin = User(
             id=str(uuid.uuid4()),
             username=TEST_SUPERUSER["username"],
@@ -70,40 +104,60 @@ def test_db() -> Generator[Session, None, None]:
             hashed_password=get_password_hash(TEST_SUPERUSER["password"]),
             is_superuser=True,
         )
-        db.add(admin)
-        db.commit()
-        db.refresh(admin)
+        session.add(admin)
+    else:
+        admin.hashed_password = get_password_hash(TEST_SUPERUSER["password"])
+        admin.is_superuser = True
+    session.flush()
 
-    # Create the test user
+    # Setup test user
     test_user = User(
         id=str(uuid.uuid4()),
         email=TEST_USER["email"],
         username=TEST_USER["username"],
         hashed_password=get_password_hash(TEST_USER["password"]),
     )
-    db.add(test_user)
-    db.commit()
-    db.refresh(test_user)
+    session.add(test_user)
+    session.flush()
 
-    yield db
+    yield session
 
-    # Clean up after tests: Remove all non-admin users
-    db.execute(delete(User).where(User.username != "admin"))
-    db.commit()
+    session.close()
+    transaction.rollback()
+    app.dependency_overrides.pop(get_prebetter_db, None)
 
-    # Reset admin to original state
-    admin = db.execute(
-        select(User).where(User.username == "admin")
-    ).scalar_one_or_none()
-    if admin:
-        admin.hashed_password = get_password_hash("admin")  # type: ignore[assignment]
-        admin.is_superuser = True  # type: ignore[assignment]
-        db.commit()
+
+@pytest.fixture(scope="function")
+def prelude_test_db(prelude_db_connection) -> Generator[Session, None, None]:
+    """Prelude DB session - any operation (including DELETE) rolls back after test."""
+    transaction = prelude_db_connection.begin()
+    session = Session(bind=prelude_db_connection, join_transaction_mode="create_savepoint")
+
+    def override():
+        yield session
+
+    app.dependency_overrides[get_prelude_db] = override
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    app.dependency_overrides.pop(get_prelude_db, None)
+
+
+# =============================================================================
+# HTTP Client Fixtures
+# =============================================================================
+
+@pytest.fixture
+def client() -> TestClient:
+    """TestClient for the FastAPI app."""
+    return TestClient(app)
 
 
 @pytest.fixture
-def auth_token(client: TestClient, test_db: Session) -> str:
-    """Log in as the test user and return the JWT access token."""
+def auth_token(client: TestClient, test_db: Session, prelude_test_db: Session) -> str:
+    """JWT token for test user. Both DBs isolated via fixture deps."""
     response = client.post(
         "/api/v1/auth/token",
         data={"username": TEST_USER["username"], "password": TEST_USER["password"]},
@@ -114,51 +168,23 @@ def auth_token(client: TestClient, test_db: Session) -> str:
 
 @pytest.fixture
 def auth_client(client: TestClient, auth_token: str) -> TestClient:
-    """Return a TestClient instance with the Authorization header set for a regular user."""
+    """Authenticated TestClient for regular user."""
     client.headers["Authorization"] = f"Bearer {auth_token}"
     return client
 
 
 @pytest.fixture
 def superuser(test_db: Session) -> User:
-    """
-    Ensure a superuser exists in the database and return the user.
-    If the superuser already exists, update its password hash.
-    """
-    db = test_db
-    existing = db.execute(
-        select(User).where(User.username == TEST_SUPERUSER["username"])
-    ).scalar_one_or_none()
-    if existing:
-        existing.hashed_password = get_password_hash(TEST_SUPERUSER["password"])  # type: ignore[assignment]
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    # Create superuser if it does not exist
-    user = User(
-        id=str(uuid.uuid4()),
-        username=TEST_SUPERUSER["username"],
-        email=TEST_SUPERUSER["email"],
-        full_name=TEST_SUPERUSER["full_name"],
-        hashed_password=get_password_hash(TEST_SUPERUSER["password"]),
-        is_superuser=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    """The superuser from test database."""
+    return test_db.query(User).filter(User.username == TEST_SUPERUSER["username"]).one()
 
 
 @pytest.fixture
-def superuser_token(client: TestClient, superuser: User) -> str:
-    """Log in as the superuser and return the JWT access token."""
+def superuser_token(client: TestClient, test_db: Session, prelude_test_db: Session, superuser: User) -> str:
+    """JWT token for superuser. Both DBs isolated via fixture deps."""
     response = client.post(
         "/api/v1/auth/token",
-        data={
-            "username": TEST_SUPERUSER["username"],
-            "password": TEST_SUPERUSER["password"],
-        },
+        data={"username": TEST_SUPERUSER["username"], "password": TEST_SUPERUSER["password"]},
     )
     assert response.status_code == 200, f"Token creation failed: {response.text}"
     return response.json()["access_token"]
@@ -166,6 +192,6 @@ def superuser_token(client: TestClient, superuser: User) -> str:
 
 @pytest.fixture
 def superuser_client(client: TestClient, superuser_token: str) -> TestClient:
-    """Return a TestClient instance with the Authorization header set for a superuser."""
+    """Authenticated TestClient for superuser."""
     client.headers["Authorization"] = f"Bearer {superuser_token}"
     return client
