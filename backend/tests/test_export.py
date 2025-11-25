@@ -190,40 +190,34 @@ def test_export_invalid_alert_ids(auth_client):
     )
 
 
-@pytest.mark.skip(
-    reason="Streaming with yield_per causes incomplete results in TestClient"
-)
 def test_export_specific_alerts(auth_client):
     """Test exporting specific alerts by ID."""
-    # Note: This test is skipped because FastAPI's TestClient doesn't properly
-    # handle streaming responses with SQLAlchemy's yield_per, causing incomplete
-    # results. The functionality works correctly in production with real HTTP clients.
-
     # First get some alert IDs from the alerts endpoint
-    alerts_response = auth_client.get("/api/v1/alerts/?page=1&size=2")
+    alerts_response = auth_client.get("/api/v1/alerts/?page=1&size=5")
     assert alerts_response.status_code == 200
     alerts_data = alerts_response.json()
 
-    if alerts_data["items"]:
-        alert_ids_to_export = [item["id"] for item in alerts_data["items"]]
-        # Test export with specific alert IDs
-        # FastAPI TestClient handles list query parameters correctly
-        params = [("alert_ids", alert_id) for alert_id in alert_ids_to_export]
-        response = auth_client.get("/api/v1/export/alerts/csv", params=params)
-        assert response.status_code == 200
-
-        rows = get_csv_rows(response.content.decode("utf-8"))
-        # Check if the header exists
-        assert len(rows) > 0, "CSV should have at least a header row"
-        exported_ids = {row[0] for row in rows[1:]}  # Alert ID is the first column
-
-        # Verify that all requested alert IDs are present in the export
-        assert all(str(req_id) in exported_ids for req_id in alert_ids_to_export), (
-            f"Not all requested alert IDs ({alert_ids_to_export}) were found in the export ({exported_ids})"
-        )
-
-        # Optionally, verify that ONLY requested alerts are present (if filters work exclusively)
-        # assert len(rows[1:]) == len(alert_ids_to_export), \
-        #     "Export should contain only the specified alert IDs"
-    else:
+    if not alerts_data["items"]:
         pytest.skip("No alerts found to test specific export by ID")
+
+    alert_ids_to_export = [item["id"] for item in alerts_data["items"]]
+
+    # Test export with specific alert IDs
+    params = [("alert_ids", alert_id) for alert_id in alert_ids_to_export]
+    response = auth_client.get("/api/v1/export/alerts/csv", params=params)
+    assert response.status_code == 200
+
+    rows = get_csv_rows(response.content.decode("utf-8"))
+    assert len(rows) > 0, "CSV should have at least a header row"
+
+    exported_ids = {row[0] for row in rows[1:]}  # Alert ID is first column
+
+    # Verify all requested alert IDs are present in the export
+    assert all(
+        str(req_id) in exported_ids for req_id in alert_ids_to_export
+    ), f"Not all requested alert IDs ({alert_ids_to_export}) found in export ({exported_ids})"
+
+    # Verify we got exactly the alerts we requested (no extras)
+    assert len(rows) - 1 == len(alert_ids_to_export), (
+        f"Expected {len(alert_ids_to_export)} data rows, got {len(rows) - 1}"
+    )

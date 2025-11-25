@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+// Strict schemas for create/edit forms
 export const usernameSchema = z
   .string()
   .min(3, 'Username must be at least 3 characters')
@@ -9,15 +10,14 @@ export const emailSchema = z
   .string()
   .email('Invalid email address')
 
-export const passwordSchema = z
-  .string()
-  .min(1, 'Password is required')
-
 export const fullNameSchema = z
   .string()
   .max(100, 'Full name must be less than 100 characters')
   .optional()
   .or(z.literal(''))
+
+// Password schema - no frontend length enforcement, backend handles validation
+export const passwordSchema = z.string()
 
 export const profileEditSchema = z.object({
   username: usernameSchema,
@@ -34,19 +34,20 @@ export const userCreateSchema = userEditSchema.extend({
 })
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
+  currentPassword: passwordSchema,
   newPassword: passwordSchema,
-  confirmPassword: z.string().min(1, 'Please confirm your password'),
+  confirmPassword: passwordSchema,
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
 })
 
 export const resetPasswordSchema = z.object({
-  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  newPassword: passwordSchema,
 })
 
+// Login schema - minimal validation, backend handles actual auth
 export const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
-  password: passwordSchema,
+  username: z.string(),
+  password: z.string(),
 })
