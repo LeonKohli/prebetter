@@ -289,8 +289,7 @@ def test_process_grouped_alerts_details_empty_and_none():
 
 
 def test_process_grouped_alerts_details_max_limit():
-    """Test that processing stops after reaching the internal max limit."""
-    # Create more alerts than the internal limit (currently 1000)
+    """Test that processing stops after reaching max_limit when provided."""
     alerts = []
     for i in range(1005):
         alerts.append(
@@ -307,11 +306,15 @@ def test_process_grouped_alerts_details_max_limit():
             )
         )
 
-    result_map = process_grouped_alerts_details(alerts)
-
-    # Check that the number of processed alerts respects the limit
+    # Test WITH limit - should stop at 1000
+    result_map = process_grouped_alerts_details(alerts, max_limit=1000)
     total_processed = sum(len(details) for details in result_map.values())
     assert total_processed == 1000
+
+    # Test WITHOUT limit - should process all
+    result_map_unlimited = process_grouped_alerts_details(alerts)
+    total_unlimited = sum(len(details) for details in result_map_unlimited.values())
+    assert total_unlimited == 1005
 
 
 # --- Tests for build_analyzer_info ---
