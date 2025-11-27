@@ -16,13 +16,13 @@ export default defineNuxtConfig({
   runtimeConfig: {
     apiBase: process.env.API_BASE_URL || 'http://localhost:8000',
     session: {
-      maxAge: 8 * 60 * 60, // 8 hours
+      maxAge: 7 * 24 * 60 * 60, // 7 days (matches refresh token lifetime)
       password: process.env.NUXT_SESSION_PASSWORD || '',
       cookie: {
         secure: process.env.NODE_ENV === 'production' && !process.env.DISABLE_SECURE_COOKIES,
         httpOnly: true,
-        sameSite: 'lax'
-      }
+        sameSite: 'lax',
+      },
     },
   },
   // Basic SEO site configuration
