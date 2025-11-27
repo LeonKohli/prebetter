@@ -175,19 +175,24 @@ async def get_grouped_alerts(
         need_analyzer = (analyzer_model is not None) or (sort_by == SortField.ANALYZER)
         need_impact = (severity is not None) or (sort_by == SortField.SEVERITY)
 
+        # Pass analyzer_model to query builders so it's applied INSIDE subqueries
+        # This avoids Cartesian products when Analyzer join is needed
         pairs_query, models = build_grouped_alerts_query(
             db,
             include_classification=need_cls,
             include_analyzer=need_analyzer,
             include_impact=need_impact,
+            analyzer_model=analyzer_model,
         )
         count_query, count_models = build_grouped_alerts_count_query(
             db,
             include_classification=need_cls,
             include_analyzer=need_analyzer,
             include_impact=need_impact,
+            analyzer_model=analyzer_model,
         )
 
+        # Don't pass analyzer_model here - it's already applied in query builders
         pairs_query = apply_standard_alert_filters(
             query=pairs_query,
             severity=severity,
@@ -196,7 +201,7 @@ async def get_grouped_alerts(
             end_date=end_date,
             source_ip=source_ip,
             target_ip=target_ip,
-            analyzer_model=analyzer_model,
+            analyzer_model=None,  # Already applied in query builder
             **models,
             Impact=Impact,
             Classification=Classification,
@@ -204,6 +209,7 @@ async def get_grouped_alerts(
             Analyzer=Analyzer,
         )
 
+        # Don't pass analyzer_model here - it's already applied in query builders
         count_query = apply_standard_alert_filters(
             query=count_query,
             severity=severity,
@@ -212,7 +218,7 @@ async def get_grouped_alerts(
             end_date=end_date,
             source_ip=source_ip,
             target_ip=target_ip,
-            analyzer_model=analyzer_model,
+            analyzer_model=None,  # Already applied in query builder
             **count_models,
             Impact=Impact,
             Classification=Classification,
