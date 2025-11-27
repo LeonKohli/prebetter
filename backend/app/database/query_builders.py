@@ -14,12 +14,12 @@ from sqlalchemy import (
     and_,
     literal_column,
     text,
-    case,
     literal,
 )
 from sqlalchemy import Table, MetaData
+from sqlalchemy.exc import NoSuchTableError
 from datetime import datetime
-import logging
+import ipaddress
 
 from ..models.prelude import (
     Alert,
@@ -49,48 +49,52 @@ from .config import (
     get_node_join_conditions,
 )
 
-logger = logging.getLogger(__name__)
+# Cache for reflected Prebetter_Pair table. Reflection occurs once per process.
+_PAIR_TABLE = None
+_PAIR_TABLE_MISSING = False
 
-_PAIR_TABLE = None  # cache for reflected Prebetter_Pair Table
+
+def _build_classification_like_pattern(classification: str) -> str:
+    """Return a LIKE pattern matching existing behavior for classification filters."""
+    return (
+        f"{classification}%" if not classification.startswith("%") else f"%{classification}%"
+    )
+
+# NOTE: These globals are accessed without locks. This is acceptable because:
+# 1. The Table object is immutable once created
+# 2. Python's GIL makes simple assignment atomic
+# 3. Worst case of race condition = redundant reflection (benign)
+# 4. If table is missing, callers raise RuntimeError anyway
+# Restart the app if Prebetter_Pair is added after startup.
 
 
 def _get_prebetter_pair_table(db: Session):
-    """Reflect Prebetter_Pair if present; cache result for this process."""
-    global _PAIR_TABLE
+    """Reflect Prebetter_Pair if present; cache result for this process.
+
+    Returns the reflected Table object, or None if the table doesn't exist.
+    Raises exceptions for actual DB errors (connection issues, etc.).
+
+    Note: Requires app restart if table is created after first check.
+    """
+    global _PAIR_TABLE, _PAIR_TABLE_MISSING
+
     if _PAIR_TABLE is not None:
         return _PAIR_TABLE
-    try:
-        metadata = MetaData()
-        # Use engine for reflection (not connection) - handles test sessions bound to connections
-        bind = db.get_bind()
-        engine = bind.engine if hasattr(bind, "engine") else bind
-        _PAIR_TABLE = Table("Prebetter_Pair", metadata, autoload_with=engine)
-        return _PAIR_TABLE
-    except Exception:
-        _PAIR_TABLE = None
+    if _PAIR_TABLE_MISSING:
         return None
 
+    metadata = MetaData()
+    bind = db.get_bind()
+    engine = bind.engine if hasattr(bind, "engine") else bind
 
-def _canonical_source_join(alert_alias, alias_name: str = "source"):
-    """Return the canonical Source alias (index 0) and join condition."""
-
-    source_alias = aliased(Source, name=alias_name)
-    join_condition = and_(
-        source_alias._message_ident == alert_alias._ident,
-        source_alias._index == 0,
-    )
-    return source_alias, join_condition
-
-
-def _canonical_target_join(alert_alias, alias_name: str = "target"):
-    """Return the canonical Target alias (index 0) and join condition."""
-
-    target_alias = aliased(Target, name=alias_name)
-    join_condition = and_(
-        target_alias._message_ident == alert_alias._ident,
-        target_alias._index == 0,
-    )
-    return target_alias, join_condition
+    try:
+        _PAIR_TABLE = Table("Prebetter_Pair", metadata, autoload_with=engine)
+        return _PAIR_TABLE
+    except NoSuchTableError:
+        # Table doesn't exist - this is expected if accelerator not installed
+        _PAIR_TABLE_MISSING = True
+        return None
+    # Other exceptions (connection errors, etc.) propagate up
 
 
 def build_alert_base_query(db: Session):
@@ -164,195 +168,210 @@ def build_alert_base_query(db: Session):
     return query, {"source_addr": source_addr, "target_addr": target_addr}
 
 
-def build_alert_count_query(db: Session):
-    """Build an optimized count query for alerts."""
-    source_addr = aliased(Address)
-    target_addr = aliased(Address)
+def _apply_grouped_filters(
+    query,
+    pair_table,
+    *,
+    start_date,
+    end_date,
+    source_ip,
+    target_ip,
+    severity,
+    classification,
+    analyzer_model,
+):
+    """Apply common filters for grouped alert queries.
 
-    count_query = (
-        select(func.count(Alert._ident))
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-    )
+    Uses subquery pattern for analyzer filter which is ~26% faster than JOIN
+    because it allows MySQL to use semi-join optimization.
+    """
+    # Date filters
+    if start_date:
+        query = query.where(DetectTime.time >= start_date)
+    if end_date:
+        query = query.where(DetectTime.time <= end_date)
 
-    return count_query, {"source_addr": source_addr, "target_addr": target_addr}
+    # IP filters
+    if source_ip:
+        query = query.where(pair_table.c.source_ip == func.inet_aton(source_ip))
+    if target_ip:
+        query = query.where(pair_table.c.target_ip == func.inet_aton(target_ip))
+
+    # Severity filter - use subquery to avoid Cartesian product
+    if severity:
+        severity_subq = select(Impact._message_ident).where(Impact.severity == severity)
+        query = query.where(pair_table.c._message_ident.in_(severity_subq))
+
+    # Classification filter - use subquery for semi-join optimization
+    if classification:
+        pattern = _build_classification_like_pattern(classification)
+        classification_subq = select(Classification._message_ident).where(
+            Classification.text.like(pattern)
+        )
+        query = query.where(pair_table.c._message_ident.in_(classification_subq))
+
+    # Analyzer filter - use subquery for better performance (semi-join optimization)
+    # This is ~26% faster than JOIN because it eliminates rows early
+    if analyzer_model:
+        analyzer_subq = (
+            select(Analyzer._message_ident)
+            .where(Analyzer._parent_type == "A")
+            .where(Analyzer.name == analyzer_model)
+        )
+        query = query.where(pair_table.c._message_ident.in_(analyzer_subq))
+
+    return query
 
 
 def build_grouped_alerts_query(
     db: Session,
     *,
-    include_classification: bool = False,
-    include_analyzer: bool = False,
-    include_impact: bool = False,
     analyzer_model: Optional[str] = None,
+    severity: Optional[str] = None,
+    classification: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    source_ip: Optional[str] = None,
+    target_ip: Optional[str] = None,
+    sort_by_severity: bool = False,
+    sort_by_classification: bool = False,
+    sort_by_analyzer: bool = False,
 ):
-    """Build a query for alerts grouped by canonical source and target IP.
+    """Build query for alerts grouped by source/target IP pair.
 
-    The query is kept lean by default. Optional joins are added only when
-    required for filters or sorting to avoid row multiplication and expensive
-    aggregates in the hot path.
+    Returns (query, sort_cols) where sort_cols maps sort field names to columns.
 
     Args:
-        analyzer_model: When provided, filters by analyzer model INSIDE the
-            subquery to avoid Cartesian products.
+        sort_by_severity: Include max_severity column for sorting
+        sort_by_classification: Include max_classification column for sorting
+        sort_by_analyzer: Include max_analyzer column for sorting
     """
-
     pair_table = _get_prebetter_pair_table(db)
-    if pair_table is not None:
-        # Sisense optimization: When Analyzer join causes Cartesian product,
-        # use nested subquery: DISTINCT in inner query, COUNT in outer query
-        if include_analyzer:
-            # Inner subquery: DISTINCT first to eliminate Analyzer duplicates
-            inner = (
-                select(
-                    pair_table.c._message_ident,
-                    pair_table.c.source_ip,
-                    pair_table.c.target_ip,
-                    pair_table.c.pair_key,
-                    DetectTime.time,
-                    DetectTime.gmtoff,
-                )
-                .distinct()
-                .select_from(DetectTime)
-                .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
-                .outerjoin(
-                    Analyzer,
-                    and_(
-                        Analyzer._message_ident == DetectTime._message_ident,
-                        Analyzer._parent_type == "A",
-                    ),
-                )
-            )
-            # Apply analyzer filter INSIDE subquery to avoid Cartesian product
-            # Note: Filter by Analyzer.name, not model - name is the unique identifier
-            # (e.g., "snort-eno5"), model is the product type (e.g., "Snort")
-            if analyzer_model:
-                inner = inner.where(Analyzer.name == analyzer_model)
+    if pair_table is None:
+        raise RuntimeError("Prebetter_Pair accelerator missing.")
 
-            if include_impact:
-                inner = inner.add_columns(Impact.severity).outerjoin(
-                    Impact, Impact._message_ident == DetectTime._message_ident
-                )
-            if include_classification:
-                inner = inner.outerjoin(
-                    Classification, Classification._message_ident == DetectTime._message_ident
-                )
+    # Build SELECT columns
+    select_cols = [
+        func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
+        func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
+        func.max(DetectTime.time).label("latest_time"),
+    ]
 
-            deduped = inner.subquery("deduped")
+    query = (
+        select(*select_cols)
+        .select_from(DetectTime)
+        .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
+    )
 
-            # Outer query: Simple COUNT over deduplicated data
-            select_cols = [
-                func.inet_ntoa(deduped.c.source_ip).label("source_ipv4"),
-                func.inet_ntoa(deduped.c.target_ip).label("target_ipv4"),
-                func.max(deduped.c.time).label("latest_time"),
-                func.count().label("total_count"),  # No DISTINCT needed!
-            ]
-            if include_impact:
-                select_cols.append(func.max(deduped.c.severity).label("max_severity"))
+    # Apply common filters (including classification now!)
+    query = _apply_grouped_filters(
+        query,
+        pair_table,
+        start_date=start_date,
+        end_date=end_date,
+        source_ip=source_ip,
+        target_ip=target_ip,
+        severity=severity,
+        classification=classification,
+        analyzer_model=analyzer_model,
+    )
 
-            pairs_query = select(*select_cols).select_from(deduped).group_by(deduped.c.pair_key)
+    # Track which columns we've added for sort_cols dict
+    sort_cols = {
+        "latest_time": literal_column("latest_time"),
+        "source_ip": literal_column("source_ipv4"),
+        "target_ip": literal_column("target_ipv4"),
+        "max_severity": None,
+        "max_classification": None,
+        "max_analyzer": None,
+    }
 
-            return pairs_query, {
-                "pair": pair_table,
-                "source_ip_order_col": func.inet_ntoa(deduped.c.source_ip),
-                "target_ip_order_col": func.inet_ntoa(deduped.c.target_ip),
-                "source_ip_int_col": deduped.c.source_ip,
-                "target_ip_int_col": deduped.c.target_ip,
-            }
+    classification_pattern = (
+        _build_classification_like_pattern(classification) if classification else None
+    )
 
-        # Standard path: No Analyzer, no Cartesian product
-        # No DISTINCT needed - Classification/Impact are 1:1 with alerts
-        select_cols = [
-            func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
-            func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
-            func.max(DetectTime.time).label("latest_time"),
-            func.count(pair_table.c._message_ident).label("total_count"),  # No DISTINCT!
-        ]
-        if include_impact:
-            select_cols.append(func.max(Impact.severity).label("max_severity"))
-
-        pairs_query = (
-            select(*select_cols)
-            .select_from(DetectTime)
-            .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
+    # Add severity column for sorting (uses OUTER JOIN - no Cartesian with subquery filter)
+    if sort_by_severity:
+        query = query.add_columns(func.max(Impact.severity).label("max_severity"))
+        query = query.outerjoin(
+            Impact, Impact._message_ident == DetectTime._message_ident
         )
-        if include_impact:
-            pairs_query = pairs_query.outerjoin(
-                Impact, Impact._message_ident == DetectTime._message_ident
-            )
-        if include_classification:
-            pairs_query = pairs_query.outerjoin(
-                Classification,
-                Classification._message_ident == DetectTime._message_ident,
-            )
+        sort_cols["max_severity"] = literal_column("max_severity")
 
-        pairs_query = pairs_query.group_by(pair_table.c.pair_key)
-
-        return pairs_query, {
-            "pair": pair_table,
-            "source_ip_order_col": func.inet_ntoa(pair_table.c.source_ip),
-            "target_ip_order_col": func.inet_ntoa(pair_table.c.target_ip),
-            "source_ip_int_col": pair_table.c.source_ip,
-            "target_ip_int_col": pair_table.c.target_ip,
-        }
-    else:
-        raise RuntimeError(
-            "Prebetter_Pair accelerator missing. Install it before starting the API."
+    # Add classification column for sorting
+    if sort_by_classification:
+        query = query.add_columns(
+            func.max(Classification.text).label("max_classification")
         )
+        join_condition = Classification._message_ident == DetectTime._message_ident
+        if classification_pattern:
+            join_condition = and_(join_condition, Classification.text.like(classification_pattern))
+        query = query.outerjoin(Classification, join_condition)
+        sort_cols["max_classification"] = literal_column("max_classification")
+
+    # Add analyzer column for sorting
+    if sort_by_analyzer:
+        query = query.add_columns(func.max(Analyzer.name).label("max_analyzer"))
+        join_condition = and_(
+            Analyzer._message_ident == DetectTime._message_ident,
+            Analyzer._parent_type == "A",
+        )
+        if analyzer_model:
+            join_condition = and_(join_condition, Analyzer.name == analyzer_model)
+        query = query.outerjoin(Analyzer, join_condition)
+        sort_cols["max_analyzer"] = literal_column("max_analyzer")
+
+    needs_distinct_count = sort_by_classification or sort_by_analyzer
+    count_column = (
+        func.count(func.distinct(pair_table.c._message_ident))
+        if needs_distinct_count
+        else func.count()
+    )
+
+    query = query.add_columns(count_column.label("total_count"))
+    sort_cols["total_count"] = literal_column("total_count")
+
+    query = query.group_by(pair_table.c.pair_key)
+
+    return query, sort_cols
 
 
 def build_grouped_alerts_count_query(
     db: Session,
     *,
-    include_classification: bool = False,
-    include_analyzer: bool = False,
-    include_impact: bool = False,
     analyzer_model: Optional[str] = None,
+    severity: Optional[str] = None,
+    classification: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    source_ip: Optional[str] = None,
+    target_ip: Optional[str] = None,
 ):
-    """Build a lightweight count query for grouped alerts pagination.
-
-    Optional joins are added only when they are needed for filters.
-
-    Args:
-        analyzer_model: When provided, applies the analyzer filter directly
-            (count query doesn't use subquery, so no Cartesian issue here).
-    """
-
+    """Build count query for grouped alerts pagination."""
     pair_table = _get_prebetter_pair_table(db)
-    if pair_table is not None:
-        count_query = (
-            select(func.count(func.distinct(pair_table.c.pair_key)))
-            .select_from(DetectTime)
-            .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
-        )
-        if include_impact:
-            count_query = count_query.outerjoin(
-                Impact, Impact._message_ident == DetectTime._message_ident
-            )
-        if include_classification:
-            count_query = count_query.outerjoin(
-                Classification,
-                Classification._message_ident == DetectTime._message_ident,
-            )
-        if include_analyzer:
-            count_query = count_query.outerjoin(
-                Analyzer, get_analyzer_join_conditions(DetectTime._message_ident)
-            )
-            # Apply analyzer filter directly in count query
-            # Note: Filter by Analyzer.name, not model
-            if analyzer_model:
-                count_query = count_query.where(Analyzer.name == analyzer_model)
-        return count_query, {
-            "pair": pair_table,
-            "source_ip_int_col": pair_table.c.source_ip,
-            "target_ip_int_col": pair_table.c.target_ip,
-        }
+    if pair_table is None:
+        raise RuntimeError("Prebetter_Pair accelerator missing.")
 
-    # No fallback allowed: enforce accelerator presence
-    else:
-        raise RuntimeError(
-            "Prebetter_Pair accelerator missing. Install it before starting the API."
-        )
+    query = (
+        select(func.count(func.distinct(pair_table.c.pair_key)))
+        .select_from(DetectTime)
+        .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
+    )
+
+    # Apply same filters as main query - ensures consistent counts
+    query = _apply_grouped_filters(
+        query,
+        pair_table,
+        start_date=start_date,
+        end_date=end_date,
+        source_ip=source_ip,
+        target_ip=target_ip,
+        severity=severity,
+        classification=classification,
+        analyzer_model=analyzer_model,
+    )
+
+    return query
 
 
 def build_grouped_alerts_detail_query(db: Session, pairs):
@@ -364,8 +383,6 @@ def build_grouped_alerts_detail_query(db: Session, pairs):
     pair_table = _get_prebetter_pair_table(db)
     if pair_table is not None:
         # Compute pair_key list from provided pairs
-        import ipaddress
-
         def ip_to_int(ip: str) -> int:
             return int(ipaddress.IPv4Address(ip))
 
@@ -730,64 +747,6 @@ def build_alerts_statistics_query(
         "source_ip": source_ip_query,
         "target_ip": target_ip_query,
     }
-
-
-def build_heartbeats_tree_query(db: Session):
-    """Build a query for the tree view of heartbeats."""
-    tree_query = (
-        select(
-            Analyzer.name.label("name"),
-            Analyzer.model.label("model"),
-            Analyzer.version.label("version"),
-            getattr(Analyzer, "class").label("class_"),
-            Node.name.label("node_name"),
-            case(
-                (
-                    Analyzer.ostype.isnot(None),
-                    func.concat(
-                        Analyzer.ostype,
-                        literal(" "),
-                        func.ifnull(Analyzer.osversion, literal("")),
-                    ),
-                ),
-                else_=None,
-            ).label("os"),
-            func.max(AnalyzerTime.time).label("last_heartbeat"),
-            func.max(Heartbeat.heartbeat_interval).label("heartbeat_interval"),
-        )
-        .select_from(Analyzer)
-        .outerjoin(
-            Node,
-            and_(
-                Node._message_ident == Analyzer._message_ident,
-                Node._parent_type == Analyzer._parent_type,
-            ),
-        )
-        .outerjoin(
-            Heartbeat,
-            Heartbeat._ident == Analyzer._message_ident,
-        )
-        .outerjoin(
-            AnalyzerTime,
-            and_(
-                AnalyzerTime._message_ident == Analyzer._message_ident,
-                AnalyzerTime._parent_type == "H",
-            ),
-        )
-        .where(Analyzer._parent_type == "H")
-        .group_by(
-            Analyzer.name,
-            Analyzer.model,
-            Analyzer.version,
-            getattr(Analyzer, "class"),
-            Node.name,
-            Analyzer.ostype,
-            Analyzer.osversion,
-        )
-        .order_by(Node.name, Analyzer.name)
-    )
-
-    return tree_query
 
 
 def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
