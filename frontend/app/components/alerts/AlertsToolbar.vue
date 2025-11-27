@@ -24,11 +24,13 @@
           @update:model-value="handleSearchFilter"
         />
       </InputGroup>
-        
+
         <DateRangePicker
           v-model="dateRange"
           :includeTime="true"
         />
+
+        <AlertsFilterPanel />
       </div>
       
       <div class="flex items-center gap-2">
@@ -120,6 +122,7 @@ import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
 import { useDebounceFn } from '@vueuse/core'
 import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 import DateRangePicker from '@/components/DateRangePicker.vue'
+import AlertsFilterPanel from '@/components/alerts/AlertsFilterPanel.vue'
 import { useAlertTableContext } from '@/composables/useAlertTableContext'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 
