@@ -106,13 +106,7 @@ function isActiveLink(link: (typeof navLinks)[number]) {
 }
 
 const handleLogout = async () => {
-  await $fetch('/api/auth/logout', {
-    method: 'POST',
-  }).catch(() => {
-    // Ignore errors, we'll clear session anyway
-  })
-  
-  await clear()
+  await clear() // Clears both client & server session
   await router.push('/login')
 }
 </script> 
