@@ -10,13 +10,13 @@ declare module '#auth-utils' {
   }
 
   interface UserSession {
-    // Add any custom fields you want to store in the session
     loggedInAt: string
+    tokenExpiresAt: number // Unix timestamp (ms) when access token expires
   }
 
   interface SecureSessionData {
-    // This is where we'll securely store the JWT
     apiToken: string
+    refreshToken: string
   }
 }
 
