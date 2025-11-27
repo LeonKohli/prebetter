@@ -1,37 +1,33 @@
-export default defineNitroPlugin(() => {
-  sessionHooks.hook('fetch', async (session, event) => {
-    if (!session.user || !session.secure?.apiToken) {
-      return
-    }
+const REFRESH_BUFFER_MS = 2 * 60 * 1000 // Refresh 2 min before expiry
 
-    const { apiBase } = useRuntimeConfig()
-    
+export default defineNitroPlugin(() => {
+  // Refresh access token before expiry (nuxt-auth-utils pattern)
+  sessionHooks.hook('fetch', async (session, event) => {
+    if (!session.user || !session.secure?.apiToken) return
+
+    const { refreshToken } = session.secure
+    const needsRefresh = refreshToken && session.tokenExpiresAt
+      && (Date.now() + REFRESH_BUFFER_MS >= session.tokenExpiresAt)
+
+    if (!needsRefresh) return
+
     try {
-      const userInfo = await $fetch<{
-        id: string
-        email: string
-        username: string
-        full_name: string | null
-        is_superuser: boolean
-      }>(`${apiBase}/api/v1/auth/users/me`, {
-        headers: {
-          'Authorization': `Bearer ${session.secure.apiToken}`,
-        },
+      const tokens = await $fetch<{
+        access_token: string
+        refresh_token: string
+        expires_in: number
+      }>(`${useRuntimeConfig().apiBase}/api/v1/auth/refresh`, {
+        method: 'POST',
+        body: { refresh_token: refreshToken },
       })
 
-      session.user = {
-        id: userInfo.id,
-        email: userInfo.email,
-        username: userInfo.username,
-        full_name: userInfo.full_name,
-        is_superuser: userInfo.is_superuser,
-      }
-    } catch (error) {
-      console.error('[Session Fetch Hook Error]', error)
+      session.secure.apiToken = tokens.access_token
+      session.secure.refreshToken = tokens.refresh_token
+      session.tokenExpiresAt = Date.now() + tokens.expires_in * 1000
+      await setUserSession(event, session)
+    } catch {
+      // Refresh failed - clear session, middleware redirects to login
+      await clearUserSession(event)
     }
-  })
-
-  sessionHooks.hook('clear', async (session, event) => {
-    console.log('User session cleared')
   })
 })

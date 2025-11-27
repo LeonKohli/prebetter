@@ -2,60 +2,41 @@ import { joinURL } from 'ufo'
 import type { H3Event } from 'h3'
 import type { FetchError } from 'ofetch'
 
-interface SessionData {
-  secure?: {
-    apiToken?: string
-  }
-}
-
+/**
+ * API Proxy - forwards requests to the backend API.
+ * Token refresh handled by session fetch hook in server/plugins/session.ts.
+ */
 export default defineEventHandler(async (event: H3Event) => {
-  // Preserve trailing slashes: /api/users/ -> users/
   const path = event.path.replace(/^\/api\//, '')
-  
-  const proxyUrl = useRuntimeConfig().apiBase as string
-  const target = joinURL(proxyUrl, 'api/v1', path)
-  
-  const session = await getUserSession(event) as SessionData
-  
-  const apiToken = session.secure?.apiToken
-  
+  const target = joinURL(useRuntimeConfig().apiBase as string, 'api/v1', path)
+
+  const session = await getUserSession(event)
   const headers: Record<string, string> = {
-    'accept': getRequestHeader(event, 'accept') || 'application/json',
+    accept: getRequestHeader(event, 'accept') || 'application/json',
   }
-  
-  if (apiToken) {
-    headers['Authorization'] = `Bearer ${apiToken}`
+  if (session.secure?.apiToken) {
+    headers['Authorization'] = `Bearer ${session.secure.apiToken}`
   }
 
   try {
-    const fetchOptions: Record<string, unknown> = {
-      method: event.method,
-      headers,
-    }
-
+    const fetchOptions: Record<string, unknown> = { method: event.method, headers }
     if (event.method !== 'GET' && event.method !== 'HEAD') {
       const body = await readBody(event)
-      if (body !== undefined) {
-        fetchOptions.body = body
-      }
+      if (body !== undefined) fetchOptions.body = body
     }
-
-    const response = await $fetch.raw(target, fetchOptions)
-    return response._data
+    return (await $fetch.raw(target, fetchOptions))._data
   } catch (error) {
     const fetchError = error as FetchError
-    
-    if (fetchError.statusCode) {
-      throw createError({
-        statusCode: fetchError.statusCode,
-        statusMessage: fetchError.statusMessage,
-        data: fetchError.data,
-      })
+
+    // 401 = clear session, client middleware handles redirect on next navigation
+    if (fetchError.statusCode === 401) {
+      await clearUserSession(event)
     }
-    
+
     throw createError({
-      statusCode: 502,
-      statusMessage: 'Bad Gateway',
+      statusCode: fetchError.statusCode || 502,
+      statusMessage: fetchError.statusMessage || 'Bad Gateway',
+      data: fetchError.data,
     })
   }
 })
