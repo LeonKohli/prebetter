@@ -170,102 +170,54 @@ async def get_grouped_alerts(
 ) -> GroupedAlertResponse:
     """Retrieve alerts grouped by source and target IP addresses."""
     try:
-        # Include optional joins only when needed for sorting or filtering
-        need_cls = (classification is not None) or (sort_by == SortField.CLASSIFICATION)
-        need_analyzer = (analyzer_model is not None) or (sort_by == SortField.ANALYZER)
-        need_impact = (severity is not None) or (sort_by == SortField.SEVERITY)
-
-        # Pass analyzer_model to query builders so it's applied INSIDE subqueries
-        # This avoids Cartesian products when Analyzer join is needed
-        pairs_query, models = build_grouped_alerts_query(
+        # Build queries with all filters
+        pairs_query, sort_cols = build_grouped_alerts_query(
             db,
-            include_classification=need_cls,
-            include_analyzer=need_analyzer,
-            include_impact=need_impact,
             analyzer_model=analyzer_model,
-        )
-        count_query, count_models = build_grouped_alerts_count_query(
-            db,
-            include_classification=need_cls,
-            include_analyzer=need_analyzer,
-            include_impact=need_impact,
-            analyzer_model=analyzer_model,
-        )
-
-        # Don't pass analyzer_model here - it's already applied in query builders
-        pairs_query = apply_standard_alert_filters(
-            query=pairs_query,
             severity=severity,
             classification=classification,
             start_date=start_date,
             end_date=end_date,
             source_ip=source_ip,
             target_ip=target_ip,
-            analyzer_model=None,  # Already applied in query builder
-            **models,
-            Impact=Impact,
-            Classification=Classification,
-            DetectTime=DetectTime,
-            Analyzer=Analyzer,
+            sort_by_severity=sort_by == SortField.SEVERITY,
+            sort_by_classification=sort_by == SortField.CLASSIFICATION,
+            sort_by_analyzer=sort_by == SortField.ANALYZER,
         )
 
-        # Don't pass analyzer_model here - it's already applied in query builders
-        count_query = apply_standard_alert_filters(
-            query=count_query,
+        count_query = build_grouped_alerts_count_query(
+            db,
+            analyzer_model=analyzer_model,
             severity=severity,
             classification=classification,
             start_date=start_date,
             end_date=end_date,
             source_ip=source_ip,
             target_ip=target_ip,
-            analyzer_model=None,  # Already applied in query builder
-            **count_models,
-            Impact=Impact,
-            Classification=Classification,
-            DetectTime=DetectTime,
-            Analyzer=Analyzer,
         )
 
-        # Determine order-by columns for source/target depending on path
-        source_order_col = (
-            models["source_addr"].address
-            if "source_addr" in models
-            else models.get("source_ip_order_col")
-        )
-        target_order_col = (
-            models["target_addr"].address
-            if "target_addr" in models
-            else models.get("target_ip_order_col")
-        )
-
-        count_expr = (
-            func.count(func.distinct(DetectTime._message_ident))
-            if need_cls
-            else func.count()
-        )
-
-        sort_option = {
-            "detect_time": func.max(DetectTime.time),
-            "severity": func.max(Impact.severity),
-            "classification": func.max(Classification.text),
-            "source_ip": source_order_col,
-            "target_ip": target_order_col,
-            "analyzer": func.max(Analyzer.name),
-            # Keep sort functions aligned with aggregation strategy in builder
-            "alert_id": count_expr,
-            "total_count": count_expr,
+        # Sorting - map sort field to column from query builder
+        sort_map = {
+            "detect_time": sort_cols["latest_time"],
+            "severity": sort_cols.get("max_severity"),
+            "classification": sort_cols.get("max_classification"),
+            "analyzer": sort_cols.get("max_analyzer"),
+            "source_ip": sort_cols["source_ip"],
+            "target_ip": sort_cols["target_ip"],
+            "total_count": sort_cols["total_count"],
+            "alert_id": sort_cols["total_count"],
         }
+        order_col = sort_map.get(sort_by.value)
+        if order_col is not None:
+            pairs_query = pairs_query.order_by(
+                order_col.desc() if sort_order == SortOrder.DESC else order_col
+            )
 
-        order_by_clause = sort_option.get(sort_by.value)
-        if order_by_clause is not None:
-            if sort_order == SortOrder.DESC:
-                order_by_clause = order_by_clause.desc()
-            pairs_query = pairs_query.order_by(order_by_clause)
-
+        # Execute
         total_pairs = db.scalar(count_query) or 0
-
-        pairs_query = pairs_query.offset((page - 1) * size).limit(size)
-        pairs = db.execute(pairs_query).all()
+        pairs = db.execute(
+            pairs_query.offset((page - 1) * size).limit(size)
+        ).all()
 
         alerts_query, alert_models = build_grouped_alerts_detail_query(db, pairs)
 
