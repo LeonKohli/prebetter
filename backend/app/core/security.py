@@ -11,6 +11,7 @@ settings = get_settings()
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_DAYS = settings.REFRESH_TOKEN_EXPIRE_DAYS
 
 # Bcrypt with configured rounds (default 14) and automatic algorithm upgrades
 pwd_context = CryptContext(
@@ -31,7 +32,7 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token with expiration."""
+    """Create a short-lived JWT access token."""
     to_encode = data.copy()
     now = get_current_time()
     if expires_delta:
@@ -42,7 +43,25 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         {
             "exp": expire,
             "iat": now,
-            "jti": f"{now.timestamp()}-{uuid.uuid4()}",  # Prevents replay attacks
+            "jti": f"{now.timestamp()}-{uuid.uuid4()}",
+            "type": "access",
+        }
+    )
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def create_refresh_token(data: dict) -> str:
+    """Create a long-lived JWT refresh token."""
+    to_encode = data.copy()
+    now = get_current_time()
+    expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update(
+        {
+            "exp": expire,
+            "iat": now,
+            "jti": f"refresh-{now.timestamp()}-{uuid.uuid4()}",
+            "type": "refresh",
         }
     )
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
