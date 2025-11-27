@@ -444,6 +444,8 @@ export const useAlertTableColumns = () => {
     start_date: "start_date",
     end_date: "end_date",
     date_preset: "date_preset",
+    severity: "severity",
+    analyzer_model: "analyzer_model",
   } as const satisfies Record<string, string>;
 
   return {
