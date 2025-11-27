@@ -31,10 +31,12 @@ prebetter/
 ## Key Architectural Decisions
 
 1. **Authentication Flow**:
-   - Backend issues JWT tokens
+   - Backend issues JWT access + refresh token pairs
    - Frontend stores tokens in secure server-side sessions only
    - All API calls proxied through frontend server for token injection
-   - 8-hour session timeout synchronized between systems
+   - Access tokens: 15 minutes (auto-refreshed transparently)
+   - Refresh tokens: 7 days (session lifetime)
+   - Nuxt session: 7 days (synchronized with refresh token)
 
 2. **Security First**:
    - No client-side token storage
@@ -73,10 +75,11 @@ For detailed implementation guidance, refer to:
 ### Authentication Flow
 1. User submits credentials to frontend
 2. Frontend calls backend `/api/v1/auth/token`
-3. Backend validates and returns JWT token
-4. Frontend stores token in secure server-side session
-5. All subsequent API calls include token via server proxy
-6. Session expires after 8 hours (synchronized)
+3. Backend validates and returns access + refresh token pair
+4. Frontend stores both tokens in secure server-side session
+5. All subsequent API calls include access token via server proxy
+6. Access token auto-refreshes 2 minutes before expiry (transparent to user)
+7. Session expires after 7 days (or when refresh token expires)
 
 ### Error Handling
 - Backend returns standardized error responses
@@ -91,13 +94,14 @@ Both components require environment configuration:
 ### Backend
 - MySQL connection details
 - `SECRET_KEY` - JWT signing key (32+ characters, NOT JWT_SECRET_KEY)
-- `ACCESS_TOKEN_EXPIRE_MINUTES=480` - 8 hours (synchronized with frontend)
+- `ACCESS_TOKEN_EXPIRE_MINUTES=15` - Short-lived access tokens
+- `REFRESH_TOKEN_EXPIRE_DAYS=7` - Long-lived refresh tokens
 - CORS origins configuration
 
 ### Frontend
 - Session password (32+ characters)
 - API base URL configuration
-- Session timeout: 8 hours (synchronized with backend)
+- Session maxAge: 7 days (synchronized with refresh token lifetime)
 
 See component-specific CLAUDE.md files for detailed configuration.
 
@@ -106,7 +110,8 @@ See component-specific CLAUDE.md files for detailed configuration.
 - **Zero client-side token exposure**: All JWT tokens stored server-side only
 - **Session-based authentication**: Using encrypted httpOnly cookies
 - **API proxy pattern**: Frontend server handles all backend communication
-- **Synchronized expiration**: 8-hour timeout on both systems
+- **Token type enforcement**: Refresh tokens rejected on protected endpoints
+- **Automatic token refresh**: Access tokens refreshed transparently before expiry
 - **Automatic security responses**: 401 errors trigger immediate session cleanup
 
 ## Development Workflow
@@ -145,10 +150,11 @@ When backend is running:
    - **Priority**: HIGH - Implement before production deployment
    - **Solution**: Add slowapi or similar rate limiting library
 
-2. **No Token Revocation**: JWTs valid until expiration (8 hours)
+2. **No Token Revocation**: JWTs valid until expiration
+   - Access tokens: 15 minutes (short window limits damage)
+   - Refresh tokens: 7 days (server-side only, never exposed to client)
    - Logout only clears frontend session
-   - Compromised tokens cannot be invalidated
-   - **Mitigation**: Short 8-hour window + httpOnly storage reduces risk
+   - **Mitigation**: Short access token window + server-side storage reduces risk
 
 ### Testing & CI/CD
 1. **Tests Not Running in CI**: 112 backend tests exist but don't execute in GitHub Actions
@@ -162,10 +168,16 @@ When backend is running:
 
 ## Session & Token Management
 
-### Synchronized Expiration (8 Hours)
-- **Backend**: `ACCESS_TOKEN_EXPIRE_MINUTES=480` in `.env`
-- **Frontend**: `maxAge: 8 * 60 * 60` (28800 seconds) in `nuxt.config.ts`
-- **Critical**: Both values MUST match for consistent behavior
+### Token Lifetimes
+- **Access Token**: `ACCESS_TOKEN_EXPIRE_MINUTES=15` (short-lived, auto-refreshed)
+- **Refresh Token**: `REFRESH_TOKEN_EXPIRE_DAYS=7` (session lifetime)
+- **Nuxt Session**: `maxAge: 7 * 24 * 60 * 60` (7 days, matches refresh token)
+
+### Token Type Enforcement
+- Access tokens have `"type": "access"` claim
+- Refresh tokens have `"type": "refresh"` claim
+- `get_current_user` rejects tokens without `type: access`
+- `/refresh` endpoint rejects tokens without `type: refresh`
 
 ### Token Security
 - JWT tokens stored server-side only (never exposed to client)
