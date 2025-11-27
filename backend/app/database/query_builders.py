@@ -5,6 +5,8 @@ These functions build reusable SQLAlchemy queries that can be used throughout
 the application to reduce code duplication and maintain consistent query patterns.
 """
 
+from typing import Optional
+
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import (
     select,
@@ -182,12 +184,17 @@ def build_grouped_alerts_query(
     include_classification: bool = False,
     include_analyzer: bool = False,
     include_impact: bool = False,
+    analyzer_model: Optional[str] = None,
 ):
     """Build a query for alerts grouped by canonical source and target IP.
 
     The query is kept lean by default. Optional joins are added only when
     required for filters or sorting to avoid row multiplication and expensive
     aggregates in the hot path.
+
+    Args:
+        analyzer_model: When provided, filters by analyzer model INSIDE the
+            subquery to avoid Cartesian products.
     """
 
     pair_table = _get_prebetter_pair_table(db)
@@ -216,6 +223,12 @@ def build_grouped_alerts_query(
                     ),
                 )
             )
+            # Apply analyzer filter INSIDE subquery to avoid Cartesian product
+            # Note: Filter by Analyzer.name, not model - name is the unique identifier
+            # (e.g., "snort-eno5"), model is the product type (e.g., "Snort")
+            if analyzer_model:
+                inner = inner.where(Analyzer.name == analyzer_model)
+
             if include_impact:
                 inner = inner.add_columns(Impact.severity).outerjoin(
                     Impact, Impact._message_ident == DetectTime._message_ident
@@ -294,10 +307,15 @@ def build_grouped_alerts_count_query(
     include_classification: bool = False,
     include_analyzer: bool = False,
     include_impact: bool = False,
+    analyzer_model: Optional[str] = None,
 ):
     """Build a lightweight count query for grouped alerts pagination.
 
     Optional joins are added only when they are needed for filters.
+
+    Args:
+        analyzer_model: When provided, applies the analyzer filter directly
+            (count query doesn't use subquery, so no Cartesian issue here).
     """
 
     pair_table = _get_prebetter_pair_table(db)
@@ -320,6 +338,10 @@ def build_grouped_alerts_count_query(
             count_query = count_query.outerjoin(
                 Analyzer, get_analyzer_join_conditions(DetectTime._message_ident)
             )
+            # Apply analyzer filter directly in count query
+            # Note: Filter by Analyzer.name, not model
+            if analyzer_model:
+                count_query = count_query.where(Analyzer.name == analyzer_model)
         return count_query, {
             "pair": pair_table,
             "source_ip_int_col": pair_table.c.source_ip,

@@ -173,7 +173,8 @@ def apply_standard_alert_filters(
         query = query.where(Impact.severity == severity)
 
     if analyzer_model and Analyzer:
-        query = query.where(Analyzer.model == analyzer_model)
+        # Filter by Analyzer.name, not model - name is unique (e.g., "snort-eno5")
+        query = query.where(Analyzer.name == analyzer_model)
 
     # Apply partial match filters last (least selective)
     if classification and Classification:
