@@ -140,7 +140,8 @@ MYSQL_PREBETTER_DB=prebetter
 # Security (CRITICAL - Change in production!)
 SECRET_KEY=your-secure-random-key-here  # Used for JWT signing (32+ characters)
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=480        # 8 hours (MUST match frontend session maxAge)
+ACCESS_TOKEN_EXPIRE_MINUTES=15         # Short-lived access tokens (auto-refreshed)
+REFRESH_TOKEN_EXPIRE_DAYS=7            # Long-lived refresh tokens (session lifetime)
 BCRYPT_ROUNDS=14
 
 # Environment & Logging
@@ -153,13 +154,14 @@ BACKEND_CORS_ORIGINS=["http://localhost:3000"]  # Frontend URL
 
 **Critical Notes**:
 - The codebase uses `SECRET_KEY` for JWT signing (NOT `JWT_SECRET_KEY`)
-- `ACCESS_TOKEN_EXPIRE_MINUTES=480` (8 hours) MUST match frontend session timeout
+- `REFRESH_TOKEN_EXPIRE_DAYS=7` MUST match frontend session maxAge (7 days)
 - Ensure a strong, unique `SECRET_KEY` value (32+ characters) in production
 
 ## API Endpoints
 
 ### Authentication
-- `POST /api/v1/auth/token` - Login (returns JWT access token)
+- `POST /api/v1/auth/token` - Login (returns access + refresh token pair)
+- `POST /api/v1/auth/refresh` - Exchange refresh token for new access token
 - `GET /api/v1/auth/users/me` - Get current user info
 
 ### Core Endpoints (Protected)
@@ -178,10 +180,11 @@ BACKEND_CORS_ORIGINS=["http://localhost:3000"]  # Frontend URL
 ## Authentication Flow
 
 1. **Login**: `POST /api/v1/auth/token` with username/password
-2. **Token Response**: `{"access_token": "...", "token_type": "bearer"}`
-3. **Protected Requests**: Include header `Authorization: Bearer <token>`
-4. **Token Validation**: Automatic via `get_current_user` dependency
-5. **Expiration**: Tokens expire after 8 hours (no refresh mechanism)
+2. **Token Response**: `{"access_token": "...", "refresh_token": "...", "expires_in": 900, "token_type": "bearer"}`
+3. **Protected Requests**: Include header `Authorization: Bearer <access_token>`
+4. **Token Validation**: `get_current_user` validates token AND enforces `type: access`
+5. **Token Refresh**: `POST /api/v1/auth/refresh` with refresh token to get new access token
+6. **Expiration**: Access tokens expire after 15 minutes, refresh tokens after 7 days
 
 ## Code Patterns
 
