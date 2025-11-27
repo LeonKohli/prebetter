@@ -79,7 +79,13 @@ class UserInDB(UserInDBBase):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
+    expires_in: int  # Seconds until access token expires
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 class TokenData(BaseModel):
