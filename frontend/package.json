@@ -10,6 +10,7 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test": "vitest",
+    "test:e2e": "vitest --config test/e2e/vitest.config.ts",
     "typecheck": "nuxt prepare && vue-tsc -b --noEmit"
   },
   "dependencies": {
@@ -43,11 +44,13 @@
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.72",
+    "@nuxt/test-utils": "^3.20.1",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vitest/ui": "^3.2.4",
     "@vue/test-utils": "^2.4.6",
     "culori": "^4.0.2",
     "happy-dom": "20.0.0",
+    "playwright-core": "^1.57.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",
     "vue-tsc": "^3.1.3"

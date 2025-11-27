@@ -7,12 +7,14 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     globals: true,
-    setupFiles: ['./test/setup.ts']
+    setupFiles: ['./test/setup.ts'],
+    include: ['test/**/*.test.ts'],
+    exclude: ['test/e2e/**'],
   },
   resolve: {
     alias: {
       '@': resolve(__dirname, './app'),
-      '~': resolve(__dirname, './app')
-    }
-  }
+      '~': resolve(__dirname, './app'),
+    },
+  },
 })
