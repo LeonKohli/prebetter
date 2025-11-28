@@ -15,7 +15,7 @@ prelude_engine = create_engine(
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
-    echo=settings.ENVIRONMENT == "development" and settings.LOG_LEVEL == "DEBUG",
+    echo=False,  # SQL logging disabled - too noisy even in debug
     future=True,  # Enable 2.0 style behaviors
 )
 
@@ -25,9 +25,10 @@ prebetter_engine = create_engine(
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
-    echo=settings.ENVIRONMENT == "development" and settings.LOG_LEVEL == "DEBUG",
+    echo=False,  # SQL logging disabled - too noisy even in debug
     future=True,  # Enable 2.0 style behaviors
 )
+
 
 # Force UTC timezone on every connection using SQLAlchemy events
 @event.listens_for(prelude_engine, "connect")
@@ -37,12 +38,14 @@ def set_prelude_timezone(dbapi_conn, connection_record):
     cursor.execute("SET time_zone='+00:00'")
     cursor.close()
 
+
 @event.listens_for(prebetter_engine, "connect")
 def set_prebetter_timezone(dbapi_conn, connection_record):
     """Set MySQL session timezone to UTC for all connections."""
     cursor = dbapi_conn.cursor()
     cursor.execute("SET time_zone='+00:00'")
     cursor.close()
+
 
 # Create metadata objects
 prelude_metadata = MetaData()
