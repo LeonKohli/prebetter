@@ -20,7 +20,9 @@ def _validate_non_empty_string(v: Optional[str]) -> Optional[str]:
 
 class UserBase(BaseModel):
     email: EmailStr = Field(max_length=EMAIL_MAX_LENGTH)
-    username: str = Field(min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH)
+    username: str = Field(
+        min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH
+    )
     full_name: Optional[str] = Field(default=None, max_length=FULL_NAME_MAX_LENGTH)
 
     @field_validator("username", "full_name")
@@ -35,7 +37,9 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = Field(default=None, min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH)
+    username: Optional[str] = Field(
+        default=None, min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH
+    )
     email: Optional[EmailStr] = Field(default=None, max_length=EMAIL_MAX_LENGTH)
     full_name: Optional[str] = Field(default=None, max_length=FULL_NAME_MAX_LENGTH)
     password: Optional[str] = None
