@@ -16,7 +16,13 @@ from app.core.security import (
 )
 from app.database.config import get_prebetter_db
 from app.models.users import User
-from app.schemas.users import Token, TokenData, RefreshRequest, User as UserSchema, UserUpdate
+from app.schemas.users import (
+    Token,
+    TokenData,
+    RefreshRequest,
+    User as UserSchema,
+    UserUpdate,
+)
 from app.services.users import UserService
 
 router = APIRouter()
@@ -111,7 +117,9 @@ async def refresh_access_token(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(refresh_data.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            refresh_data.refresh_token, SECRET_KEY, algorithms=[ALGORITHM]
+        )
         if payload.get("type") != "refresh":
             raise credentials_exception
         user_id = payload.get("sub")

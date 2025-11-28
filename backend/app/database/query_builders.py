@@ -57,8 +57,11 @@ _PAIR_TABLE_MISSING = False
 def _build_classification_like_pattern(classification: str) -> str:
     """Return a LIKE pattern matching existing behavior for classification filters."""
     return (
-        f"{classification}%" if not classification.startswith("%") else f"%{classification}%"
+        f"{classification}%"
+        if not classification.startswith("%")
+        else f"%{classification}%"
     )
+
 
 # NOTE: These globals are accessed without locks. This is acceptable because:
 # 1. The Table object is immutable once created
@@ -305,7 +308,9 @@ def build_grouped_alerts_query(
         )
         join_condition = Classification._message_ident == DetectTime._message_ident
         if classification_pattern:
-            join_condition = and_(join_condition, Classification.text.like(classification_pattern))
+            join_condition = and_(
+                join_condition, Classification.text.like(classification_pattern)
+            )
         query = query.outerjoin(Classification, join_condition)
         sort_cols["max_classification"] = literal_column("max_classification")
 
