@@ -16,10 +16,10 @@ async def check_database_connections(check_prelude=True, check_prebetter=True) -
                 conn.execute(text("SELECT 1"))
                 logger.info("Prelude database connection successful")
         except sqlalchemy.exc.OperationalError as e:
-            logger.error(f"Prelude database connection failed: {str(e)}")
+            logger.error(f"Prelude database connection failed: {e}")
             all_successful = False
         except Exception as e:
-            logger.error(f"Unexpected error connecting to Prelude database: {str(e)}")
+            logger.error(f"Unexpected error connecting to Prelude database: {e}")
             all_successful = False
 
     if check_prebetter:
@@ -28,10 +28,10 @@ async def check_database_connections(check_prelude=True, check_prebetter=True) -
                 conn.execute(text("SELECT 1"))
                 logger.info("Prebetter database connection successful")
         except sqlalchemy.exc.OperationalError as e:
-            logger.error(f"Prebetter database connection failed: {str(e)}")
+            logger.error(f"Prebetter database connection failed: {e}")
             all_successful = False
         except Exception as e:
-            logger.error(f"Unexpected error connecting to Prebetter database: {str(e)}")
+            logger.error(f"Unexpected error connecting to Prebetter database: {e}")
             all_successful = False
 
     return all_successful
@@ -45,19 +45,19 @@ async def ensure_database() -> None:
                 conn.execute(text("USE prebetter"))
                 conn.commit()
         except sqlalchemy.exc.OperationalError as e:
-            logger.error(f"Failed to create/use prebetter database: {str(e)}")
+            logger.error(f"Failed to create/use prebetter database: {e}")
             pass
 
         try:
             PrebetterBase.metadata.create_all(bind=prebetter_engine)
             logger.info("Database tables created successfully!")
         except sqlalchemy.exc.OperationalError as e:
-            logger.error(f"Failed to create tables: {str(e)}")
+            logger.error(f"Failed to create tables: {e}")
             raise
 
         logger.info("Database initialization completed successfully!")
     except Exception as e:
-        logger.error(f"Error during database initialization: {str(e)}")
+        logger.error(f"Error during database initialization: {e}")
         raise
 
 
