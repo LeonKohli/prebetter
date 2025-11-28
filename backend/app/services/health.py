@@ -1,7 +1,7 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import logging
 from pydantic import BaseModel, Field
@@ -65,7 +65,7 @@ def get_health_status() -> HealthResponse:
         prelude_db=_HEALTH_STATE["prelude_db_available"],
         prebetter_db=_HEALTH_STATE["prebetter_db_available"],
         uptime_seconds=uptime,
-        timestamp=datetime.now().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
 
@@ -80,7 +80,7 @@ def check_database_health(db: Session, db_type: str) -> Dict[str, Any]:
 
         return {"connected": True}
     except Exception as e:
-        logger.error(f"Database connection check failed for {db_type}: {str(e)}")
+        logger.error(f"Database connection check failed for {db_type}: {e}")
 
         if db_type == "prelude":
             update_health_state(prelude_available=False)

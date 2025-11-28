@@ -215,9 +215,7 @@ async def get_grouped_alerts(
 
         # Execute
         total_pairs = db.scalar(count_query) or 0
-        pairs = db.execute(
-            pairs_query.offset((page - 1) * size).limit(size)
-        ).all()
+        pairs = db.execute(pairs_query.offset((page - 1) * size).limit(size)).all()
 
         alerts_query, alert_models = build_grouped_alerts_detail_query(db, pairs)
 
@@ -259,10 +257,10 @@ async def get_grouped_alerts(
             total_alerts=total_alerts_on_page,
         )
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Error fetching grouped alerts: {str(e)}",
+            detail="Error fetching grouped alerts",
         )
 
 
@@ -496,11 +494,12 @@ async def get_alert_detail(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing alert: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error processing alert")
 
 
 # Alert Deletion Endpoint
+
 
 @router.delete("")
 @router.delete("/")
@@ -509,7 +508,7 @@ async def delete_alerts(
     source_ip: Optional[str] = Query(None, description="Filter by source IP"),
     target_ip: Optional[str] = Query(None, description="Filter by target IP"),
     db: Session = Depends(get_prelude_db),
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
     """
     Delete alerts by IDs or by IP pair filter.
@@ -533,16 +532,14 @@ async def delete_alerts(
     elif ids:
         try:
             alert_ids = [int(i.strip()) for i in ids.split(",") if i.strip()]
-        except ValueError as e:
+        except ValueError:
             raise HTTPException(
-                status_code=422,
-                detail=f"Invalid alert IDs: all IDs must be numeric. Error: {str(e)}"
+                status_code=422, detail="Invalid alert IDs: all IDs must be numeric"
             )
 
         if len(alert_ids) == 0:
             raise HTTPException(
-                status_code=422,
-                detail="No valid alert IDs provided after parsing"
+                status_code=422, detail="No valid alert IDs provided after parsing"
             )
 
         if len(alert_ids) == 1:

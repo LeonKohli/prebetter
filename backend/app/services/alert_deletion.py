@@ -88,7 +88,9 @@ class AlertDeletionService:
         "Prelude_AdditionalData": ["A"],  # Alert level only
         "Prelude_Analyzer": ["A"],  # Alert level only
         "Prelude_AnalyzerTime": ["A"],  # Alert level only
-        "Prelude_CreateTime": ["A"],  # CRITICAL: Filter to prevent deleting Heartbeat timestamps
+        "Prelude_CreateTime": [
+            "A"
+        ],  # CRITICAL: Filter to prevent deleting Heartbeat timestamps
         "Prelude_Node": ["A", "S", "T"],  # Multiple levels
         "Prelude_Process": ["A", "S", "T"],  # Multiple levels
         "Prelude_ProcessArg": ["A", "S", "T"],  # Multiple levels
@@ -131,9 +133,7 @@ class AlertDeletionService:
         """Initialize the deletion service with a database session."""
         self.db = db
 
-    def delete_single_alert(
-        self, alert_id: int, username: str
-    ) -> Dict:
+    def delete_single_alert(self, alert_id: int, username: str) -> Dict:
         """
         Delete a single alert with all associated data.
 
@@ -149,9 +149,7 @@ class AlertDeletionService:
         """
         return self._delete_alerts([alert_id], username, "single")
 
-    def delete_bulk_alerts(
-        self, alert_ids: List[int], username: str
-    ) -> Dict:
+    def delete_bulk_alerts(self, alert_ids: List[int], username: str) -> Dict:
         """
         Delete multiple alerts with all associated data.
 
@@ -195,7 +193,9 @@ class AlertDeletionService:
               AND target_ip = INET_ATON(:target_ip)
         """)
 
-        result = self.db.execute(query, {"source_ip": source_ip, "target_ip": target_ip})
+        result = self.db.execute(
+            query, {"source_ip": source_ip, "target_ip": target_ip}
+        )
         alert_ids = [row[0] for row in result.fetchall()]
 
         if not alert_ids:
@@ -286,13 +286,13 @@ class AlertDeletionService:
             duration = time.time() - start_time
 
             logger.error(
-                f"Alert deletion failed after {duration:.2f}s: {str(e)}",
+                f"Alert deletion failed after {duration:.2f}s: {e}",
                 exc_info=True,
             )
 
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Alert deletion failed: {str(e)}",
+                detail="Alert deletion failed",
             )
 
     def _verify_alerts_exist(self, alert_ids: List[int]) -> None:

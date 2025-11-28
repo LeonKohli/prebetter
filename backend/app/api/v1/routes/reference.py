@@ -26,10 +26,8 @@ async def get_unique_classifications(
             .all()
         )
         return list(results)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching classifications: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error fetching classifications")
 
 
 @router.get("/severities", response_model=List[str])
@@ -49,10 +47,8 @@ async def get_unique_severities(
             .all()
         )
         return list(results)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching severities: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error fetching severities")
 
 
 @router.get("/analyzers", response_model=List[str])
@@ -76,7 +72,5 @@ async def get_unique_analyzers(
             .all()
         )
         return list(results)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error fetching analyzers: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error fetching analyzers")

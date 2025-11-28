@@ -139,10 +139,8 @@ async def get_timeline(
             end_date=end_date or get_current_time(),
             data=timeline_points,
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error generating timeline data: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error generating timeline data")
 
 
 @router.get("/summary", response_model=StatisticsSummary)
@@ -197,7 +195,7 @@ async def get_statistics_summary(
             start_at=start_date,
             end_at=end_date,
         )
-    except Exception as e:
+    except Exception:
         raise HTTPException(
-            status_code=500, detail=f"Error generating statistics summary: {str(e)}"
+            status_code=500, detail="Error generating statistics summary"
         )
