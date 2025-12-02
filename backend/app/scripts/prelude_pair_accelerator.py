@@ -117,6 +117,17 @@ END;
 """
 
 
+# Delete trigger on Prelude_Alert to automatically clean up Prebetter_Pair
+# This prevents stale cache entries when alerts are deleted outside the app
+TRIGGER_AD_SQL = """
+CREATE TRIGGER prebetter_pair_ad AFTER DELETE ON Prelude_Alert
+FOR EACH ROW
+BEGIN
+  DELETE FROM Prebetter_Pair WHERE _message_ident = OLD._ident;
+END;
+"""
+
+
 def _drop_triggers(conn) -> None:
     """Drop existing pair accelerator triggers.
 
@@ -125,6 +136,7 @@ def _drop_triggers(conn) -> None:
     """
     conn.execute(text("DROP TRIGGER IF EXISTS prebetter_pair_ai"))
     conn.execute(text("DROP TRIGGER IF EXISTS prebetter_pair_au"))
+    conn.execute(text("DROP TRIGGER IF EXISTS prebetter_pair_ad"))
 
 
 @app.command()
@@ -132,7 +144,10 @@ def install() -> None:
     """Create Prebetter_Pair table and install triggers.
 
     This creates the helper table and database triggers that automatically
-    maintain source/target IP pairs for each message.
+    maintain source/target IP pairs for each message. Includes:
+    - AFTER INSERT on Prelude_Address: populate cache for new alerts
+    - AFTER UPDATE on Prelude_Address: update cache on IP changes
+    - AFTER DELETE on Prelude_Alert: clean cache when alerts are deleted
     """
     try:
         with prelude_engine.begin() as conn:
@@ -143,9 +158,10 @@ def install() -> None:
             _drop_triggers(conn)
             conn.execute(text(TRIGGER_AI_SQL))
             conn.execute(text(TRIGGER_AU_SQL))
+            conn.execute(text(TRIGGER_AD_SQL))
 
         typer.secho(
-            "✓ Prebetter_Pair installed successfully (table + triggers)",
+            "✓ Prebetter_Pair installed successfully (table + 3 triggers)",
             fg=typer.colors.GREEN,
             bold=True,
         )
@@ -297,7 +313,7 @@ def status() -> None:
                 text(
                     "SELECT trigger_name FROM information_schema.triggers "
                     "WHERE trigger_schema = DATABASE() "
-                    "AND trigger_name IN ('prebetter_pair_ai', 'prebetter_pair_au')"
+                    "AND trigger_name IN ('prebetter_pair_ai', 'prebetter_pair_au', 'prebetter_pair_ad')"
                 )
             ).fetchall()
 
@@ -308,13 +324,16 @@ def status() -> None:
             typer.echo(f"Rows: {row_count:,}")
             typer.echo("\nTriggers:")
             typer.echo(
-                f"  • prebetter_pair_ai: {'✓' if 'prebetter_pair_ai' in trigger_names else '✗ Missing'}"
+                f"  • prebetter_pair_ai (INSERT): {'✓' if 'prebetter_pair_ai' in trigger_names else '✗ Missing'}"
             )
             typer.echo(
-                f"  • prebetter_pair_au: {'✓' if 'prebetter_pair_au' in trigger_names else '✗ Missing'}"
+                f"  • prebetter_pair_au (UPDATE): {'✓' if 'prebetter_pair_au' in trigger_names else '✗ Missing'}"
+            )
+            typer.echo(
+                f"  • prebetter_pair_ad (DELETE): {'✓' if 'prebetter_pair_ad' in trigger_names else '✗ Missing'}"
             )
 
-            if len(trigger_names) < 2:
+            if len(trigger_names) < 3:
                 typer.secho(
                     "\n⚠ Some triggers are missing. Run 'install' to fix.",
                     fg=typer.colors.YELLOW,
@@ -323,6 +342,79 @@ def status() -> None:
     except Exception as e:
         logger.error(f"Status check failed: {e}")
         typer.secho(f"✗ Status check failed: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def cleanup(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Show orphans without deleting"
+    ),
+) -> None:
+    """Remove orphaned entries from Prebetter_Pair cache.
+
+    Finds and removes cache entries that reference alerts which no longer
+    exist in Prelude_Alert. This handles stale data from alerts deleted
+    outside the application (e.g., direct database operations).
+
+    Use --dry-run to preview without making changes.
+    """
+    try:
+        with prelude_engine.begin() as conn:
+            # Count orphans first
+            count_sql = text("""
+                SELECT COUNT(*)
+                FROM Prebetter_Pair pp
+                LEFT JOIN Prelude_Alert pa ON pp._message_ident = pa._ident
+                WHERE pa._ident IS NULL
+            """)
+            orphan_count = conn.execute(count_sql).scalar() or 0
+
+            if orphan_count == 0:
+                typer.secho(
+                    "✓ No orphaned cache entries found",
+                    fg=typer.colors.GREEN,
+                    bold=True,
+                )
+                return
+
+            typer.echo(f"Found {orphan_count:,} orphaned cache entries")
+
+            if dry_run:
+                typer.secho(
+                    f"⚠ Dry run: would delete {orphan_count:,} rows",
+                    fg=typer.colors.YELLOW,
+                )
+                # Show sample of orphaned IDs
+                sample_sql = text("""
+                    SELECT pp._message_ident
+                    FROM Prebetter_Pair pp
+                    LEFT JOIN Prelude_Alert pa ON pp._message_ident = pa._ident
+                    WHERE pa._ident IS NULL
+                    LIMIT 10
+                """)
+                samples = [row[0] for row in conn.execute(sample_sql).fetchall()]
+                if samples:
+                    typer.echo(f"Sample orphan IDs: {samples}")
+                return
+
+            # Delete orphans
+            delete_sql = text("""
+                DELETE pp FROM Prebetter_Pair pp
+                LEFT JOIN Prelude_Alert pa ON pp._message_ident = pa._ident
+                WHERE pa._ident IS NULL
+            """)
+            conn.execute(delete_sql)
+
+            typer.secho(
+                f"✓ Deleted {orphan_count:,} orphaned cache entries",
+                fg=typer.colors.GREEN,
+                bold=True,
+            )
+
+    except Exception as e:
+        logger.error(f"Cleanup failed: {e}")
+        typer.secho(f"✗ Cleanup failed: {e}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
 
 
