@@ -14,12 +14,14 @@ export default defineNuxtConfig({
     '@nuxt/fonts',
   ],
   runtimeConfig: {
-    apiBase: process.env.API_BASE_URL || 'http://localhost:8000',
+    // Empty defaults - overridden by NUXT_* env vars at runtime (12-factor)
+    // NUXT_API_BASE, NUXT_SESSION_PASSWORD, etc.
+    apiBase: '',
     session: {
-      maxAge: 7 * 24 * 60 * 60, // 7 days (matches refresh token lifetime)
-      password: process.env.NUXT_SESSION_PASSWORD || '',
+      maxAge: 604800, // 7 days - must match REFRESH_TOKEN_EXPIRE_DAYS
+      password: '',
       cookie: {
-        secure: process.env.NODE_ENV === 'production' && !process.env.DISABLE_SECURE_COOKIES,
+        secure: true,
         httpOnly: true,
         sameSite: 'lax',
       },
