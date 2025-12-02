@@ -3,27 +3,30 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    # App metadata (internal, not deployment config)
     PROJECT_NAME: str = "Prebetter Backend"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 
+    # Database - all required, no defaults (12-factor)
     MYSQL_USER: str
     MYSQL_PASSWORD: str
-    MYSQL_HOST: str = "localhost"
-    MYSQL_PORT: str = "3306"
-    MYSQL_PRELUDE_DB: str = "prelude"
+    MYSQL_HOST: str
+    MYSQL_PORT: str
+    MYSQL_PRELUDE_DB: str
+    MYSQL_PREBETTER_DB: str
 
-    MYSQL_PREBETTER_DB: str = "prebetter"
+    # Security - all required, no defaults
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    REFRESH_TOKEN_EXPIRE_DAYS: int
+    BCRYPT_ROUNDS: int
 
-    # JWT / Auth
-    SECRET_KEY: str  # Required. Set in environment/.env
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # Short-lived access tokens
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # Long-lived refresh tokens
-    BCRYPT_ROUNDS: int = 14
-
-    ENVIRONMENT: str = "development"
-    LOG_LEVEL: str = "INFO"
+    # Runtime - required
+    ENVIRONMENT: str
+    LOG_LEVEL: str
+    BACKEND_CORS_ORIGINS: list[str]
 
     @property
     def PRELUDE_DATABASE_URL(self) -> str:
@@ -32,9 +35,6 @@ class Settings(BaseSettings):
     @property
     def PREBETTER_DATABASE_URL(self) -> str:
         return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_PREBETTER_DB}"
-
-    # CORS: keep restrictive by default; override in .env
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
