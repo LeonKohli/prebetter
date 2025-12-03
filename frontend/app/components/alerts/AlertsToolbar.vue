@@ -13,18 +13,6 @@
           <Icon name="lucide:arrow-left" class="mr-1 size-4" />
           Back to groups
         </Button>
-      <InputGroup class="w-72 h-8">
-        <InputGroupAddon>
-          <Icon name="lucide:search" class="size-4" />
-        </InputGroupAddon>
-        <InputGroupInput
-          class="text-xs"
-          placeholder="Filter alerts by classification..."
-          :model-value="urlState.filters.value.classification_text || ''"
-          @update:model-value="handleSearchFilter"
-        />
-      </InputGroup>
-
         <DateRangePicker
           v-model="dateRange"
           :includeTime="true"
@@ -119,12 +107,10 @@
 
 <script setup lang="ts">
 import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
-import { useDebounceFn } from '@vueuse/core'
 import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import AlertsFilterPanel from '@/components/alerts/AlertsFilterPanel.vue'
 import { useAlertTableContext } from '@/composables/useAlertTableContext'
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 
 interface DateRangeValue {
   from: Date | undefined
@@ -236,21 +222,6 @@ const autoRefreshDisplayText = computed(() => {
   const value = Number(autoRefreshModel.value)
   return value >= 60 ? `${value / 60}m` : `${value}s`
 })
-
-const updateSearchFilter = (value: string | number) => {
-  const stringValue = String(value)
-  if (stringValue) {
-    urlState.filters.value = { 
-      ...urlState.filters.value, 
-      classification_text: stringValue 
-    }
-  } else {
-    const { classification_text, ...rest } = urlState.filters.value
-    urlState.filters.value = rest
-  }
-}
-
-const handleSearchFilter = useDebounceFn(updateSearchFilter, 300)
 
 function setAutoRefresh(seconds: number) {
   urlState.autoRefresh.value = seconds
