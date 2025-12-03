@@ -173,19 +173,25 @@ def apply_standard_alert_filters(
             query = query.where(target_addr.address == target_ip)
 
     if severity and Impact:
-        query = query.where(Impact.severity == severity)
+        severity_list = [s.strip() for s in severity.split(",") if s.strip()]
+        if len(severity_list) == 1:
+            query = query.where(Impact.severity == severity_list[0])
+        elif len(severity_list) > 1:
+            query = query.where(Impact.severity.in_(severity_list))
 
     if analyzer_model and Analyzer:
-        # Filter by Analyzer.name, not model - name is unique (e.g., "snort-eno5")
-        query = query.where(Analyzer.name == analyzer_model)
+        analyzer_list = [a.strip() for a in analyzer_model.split(",") if a.strip()]
+        if len(analyzer_list) == 1:
+            query = query.where(Analyzer.name == analyzer_list[0])
+        elif len(analyzer_list) > 1:
+            query = query.where(Analyzer.name.in_(analyzer_list))
 
-    # Apply partial match filters last (least selective)
     if classification and Classification:
-        # Use index-friendly LIKE pattern with right wildcard only if possible
-        if not classification.startswith("%"):
-            query = query.where(Classification.text.like(f"{classification}%"))
-        else:
-            query = query.where(Classification.text.like(f"%{classification}%"))
+        classification_list = [c.strip() for c in classification.split(",") if c.strip()]
+        if len(classification_list) == 1:
+            query = query.where(Classification.text == classification_list[0])
+        elif len(classification_list) > 1:
+            query = query.where(Classification.text.in_(classification_list))
 
     return query
 
