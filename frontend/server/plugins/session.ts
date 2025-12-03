@@ -1,14 +1,10 @@
 const REFRESH_BUFFER_MS = 2 * 60 * 1000 // Refresh 2 min before expiry
 
 export default defineNitroPlugin(() => {
-  // Refresh access token before expiry (nuxt-auth-utils pattern)
   sessionHooks.hook('fetch', async (session, event) => {
-    if (!session.user || !session.secure?.apiToken) return
+    if (!session.user || !session.secure?.apiToken || !session.secure?.refreshToken) return
 
-    const { refreshToken } = session.secure
-    const needsRefresh = refreshToken && session.tokenExpiresAt
-      && (Date.now() + REFRESH_BUFFER_MS >= session.tokenExpiresAt)
-
+    const needsRefresh = session.tokenExpiresAt && Date.now() + REFRESH_BUFFER_MS >= session.tokenExpiresAt
     if (!needsRefresh) return
 
     try {
@@ -18,7 +14,7 @@ export default defineNitroPlugin(() => {
         expires_in: number
       }>(`${useRuntimeConfig().apiBase}/api/v1/auth/refresh`, {
         method: 'POST',
-        body: { refresh_token: refreshToken },
+        body: { refresh_token: session.secure.refreshToken },
       })
 
       session.secure.apiToken = tokens.access_token
@@ -26,7 +22,6 @@ export default defineNitroPlugin(() => {
       session.tokenExpiresAt = Date.now() + tokens.expires_in * 1000
       await setUserSession(event, session)
     } catch {
-      // Refresh failed - clear session, middleware redirects to login
       await clearUserSession(event)
     }
   })
