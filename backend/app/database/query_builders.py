@@ -54,13 +54,17 @@ _PAIR_TABLE = None
 _PAIR_TABLE_MISSING = False
 
 
-def _build_classification_like_pattern(classification: str) -> str:
-    """Return a LIKE pattern matching existing behavior for classification filters."""
-    return (
-        f"{classification}%"
-        if not classification.startswith("%")
-        else f"%{classification}%"
-    )
+def _build_classification_subquery(classification: str):
+    """Build a subquery for classification filter supporting comma-separated values."""
+    classification_list = [c.strip() for c in classification.split(",") if c.strip()]
+    if len(classification_list) == 1:
+        return select(Classification._message_ident).where(
+            Classification.text == classification_list[0]
+        )
+    else:
+        return select(Classification._message_ident).where(
+            Classification.text.in_(classification_list)
+        )
 
 
 # NOTE: These globals are accessed without locks. This is acceptable because:
@@ -207,10 +211,7 @@ def _apply_grouped_filters(
 
     # Classification filter - use subquery for semi-join optimization
     if classification:
-        pattern = _build_classification_like_pattern(classification)
-        classification_subq = select(Classification._message_ident).where(
-            Classification.text.like(pattern)
-        )
+        classification_subq = _build_classification_subquery(classification)
         query = query.where(pair_table.c._message_ident.in_(classification_subq))
 
     # Analyzer filter - use subquery for better performance (semi-join optimization)
@@ -289,8 +290,10 @@ def build_grouped_alerts_query(
         "max_analyzer": None,
     }
 
-    classification_pattern = (
-        _build_classification_like_pattern(classification) if classification else None
+    classification_list = (
+        [c.strip() for c in classification.split(",") if c.strip()]
+        if classification
+        else None
     )
 
     # Add severity column for sorting (uses OUTER JOIN - no Cartesian with subquery filter)
@@ -307,10 +310,15 @@ def build_grouped_alerts_query(
             func.max(Classification.text).label("max_classification")
         )
         join_condition = Classification._message_ident == DetectTime._message_ident
-        if classification_pattern:
-            join_condition = and_(
-                join_condition, Classification.text.like(classification_pattern)
-            )
+        if classification_list:
+            if len(classification_list) == 1:
+                join_condition = and_(
+                    join_condition, Classification.text == classification_list[0]
+                )
+            else:
+                join_condition = and_(
+                    join_condition, Classification.text.in_(classification_list)
+                )
         query = query.outerjoin(Classification, join_condition)
         sort_cols["max_classification"] = literal_column("max_classification")
 
