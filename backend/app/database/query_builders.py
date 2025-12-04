@@ -172,7 +172,7 @@ def build_alert_base_query(db: Session):
         )
     )
 
-    return query, {"source_addr": source_addr, "target_addr": target_addr}
+    return query, {"source_addr": source_addr, "target_addr": target_addr, "Node": Node}
 
 
 def _apply_grouped_filters(
@@ -214,14 +214,35 @@ def _apply_grouped_filters(
         classification_subq = _build_classification_subquery(classification)
         query = query.where(pair_table.c._message_ident.in_(classification_subq))
 
-    # Analyzer filter - use subquery for better performance (semi-join optimization)
-    # This is ~26% faster than JOIN because it eliminates rows early
+    # Analyzer filter - now filters by Node.name (server) instead of Analyzer.name
+    # Uses subquery for better performance (semi-join optimization)
     if analyzer_model:
+        analyzer_list = [a.strip() for a in analyzer_model.split(",") if a.strip()]
+        # Build subquery that joins Analyzer -> Node and filters by short node name
         analyzer_subq = (
             select(Analyzer._message_ident)
+            .select_from(Analyzer)
+            .outerjoin(
+                Node,
+                and_(
+                    Node._message_ident == Analyzer._message_ident,
+                    Node._parent_type == "A",
+                    Node._parent0_index == Analyzer._index,
+                ),
+            )
             .where(Analyzer._parent_type == "A")
-            .where(Analyzer.name == analyzer_model)
         )
+        # Filter by short node name - match beginning of FQDN
+        if len(analyzer_list) == 1:
+            analyzer_subq = analyzer_subq.where(
+                Node.name.startswith(analyzer_list[0] + ".")
+            )
+        else:
+            # For multiple values, use OR conditions
+            from sqlalchemy import or_
+
+            conditions = [Node.name.startswith(a + ".") for a in analyzer_list]
+            analyzer_subq = analyzer_subq.where(or_(*conditions))
         query = query.where(pair_table.c._message_ident.in_(analyzer_subq))
 
     return query
@@ -322,16 +343,31 @@ def build_grouped_alerts_query(
         query = query.outerjoin(Classification, join_condition)
         sort_cols["max_classification"] = literal_column("max_classification")
 
-    # Add analyzer column for sorting
+    # Add analyzer column for sorting (using Node.name for server-based display)
     if sort_by_analyzer:
-        query = query.add_columns(func.max(Analyzer.name).label("max_analyzer"))
-        join_condition = and_(
+        query = query.add_columns(func.max(Node.name).label("max_analyzer"))
+        analyzer_join_condition = and_(
             Analyzer._message_ident == DetectTime._message_ident,
             Analyzer._parent_type == "A",
         )
+        node_join_condition = and_(
+            Node._message_ident == Analyzer._message_ident,
+            Node._parent_type == "A",
+            Node._parent0_index == Analyzer._index,
+        )
         if analyzer_model:
-            join_condition = and_(join_condition, Analyzer.name == analyzer_model)
-        query = query.outerjoin(Analyzer, join_condition)
+            analyzer_list = [a.strip() for a in analyzer_model.split(",") if a.strip()]
+            if len(analyzer_list) == 1:
+                node_join_condition = and_(
+                    node_join_condition, Node.name.startswith(analyzer_list[0] + ".")
+                )
+            else:
+                from sqlalchemy import or_
+
+                conditions = [Node.name.startswith(a + ".") for a in analyzer_list]
+                node_join_condition = and_(node_join_condition, or_(*conditions))
+        query = query.outerjoin(Analyzer, analyzer_join_condition)
+        query = query.outerjoin(Node, node_join_condition)
         sort_cols["max_analyzer"] = literal_column("max_analyzer")
 
     needs_distinct_count = sort_by_classification or sort_by_analyzer
