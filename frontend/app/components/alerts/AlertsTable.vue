@@ -604,8 +604,8 @@ onUnmounted(() => {
             </template>
             <!-- Show data when available -->
             <template v-else-if="table.getRowModel().rows?.length">
-              <template v-for="row in table.getRowModel().rows" :key="row.id">
-                <TableRow :data-state="row.getIsSelected() && 'selected'" class="h-11 border-b border-border/40 hover:bg-muted/50 transition-colors">
+              <template v-for="(row, index) in table.getRowModel().rows" :key="row.id">
+                <TableRow :data-state="row.getIsSelected() && 'selected'" :class="['h-11 border-b border-border/40 hover:bg-muted/50 transition-colors', index % 2 === 1 && 'bg-muted/30']">
                   <TableCell
                     v-for="(cell, index) in row.getVisibleCells()"
                     :key="cell.id"
