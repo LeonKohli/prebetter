@@ -76,7 +76,7 @@ async def get_timeline(
             query=timeline_query,
             severity=severity,
             classification=classification,
-            analyzer_model=None,
+            server=None,
             Impact=Impact,
             Classification=Classification,
             DetectTime=DetectTime,

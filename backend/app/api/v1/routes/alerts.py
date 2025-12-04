@@ -83,7 +83,7 @@ async def list_alerts(
     end_date: Optional[datetime] = None,
     source_ip: Optional[str] = None,
     target_ip: Optional[str] = None,
-    analyzer_model: Optional[str] = None,
+    server: Optional[str] = None,
     db: Session = Depends(get_prelude_db),
 ) -> AlertListResponse:
     """Retrieve a paginated list of alerts with filtering and sorting."""
@@ -106,7 +106,7 @@ async def list_alerts(
         end_date=end_date,
         source_ip=source_ip,
         target_ip=target_ip,
-        analyzer_model=analyzer_model,
+        server=server,
         **models,
         Impact=Impact,
         Classification=Classification,
@@ -165,7 +165,7 @@ async def get_grouped_alerts(
     end_date: Optional[datetime] = None,
     source_ip: Optional[str] = None,
     target_ip: Optional[str] = None,
-    analyzer_model: Optional[str] = None,
+    server: Optional[str] = None,
     db: Session = Depends(get_prelude_db),
 ) -> GroupedAlertResponse:
     """Retrieve alerts grouped by source and target IP addresses."""
@@ -173,7 +173,7 @@ async def get_grouped_alerts(
         # Build queries with all filters
         pairs_query, sort_cols = build_grouped_alerts_query(
             db,
-            analyzer_model=analyzer_model,
+            server=server,
             severity=severity,
             classification=classification,
             start_date=start_date,
@@ -187,7 +187,7 @@ async def get_grouped_alerts(
 
         count_query = build_grouped_alerts_count_query(
             db,
-            analyzer_model=analyzer_model,
+            server=server,
             severity=severity,
             classification=classification,
             start_date=start_date,
@@ -230,7 +230,7 @@ async def get_grouped_alerts(
             end_date=end_date,  # Safe - DetectTime already joined
             source_ip=None,  # Skip - already filtered by pair_key
             target_ip=None,  # Skip - already filtered by pair_key
-            analyzer_model=None,  # Skip - causes Cartesian product
+            server=None,  # Skip - causes Cartesian product
             **alert_models,
             Impact=Impact,
             Classification=Classification,

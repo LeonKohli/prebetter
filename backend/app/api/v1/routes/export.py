@@ -110,7 +110,7 @@ async def export_alerts(
     classification: Optional[str] = Query(None, description="Filter by classification"),
     source_ip: Optional[str] = Query(None, description="Filter by source IP address"),
     target_ip: Optional[str] = Query(None, description="Filter by target IP address"),
-    analyzer_model: Optional[str] = Query(None, description="Filter by analyzer model"),
+    server: Optional[str] = Query(None, description="Filter by server name"),
     hours_back: Optional[int] = Query(
         None,
         description="Export alerts from the past N hours (alternative to start/end dates)",
@@ -168,7 +168,7 @@ async def export_alerts(
             end_date=end_date,
             source_ip=source_ip,
             target_ip=target_ip,
-            analyzer_model=analyzer_model,
+            server=server,
             **models,
             Impact=Impact,
             Classification=Classification,

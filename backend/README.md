@@ -301,7 +301,7 @@ The API implements a structured lifecycle management approach:
     - `end_date`: End date in ISO format.
     - `source_ip`: Filter by source IP (exact match).
     - `target_ip`: Filter by target IP (exact match).
-    - `analyzer_model`: Filter by analyzer model.
+    - `server`: Filter by server name (short node name like server-001).
 
 - **Grouped Alerts:** `GET /api/v1/alerts/groups`
   - Supports the same query parameters as the alerts listing endpoint.
@@ -326,7 +326,7 @@ The API implements a structured lifecycle management approach:
     - `classification`: Filter by classification text.
     - `source_ip`: Filter by source IP.
     - `target_ip`: Filter by target IP.
-    - `analyzer_model`: Filter by analyzer model.
+    - `server`: Filter by server name (short node name).
   - Returns: A streaming CSV file containing alert data with a header row (including fields like `id`, `created_at`, `detected_at`, etc.).
 
 ### Heartbeat Monitoring
@@ -371,9 +371,9 @@ The API implements a structured lifecycle management approach:
 
 ### Reference Data
 
-- **Classifications:** `GET /api/v1/classifications`
-- **Severities:** `GET /api/v1/severities`
-- **Analyzers:** `GET /api/v1/analyzers`
+- **Classifications:** `GET /api/v1/reference/classifications`
+- **Severities:** `GET /api/v1/reference/severities`
+- **Servers:** `GET /api/v1/reference/servers` - Returns short node names (e.g., server-001)
 
 ### Health Monitoring
 

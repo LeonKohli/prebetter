@@ -156,10 +156,10 @@
             </Popover>
           </div>
 
-          <!-- Analyzer Filter -->
+          <!-- Server Filter -->
           <div class="space-y-1.5">
-            <Label class="text-xs">Analyzer</Label>
-            <Popover v-model:open="analyzerOpen">
+            <Label class="text-xs">Server</Label>
+            <Popover v-model:open="serverOpen">
               <PopoverTrigger as-child>
                 <Button
                   variant="outline"
@@ -167,31 +167,31 @@
                   class="w-full justify-between font-normal"
                 >
                   <div class="flex items-center gap-2 truncate">
-                    <Icon name="lucide:scan-search" class="size-4 shrink-0 text-muted-foreground" />
-                    <span v-if="selectedAnalyzers.length === 0" class="text-muted-foreground">Any</span>
-                    <span v-else-if="selectedAnalyzers.length === 1" class="truncate">{{ selectedAnalyzers[0]! }}</span>
-                    <span v-else class="text-muted-foreground">{{ selectedAnalyzers.length }} selected</span>
+                    <Icon name="lucide:server" class="size-4 shrink-0 text-muted-foreground" />
+                    <span v-if="selectedServers.length === 0" class="text-muted-foreground">Any</span>
+                    <span v-else-if="selectedServers.length === 1" class="truncate">{{ selectedServers[0]! }}</span>
+                    <span v-else class="text-muted-foreground">{{ selectedServers.length }} selected</span>
                   </div>
                   <Icon name="lucide:chevron-down" class="size-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent class="w-56 p-0" align="start">
                 <Command>
-                  <CommandInput placeholder="Search analyzers..." />
+                  <CommandInput placeholder="Search servers..." />
                   <CommandList>
-                    <CommandEmpty>No analyzer found.</CommandEmpty>
+                    <CommandEmpty>No server found.</CommandEmpty>
                     <CommandGroup>
                       <CommandItem
-                        v-for="analyzer in analyzersData"
-                        :key="analyzer"
-                        :value="analyzer"
-                        @select="toggleAnalyzer(analyzer)"
+                        v-for="server in serversData"
+                        :key="server"
+                        :value="server"
+                        @select="toggleServer(server)"
                       >
                         <Checkbox
-                          :model-value="selectedAnalyzers.includes(analyzer)"
+                          :model-value="selectedServers.includes(server)"
                           class="pointer-events-none"
                         />
-                        <span class="truncate">{{ analyzer }}</span>
+                        <span class="truncate">{{ server }}</span>
                       </CommandItem>
                     </CommandGroup>
                   </CommandList>
@@ -271,11 +271,11 @@ const { urlState } = useAlertTableContext()
 
 const isOpen = ref(false)
 const severityOpen = ref(false)
-const analyzerOpen = ref(false)
+const serverOpen = ref(false)
 const classificationOpen = ref(false)
 
 const { data: severitiesData } = useFetch<string[]>('/api/reference/severities', { default: () => [], lazy: true })
-const { data: analyzersData } = useFetch<string[]>('/api/reference/analyzers', { default: () => [], lazy: true })
+const { data: serversData } = useFetch<string[]>('/api/reference/servers', { default: () => [], lazy: true })
 const { data: classificationsData, status: classificationsStatus } = useFetch<string[]>('/api/reference/classifications', { default: () => [], lazy: true })
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -304,12 +304,12 @@ const selectedSeverities = computed({
   },
 })
 
-const selectedAnalyzers = computed({
-  get: () => urlState.filters.value.analyzer_model ? String(urlState.filters.value.analyzer_model).split(',') : [],
+const selectedServers = computed({
+  get: () => urlState.filters.value.server ? String(urlState.filters.value.server).split(',') : [],
   set: (values: string[]) => {
     const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
-    delete nextFilters.analyzer_model
-    if (values.length) nextFilters.analyzer_model = values.join(',')
+    delete nextFilters.server
+    if (values.length) nextFilters.server = values.join(',')
     urlState.filters.value = nextFilters
   },
 })
@@ -329,9 +329,9 @@ function toggleSeverity(item: string) {
   selectedSeverities.value = current.includes(item) ? current.filter(i => i !== item) : [...current, item]
 }
 
-function toggleAnalyzer(item: string) {
-  const current = selectedAnalyzers.value
-  selectedAnalyzers.value = current.includes(item) ? current.filter(i => i !== item) : [...current, item]
+function toggleServer(item: string) {
+  const current = selectedServers.value
+  selectedServers.value = current.includes(item) ? current.filter(i => i !== item) : [...current, item]
 }
 
 function toggleClassification(item: string) {
@@ -400,8 +400,8 @@ const activeFilters = computed(() => {
   for (const s of selectedSeverities.value) {
     result.push({ key: `severity:${s}`, label: formatSeverity(s), color: getSeverityColor(s) })
   }
-  for (const a of selectedAnalyzers.value) {
-    result.push({ key: `analyzer:${a}`, label: a, icon: 'lucide:scan-search' })
+  for (const srv of selectedServers.value) {
+    result.push({ key: `server:${srv}`, label: srv, icon: 'lucide:server' })
   }
   for (const c of selectedClassifications.value) {
     result.push({ key: `classification:${c}`, label: c.length <= 20 ? c : `${c.slice(0, 20)}…`, icon: 'lucide:tag' })
@@ -421,7 +421,7 @@ function clearFilter(key: string) {
 
   const [type, value] = key.split(':')
   if (type === 'severity') selectedSeverities.value = selectedSeverities.value.filter(v => v !== value)
-  if (type === 'analyzer') selectedAnalyzers.value = selectedAnalyzers.value.filter(v => v !== value)
+  if (type === 'server') selectedServers.value = selectedServers.value.filter(v => v !== value)
   if (type === 'classification') selectedClassifications.value = selectedClassifications.value.filter(v => v !== value)
 }
 
@@ -430,7 +430,7 @@ function clearAllFilters() {
   targetIpDraft.value = ''
   const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
   delete nextFilters.severity
-  delete nextFilters.analyzer_model
+  delete nextFilters.server
   delete nextFilters.classification_text
   delete nextFilters.source_ipv4
   delete nextFilters.target_ipv4
