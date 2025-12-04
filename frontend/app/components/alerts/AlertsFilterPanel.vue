@@ -276,7 +276,7 @@ const classificationOpen = ref(false)
 
 const { data: severitiesData } = useFetch<string[]>('/api/reference/severities', { default: () => [], lazy: true })
 const { data: analyzersData } = useFetch<string[]>('/api/reference/analyzers', { default: () => [], lazy: true })
-const { data: classificationsData, execute: fetchClassifications, status: classificationsStatus } = useFetch<string[]>('/api/reference/classifications', { default: () => [], immediate: false })
+const { data: classificationsData, status: classificationsStatus } = useFetch<string[]>('/api/reference/classifications', { default: () => [], lazy: true })
 
 const SEVERITY_COLORS: Record<string, string> = {
   high: 'bg-primary',
@@ -356,7 +356,6 @@ const filteredClassifications = computed(() => {
 const { list: virtualClassifications, containerProps, wrapperProps } = useVirtualList(filteredClassifications, { itemHeight: 32, overscan: 5 })
 
 watch(classificationOpen, (open) => {
-  if (open && classificationsStatus.value === 'idle') fetchClassifications()
   if (!open) classificationSearch.value = ''
 })
 
