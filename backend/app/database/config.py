@@ -135,7 +135,6 @@ def apply_standard_alert_filters(
     # Optional integer IP columns when using Prebetter_Pair
     source_ip_int_col = models.get("source_ip_int_col")
     target_ip_int_col = models.get("target_ip_int_col")
-    Analyzer = models.get("Analyzer")
 
     # Apply filters progressively from most to least selective for better query planning
 
@@ -179,12 +178,19 @@ def apply_standard_alert_filters(
         elif len(severity_list) > 1:
             query = query.where(Impact.severity.in_(severity_list))
 
-    if analyzer_model and Analyzer:
+    # Filter by analyzer/node - now uses Node.name (server) instead of Analyzer.name
+    Node = models.get("Node")
+    if analyzer_model and Node:
         analyzer_list = [a.strip() for a in analyzer_model.split(",") if a.strip()]
+        # Filter by short node name - match beginning of FQDN
         if len(analyzer_list) == 1:
-            query = query.where(Analyzer.name == analyzer_list[0])
+            query = query.where(Node.name.startswith(analyzer_list[0] + "."))
         elif len(analyzer_list) > 1:
-            query = query.where(Analyzer.name.in_(analyzer_list))
+            # For multiple values, use OR conditions
+            from sqlalchemy import or_
+
+            conditions = [Node.name.startswith(a + ".") for a in analyzer_list]
+            query = query.where(or_(*conditions))
 
     if classification and Classification:
         classification_list = [c.strip() for c in classification.split(",") if c.strip()]
