@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from typing import List
 from app.database.config import get_prelude_db
-from app.models.prelude import Classification, Impact, Analyzer
+from app.models.prelude import Classification, Impact, Analyzer, Node
 from app.api.v1.routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -55,22 +55,30 @@ async def get_unique_severities(
 async def get_unique_analyzers(
     db: Session = Depends(get_prelude_db),
 ) -> List[str]:
-    """Get a list of unique analyzer names."""
+    """Get a list of unique short node names (servers)."""
     try:
-        results = (
-            db.execute(
-                select(Analyzer.name)
-                .where(
-                    Analyzer.name.isnot(None),
-                    Analyzer._parent_type == "A",
-                    Analyzer._index == -1,
-                )
-                .distinct()
-                .order_by(Analyzer.name)
+        results = db.execute(
+            select(Node.name)
+            .select_from(Analyzer)
+            .outerjoin(
+                Node,
+                and_(
+                    Node._message_ident == Analyzer._message_ident,
+                    Node._parent_type == "A",
+                    Node._parent0_index == Analyzer._index,
+                ),
             )
-            .scalars()
-            .all()
-        )
-        return list(results)
+            .where(
+                Analyzer.name.isnot(None),
+                Analyzer._parent_type == "A",
+                Analyzer._index == -1,
+                Node.name.isnot(None),
+            )
+            .distinct()
+        ).scalars().all()
+
+        # Extract short node name (before first dot)
+        short_nodes = {name.split(".")[0] for name in results if name}
+        return sorted(short_nodes)
     except Exception:
         raise HTTPException(status_code=500, detail="Error fetching analyzers")
