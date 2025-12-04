@@ -51,11 +51,11 @@ async def get_unique_severities(
         raise HTTPException(status_code=500, detail="Error fetching severities")
 
 
-@router.get("/analyzers", response_model=List[str])
-async def get_unique_analyzers(
+@router.get("/servers", response_model=List[str])
+async def get_unique_servers(
     db: Session = Depends(get_prelude_db),
 ) -> List[str]:
-    """Get a list of unique short node names (servers)."""
+    """Get a list of unique short node names (servers like server-001)."""
     try:
         results = db.execute(
             select(Node.name)
@@ -81,4 +81,4 @@ async def get_unique_analyzers(
         short_nodes = {name.split(".")[0] for name in results if name}
         return sorted(short_nodes)
     except Exception:
-        raise HTTPException(status_code=500, detail="Error fetching analyzers")
+        raise HTTPException(status_code=500, detail="Error fetching servers")

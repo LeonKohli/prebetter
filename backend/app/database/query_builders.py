@@ -185,11 +185,11 @@ def _apply_grouped_filters(
     target_ip,
     severity,
     classification,
-    analyzer_model,
+    server,
 ):
     """Apply common filters for grouped alert queries.
 
-    Uses subquery pattern for analyzer filter which is ~26% faster than JOIN
+    Uses subquery pattern for server filter which is ~26% faster than JOIN
     because it allows MySQL to use semi-join optimization.
     """
     # Date filters
@@ -214,12 +214,12 @@ def _apply_grouped_filters(
         classification_subq = _build_classification_subquery(classification)
         query = query.where(pair_table.c._message_ident.in_(classification_subq))
 
-    # Analyzer filter - now filters by Node.name (server) instead of Analyzer.name
+    # Server filter - filters by Node.name (short server name like server-001)
     # Uses subquery for better performance (semi-join optimization)
-    if analyzer_model:
-        analyzer_list = [a.strip() for a in analyzer_model.split(",") if a.strip()]
+    if server:
+        server_list = [s.strip() for s in server.split(",") if s.strip()]
         # Build subquery that joins Analyzer -> Node and filters by short node name
-        analyzer_subq = (
+        server_subq = (
             select(Analyzer._message_ident)
             .select_from(Analyzer)
             .outerjoin(
@@ -233,17 +233,17 @@ def _apply_grouped_filters(
             .where(Analyzer._parent_type == "A")
         )
         # Filter by short node name - match beginning of FQDN
-        if len(analyzer_list) == 1:
-            analyzer_subq = analyzer_subq.where(
-                Node.name.startswith(analyzer_list[0] + ".")
+        if len(server_list) == 1:
+            server_subq = server_subq.where(
+                Node.name.startswith(server_list[0] + ".")
             )
         else:
             # For multiple values, use OR conditions
             from sqlalchemy import or_
 
-            conditions = [Node.name.startswith(a + ".") for a in analyzer_list]
-            analyzer_subq = analyzer_subq.where(or_(*conditions))
-        query = query.where(pair_table.c._message_ident.in_(analyzer_subq))
+            conditions = [Node.name.startswith(s + ".") for s in server_list]
+            server_subq = server_subq.where(or_(*conditions))
+        query = query.where(pair_table.c._message_ident.in_(server_subq))
 
     return query
 
@@ -251,7 +251,7 @@ def _apply_grouped_filters(
 def build_grouped_alerts_query(
     db: Session,
     *,
-    analyzer_model: Optional[str] = None,
+    server: Optional[str] = None,
     severity: Optional[str] = None,
     classification: Optional[str] = None,
     start_date: Optional[datetime] = None,
@@ -298,7 +298,7 @@ def build_grouped_alerts_query(
         target_ip=target_ip,
         severity=severity,
         classification=classification,
-        analyzer_model=analyzer_model,
+        server=server,
     )
 
     # Track which columns we've added for sort_cols dict
@@ -355,16 +355,16 @@ def build_grouped_alerts_query(
             Node._parent_type == "A",
             Node._parent0_index == Analyzer._index,
         )
-        if analyzer_model:
-            analyzer_list = [a.strip() for a in analyzer_model.split(",") if a.strip()]
-            if len(analyzer_list) == 1:
+        if server:
+            server_list = [s.strip() for s in server.split(",") if s.strip()]
+            if len(server_list) == 1:
                 node_join_condition = and_(
-                    node_join_condition, Node.name.startswith(analyzer_list[0] + ".")
+                    node_join_condition, Node.name.startswith(server_list[0] + ".")
                 )
             else:
                 from sqlalchemy import or_
 
-                conditions = [Node.name.startswith(a + ".") for a in analyzer_list]
+                conditions = [Node.name.startswith(s + ".") for s in server_list]
                 node_join_condition = and_(node_join_condition, or_(*conditions))
         query = query.outerjoin(Analyzer, analyzer_join_condition)
         query = query.outerjoin(Node, node_join_condition)
@@ -388,7 +388,7 @@ def build_grouped_alerts_query(
 def build_grouped_alerts_count_query(
     db: Session,
     *,
-    analyzer_model: Optional[str] = None,
+    server: Optional[str] = None,
     severity: Optional[str] = None,
     classification: Optional[str] = None,
     start_date: Optional[datetime] = None,
@@ -417,7 +417,7 @@ def build_grouped_alerts_count_query(
         target_ip=target_ip,
         severity=severity,
         classification=classification,
-        analyzer_model=analyzer_model,
+        server=server,
     )
 
     return query

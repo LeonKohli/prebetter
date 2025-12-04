@@ -106,7 +106,7 @@ def apply_standard_alert_filters(
     end_date: Optional[datetime] = None,
     source_ip: Optional[str] = None,
     target_ip: Optional[str] = None,
-    analyzer_model: Optional[str] = None,
+    server: Optional[str] = None,
     **models,
 ):
     """
@@ -120,9 +120,9 @@ def apply_standard_alert_filters(
         end_date: Optional end date filter
         source_ip: Optional source IP filter (exact match)
         target_ip: Optional target IP filter (exact match)
-        analyzer_model: Optional analyzer model filter
+        server: Optional server name filter (short node name like server-001)
         models: Dict containing model classes. Expected keys: Impact, Classification,
-                DetectTime, source_addr, target_addr, Analyzer
+                DetectTime, source_addr, target_addr, Node
 
     Returns:
         Filtered SQLAlchemy query
@@ -178,18 +178,18 @@ def apply_standard_alert_filters(
         elif len(severity_list) > 1:
             query = query.where(Impact.severity.in_(severity_list))
 
-    # Filter by analyzer/node - now uses Node.name (server) instead of Analyzer.name
+    # Filter by server (Node.name) - matches short node name like server-001
     Node = models.get("Node")
-    if analyzer_model and Node:
-        analyzer_list = [a.strip() for a in analyzer_model.split(",") if a.strip()]
+    if server and Node:
+        server_list = [s.strip() for s in server.split(",") if s.strip()]
         # Filter by short node name - match beginning of FQDN
-        if len(analyzer_list) == 1:
-            query = query.where(Node.name.startswith(analyzer_list[0] + "."))
-        elif len(analyzer_list) > 1:
+        if len(server_list) == 1:
+            query = query.where(Node.name.startswith(server_list[0] + "."))
+        elif len(server_list) > 1:
             # For multiple values, use OR conditions
             from sqlalchemy import or_
 
-            conditions = [Node.name.startswith(a + ".") for a in analyzer_list]
+            conditions = [Node.name.startswith(s + ".") for s in server_list]
             query = query.where(or_(*conditions))
 
     if classification and Classification:
