@@ -307,8 +307,8 @@ watch([startHour, startMinute, endHour, endMinute], () => {
 })
 
 
-// Reactive current time using VueUse
-const currentTime = useNow()
+// Reactive current time - update every 60s (minute precision is sufficient for display)
+const currentTime = useNow({ interval: 60000 })
 
 // Helper function to convert Date to CalendarDateTime
 function dateToCalendarDateTime(date: Date): CalendarDateTime {

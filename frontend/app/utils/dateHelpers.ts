@@ -18,8 +18,9 @@ export function getLast24HoursRange(): DateRange {
 
 // Reactive date range that updates at midnight
 export function useReactiveTodayRange() {
-  const now = useNow()
-  
+  // Update once per minute - no need for 60 FPS here
+  const now = useNow({ interval: 60000 })
+
   return computed(() => {
     const current = now.value
     const startOfDay = new Date(current.getFullYear(), current.getMonth(), current.getDate())
