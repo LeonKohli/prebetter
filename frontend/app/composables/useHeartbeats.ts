@@ -2,23 +2,11 @@ const WELL_KNOWN_STATUSES = ['active', 'inactive', 'offline', 'unknown'] as cons
 
 type WellKnownStatus = (typeof WELL_KNOWN_STATUSES)[number]
 
-type HeartbeatStatusSummaryListItem = {
-  status: string
-  count: number
-}
-
-interface HeartbeatStatusOptions {
+export function useHeartbeatStatus(options: {
   days?: number
   autoRefreshMs?: number
   immediate?: boolean
-}
-
-interface HeartbeatTimelineOptions {
-  hours?: number
-  pageSize?: number
-}
-
-export function useHeartbeatStatus(options: HeartbeatStatusOptions = {}) {
+} = {}) {
   const days = ref(options.days ?? 1)
   const lastUpdated = ref<Date | null>(null)
   const autoRefreshInterval = ref(options.autoRefreshMs ?? 30_000)
@@ -59,9 +47,9 @@ export function useHeartbeatStatus(options: HeartbeatStatusOptions = {}) {
     return normalised
   })
 
-  const statusSummaryList = computed<HeartbeatStatusSummaryListItem[]>(() => {
-    const base: HeartbeatStatusSummaryListItem[] = WELL_KNOWN_STATUSES.map((statusKey) => ({
-      status: statusKey,
+  const statusSummaryList = computed(() => {
+    const base = WELL_KNOWN_STATUSES.map((statusKey) => ({
+      status: statusKey as string,
       count: statusSummary.value[statusKey] ?? 0,
     }))
 
@@ -141,7 +129,7 @@ export function useHeartbeatStatus(options: HeartbeatStatusOptions = {}) {
   }
 }
 
-export function useHeartbeatTimeline(options: HeartbeatTimelineOptions = {}) {
+export function useHeartbeatTimeline(options: { hours?: number; pageSize?: number } = {}) {
   const hours = ref(options.hours ?? 24)
   const page = ref(1)
   const pageSize = ref(options.pageSize ?? 100)
