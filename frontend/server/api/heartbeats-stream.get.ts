@@ -36,6 +36,11 @@ export default defineEventHandler(async (event) => {
 
   const target = joinURL(config.apiBase as string, 'api/v1/heartbeats/stream')
 
+  // Critical headers to prevent proxy buffering on corporate networks
+  setResponseHeader(event, 'X-Accel-Buffering', 'no')
+  setResponseHeader(event, 'Cache-Control', 'no-cache, no-transform')
+  setResponseHeader(event, 'Connection', 'keep-alive')
+
   return proxyRequest(event, target, {
     headers: {
       'Authorization': `Bearer ${session.secure!.apiToken}`,
