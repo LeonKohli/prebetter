@@ -1,8 +1,20 @@
 <script setup lang="ts">
 import type { NuxtError } from '#app'
 
+// FastAPI validation error format
+interface ValidationError {
+  loc: (string | number)[]
+  msg: string
+  type: string
+}
+
+// FastAPI error data format
+interface FastAPIErrorData {
+  detail?: string | ValidationError[]
+}
+
 const props = defineProps({
-  error: Object as () => NuxtError
+  error: Object as () => NuxtError<FastAPIErrorData>
 })
 
 const router = useRouter()
@@ -28,7 +40,7 @@ const errorTitle = computed(() => {
 })
 
 const errorMessage = computed(() => {
-  const detail = (props.error?.data as any)?.detail
+  const detail = props.error?.data?.detail
   if (detail) {
     if (typeof detail === 'string') {
       return detail
@@ -37,8 +49,8 @@ const errorMessage = computed(() => {
       // Format FastAPI validation errors
       return detail
         .map(
-          err =>
-            `${(err.loc || []).slice(1).join(' → ')}: ${
+          (err: ValidationError) =>
+            `${err.loc.slice(1).join(' → ')}: ${
               err.msg || 'Invalid value'
             }`,
         )
