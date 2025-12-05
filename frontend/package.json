@@ -10,8 +10,7 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test": "vitest",
-    "test:e2e": "vitest --config test/e2e/vitest.config.ts",
-    "typecheck": "nuxt prepare && vue-tsc -b --noEmit"
+    "typecheck": "nuxt typecheck"
   },
   "dependencies": {
     "@internationalized/date": "^3.10.0",
