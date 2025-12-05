@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
-from typing import Optional
+from typing import Optional, AsyncGenerator, Annotated
 from datetime import datetime
 from enum import Enum
+import asyncio
 from app.database.config import (
     get_prelude_db,
+    PreludeSessionLocal,
+    PrebetterSessionLocal,
     apply_standard_alert_filters,
     apply_sorting,
 )
@@ -48,9 +52,15 @@ from app.schemas.prelude import (
     PaginatedResponse,
 )
 from app.core.datetime_utils import get_current_time, ensure_timezone
-from app.api.v1.routes.auth import get_current_user
+from app.api.v1.routes.auth import (
+    get_current_user,
+    validate_access_token,
+    oauth2_scheme,
+)
+from app.models.users import User
+from app.services.users import UserService
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
+router = APIRouter()
 
 
 class SortField(str, Enum):
@@ -85,6 +95,7 @@ async def list_alerts(
     target_ip: Optional[str] = None,
     server: Optional[str] = None,
     db: Session = Depends(get_prelude_db),
+    _: Annotated[User, Depends(get_current_user)] = None,
 ) -> AlertListResponse:
     """Retrieve a paginated list of alerts with filtering and sorting."""
     # Future date validation prevents empty results from test queries
@@ -151,6 +162,103 @@ async def list_alerts(
     )
 
 
+# SSE endpoint for real-time alert streaming
+# IMPORTANT: Must be defined BEFORE /{alert_id} route to avoid path parameter matching
+@router.get("/stream")
+async def stream_alerts(
+    request: Request,
+    token: Annotated[str, Depends(oauth2_scheme)],
+    last_id: Optional[int] = Query(None, description="Last known alert ID"),
+):
+    """
+    Server-Sent Events endpoint for real-time alert updates.
+
+    Connect with EventSource and receive new alerts as they appear.
+    Pass `last_id` to only receive alerts newer than that ID.
+
+    IMPORTANT: This endpoint does NOT hold a database connection for the stream lifetime.
+    Each poll acquires and releases a fresh session to avoid exhausting the pool.
+
+    Note: FastAPI's Depends() with yield is incompatible with SSE because the dependency
+    cleanup only runs when the request completes - which for SSE means never.
+    Manual session management inside the generator is the standard pattern.
+    """
+
+    # Authenticate once and immediately release the Prebetter DB session
+    with PrebetterSessionLocal() as user_db:
+        user_service = UserService(user_db)
+        validate_access_token(token, user_service)
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        current_last_id = last_id
+
+        # Respect Last-Event-ID header for native SSE resume support
+        header_last_id = request.headers.get("last-event-id")
+        if header_last_id:
+            try:
+                parsed_header_id = int(header_last_id)
+                current_last_id = max(parsed_header_id, current_last_id or 0)
+            except ValueError:
+                # Ignore malformed header values
+                pass
+
+        # Get initial max ID if not provided - use short-lived session
+        if current_last_id is None:
+            with PreludeSessionLocal() as db:
+                max_id = db.scalar(select(func.max(Alert._ident)))
+                current_last_id = max_id or 0
+
+        heartbeat_counter = 0
+
+        while True:
+            # Check if client disconnected
+            if await request.is_disconnected():
+                break
+
+            # Acquire fresh session for EACH poll - releases immediately after
+            # This is critical: SSE connections can live for hours/days
+            with PreludeSessionLocal() as db:
+                query, models = build_alert_base_query(db)
+                query = query.where(Alert._ident > current_last_id).order_by(
+                    Alert._ident.asc()
+                ).limit(50)
+
+                results = db.execute(query).all()
+
+                if results:
+                    for result in results:
+                        alert_item = alert_result_to_list_item(result)
+                        # SSE format: event type + data
+                        yield (
+                            f"id: {alert_item.id}\n"
+                            f"event: alert\n"
+                            f"data: {alert_item.model_dump_json()}\n\n"
+                        )
+                        current_last_id = int(alert_item.id)
+
+                    # Reset heartbeat counter when we send data
+                    heartbeat_counter = 0
+                else:
+                    heartbeat_counter += 1
+                    # Send heartbeat every 6th iteration (30 seconds at 5s intervals)
+                    if heartbeat_counter >= 6:
+                        yield ": heartbeat\n\n"
+                        heartbeat_counter = 0
+
+            # Session is now CLOSED - connection returned to pool
+            await asyncio.sleep(5)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/groups", response_model=GroupedAlertResponse)
 async def get_grouped_alerts(
     page: int = Query(1, ge=1, description="Page number"),
@@ -167,6 +275,7 @@ async def get_grouped_alerts(
     target_ip: Optional[str] = None,
     server: Optional[str] = None,
     db: Session = Depends(get_prelude_db),
+    _: Annotated[User, Depends(get_current_user)] = None,
 ) -> GroupedAlertResponse:
     """Retrieve alerts grouped by source and target IP addresses."""
     try:
@@ -268,6 +377,7 @@ async def get_grouped_alerts(
 async def get_alert_detail(
     alert_id: int,
     db: Session = Depends(get_prelude_db),
+    _: Annotated[User, Depends(get_current_user)] = None,
 ) -> AlertDetail:
     """Get detailed information about a specific alert."""
     try:

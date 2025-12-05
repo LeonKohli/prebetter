@@ -47,11 +47,8 @@ def authenticate_user(
     return user
 
 
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    user_service: UserService = Depends(get_user_service),
-) -> User:
-    """Retrieve the current user based on JWT token."""
+def validate_access_token(token: str, user_service: UserService) -> User:
+    """Validate an access token and return the associated user."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -77,6 +74,14 @@ async def get_current_user(
     if not user:
         raise credentials_exception
     return user
+
+
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    user_service: UserService = Depends(get_user_service),
+) -> User:
+    """Retrieve the current user based on JWT token."""
+    return validate_access_token(token, user_service)
 
 
 @router.post("/token", response_model=Token)
