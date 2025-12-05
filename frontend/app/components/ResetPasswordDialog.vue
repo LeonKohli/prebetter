@@ -7,8 +7,8 @@
           Set a new password for <strong>{{ user?.username }}</strong>. They will be required to change it on next login.
         </DialogDescription>
       </DialogHeader>
-      
-      <Form v-slot="{ setFieldValue }" :validation-schema="formSchema" :initial-values="initialValues" @submit="onSubmit">
+
+      <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
           <FormField v-slot="{ componentField }" name="newPassword">
             <FormItem>
@@ -16,7 +16,7 @@
               <FormControl>
                 <div class="flex gap-2">
                   <Input type="text" v-bind="componentField" placeholder="Enter new password" />
-                  <Button type="button" size="sm" variant="outline" @click="generatePassword(setFieldValue)">
+                  <Button type="button" size="sm" variant="outline" @click="generatePassword">
                     <Icon name="lucide:dice-3" class="size-4" />
                   </Button>
                 </div>
@@ -36,7 +36,7 @@
             </AlertDescription>
           </Alert>
         </div>
-        
+
         <DialogFooter>
           <DialogClose as-child>
             <Button type="button" variant="outline" :disabled="isSubmitting">
@@ -48,14 +48,14 @@
             {{ isSubmitting ? 'Resetting...' : 'Reset Password' }}
           </Button>
         </DialogFooter>
-      </Form>
+      </form>
     </DialogContent>
   </Dialog>
 </template>
 
 <script setup lang="ts">
 import { toTypedSchema } from '@vee-validate/zod'
-import { Form } from '@/components/ui/form'
+import { useForm } from 'vee-validate'
 
 interface User {
   id: string
@@ -77,17 +77,19 @@ const emit = defineEmits<{
 
 // Dialog state
 const isOpen = ref(false)
-const isSubmitting = ref(false)
 
-const formSchema = toTypedSchema(resetPasswordSchema)
+// Form setup with useForm - the canonical vee-validate pattern
+const form = useForm({
+  validationSchema: toTypedSchema(resetPasswordSchema),
+  initialValues: {
+    newPassword: '',
+  },
+})
 
-// Initial form values
-const initialValues = {
-  newPassword: '',
-}
+const { isSubmitting, setFieldValue, resetForm } = form
 
 // Generate random password
-const generatePassword = (setFieldValue: any) => {
+const generatePassword = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
   let password = ''
   for (let i = 0; i < 12; i++) {
@@ -96,11 +98,10 @@ const generatePassword = (setFieldValue: any) => {
   setFieldValue('newPassword', password)
 }
 
-const onSubmit = async (values: any) => {
+// handleSubmit returns a properly typed submit handler
+const onSubmit = form.handleSubmit(async (values) => {
   if (!props.user) return
-  
-  isSubmitting.value = true
-  
+
   try {
     await $fetch(`/api/users/${props.user.id}/reset-password`, {
       method: 'POST',
@@ -112,12 +113,11 @@ const onSubmit = async (values: any) => {
     // Emit success event
     emit('reset:success')
     isOpen.value = false
-  } catch (error: any) {
+    resetForm()
+  } catch (error) {
     console.error('Reset password error:', error)
-  } finally {
-    isSubmitting.value = false
   }
-}
+})
 
 // Expose open method for parent component
 defineExpose({
