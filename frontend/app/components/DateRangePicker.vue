@@ -89,7 +89,6 @@
 </template>
 
 <script setup lang="ts">
-import { useNow } from '@vueuse/core'
 import type { DateRange } from 'reka-ui'
 import {
   CalendarDate,
@@ -97,13 +96,7 @@ import {
   DateFormatter,
   getLocalTimeZone,
 } from '@internationalized/date'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { RangeCalendar } from '@/components/ui/range-calendar'
-import { DATE_PRESETS, getPresetLabel, isRelativePreset, isValidPresetId, type DatePreset, type DatePresetId } from '@/utils/datePresets'
-
+import { DATE_PRESETS, isRelativePreset, type DatePreset, type DatePresetId } from '@/utils/datePresets'
 
 interface DateRangeValue {
   from: Date | undefined
