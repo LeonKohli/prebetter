@@ -1,5 +1,5 @@
 interface UseAlertStreamOptions {
-  /** Auto-connect on mount (default: false to avoid 401 race on page load) */
+  /** Auto-connect on mount (default: true) */
   immediate?: boolean
   /** Callback when new alerts arrive (debounced) */
   onNewAlerts?: () => void
@@ -24,7 +24,7 @@ interface UseAlertStreamOptions {
  */
 export function useAlertStream(options: UseAlertStreamOptions = {}) {
   const {
-    immediate = false,
+    immediate = true,
     onNewAlerts,
     debounceMs = 1000
   } = options
