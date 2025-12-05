@@ -147,21 +147,16 @@ async function performSseRefresh() {
 }
 
 // Initialize SSE stream for real-time heartbeat updates
-// Only on client side - SSE doesn't work during SSR
-const sseStream = import.meta.client
-  ? useHeartbeatStream({
-      onNewHeartbeats: performSseRefresh,
-      debounceMs: 2000,
-    })
-  : {
-      status: ref('CLOSED' as const),
-      error: ref<Event | null>(null),
-      close: () => {},
-      open: () => {},
-    }
-
-const sseStatus = computed(() => sseStream.status.value)
-const sseError = computed(() => sseStream.error?.value ?? null)
+// VueUse's useEventSource is SSR-safe - it checks isClient internally
+const {
+  status: sseStatus,
+  error: sseError,
+  close: sseClose,
+  open: sseOpen,
+} = useHeartbeatStream({
+  onNewHeartbeats: performSseRefresh,
+  debounceMs: 2000,
+})
 
 // Toggle live mode - pauses/resumes SSE stream
 function toggleLive() {
@@ -169,12 +164,12 @@ function toggleLive() {
 
   if (isLive.value) {
     // Resume: reopen SSE and refresh data
-    sseStream.open()
+    sseOpen()
     refreshStatus()
     refreshTimeline()
   } else {
     // Pause: close SSE connection
-    sseStream.close()
+    sseClose()
   }
 }
 

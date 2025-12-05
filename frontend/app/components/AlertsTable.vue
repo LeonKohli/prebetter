@@ -227,25 +227,18 @@ const performSseRefresh = async () => {
 const isLive = ref(true)
 
 // Initialize SSE stream with auto-refresh callback
-// Only on client side - SSE doesn't work during SSR
-const sseStream = process.client
-  ? useAlertStream({
-      onNewAlerts: () => {
-        if (isLive.value) performSseRefresh()
-      },
-      debounceMs: 2000,
-    })
-  : {
-      status: ref('CLOSED' as const),
-      error: ref<Event | null>(null),
-      isConnected: ref(false),
-      isConnecting: ref(false),
-      clearAlerts: () => {},
-      close: () => {},
-      open: () => {},
-    }
-
-const { status: sseStatus, error: sseError, clearAlerts } = sseStream
+// VueUse's useEventSource is SSR-safe - it checks isClient internally
+const {
+  status: sseStatus,
+  error: sseError,
+  close: sseClose,
+  open: sseOpen,
+} = useAlertStream({
+  onNewAlerts: () => {
+    if (isLive.value) performSseRefresh()
+  },
+  debounceMs: 2000,
+})
 
 // Toggle live mode - pauses/resumes SSE stream
 function handleToggleLive() {
@@ -253,11 +246,11 @@ function handleToggleLive() {
 
   if (isLive.value) {
     // Resume: reopen SSE and refresh data
-    sseStream.open()
+    sseOpen()
     refresh()
   } else {
     // Pause: close SSE connection
-    sseStream.close()
+    sseClose()
   }
 }
 
