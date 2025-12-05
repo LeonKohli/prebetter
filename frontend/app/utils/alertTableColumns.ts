@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/vue-table";
-import AlertActions from "@/components/alerts/AlertActions.vue";
-import ClassificationBadges from "@/components/alerts/ClassificationBadges.vue";
-import DataTableColumnHeader from "@/components/alerts/DataTableColumnHeader.vue";
+import AlertActions from "@/components/AlertActions.vue";
+import ClassificationBadges from "@/components/ClassificationBadges.vue";
+import DataTableColumnHeader from "@/components/DataTableColumnHeader.vue";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   formatTimestamp,

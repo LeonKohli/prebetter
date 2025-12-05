@@ -18,9 +18,8 @@ function copyId() {
   let id = ''
   if (props.isGrouped) {
     // For grouped rows, use the IP pair as identifier (works for both legacy and compact)
-    const anyAlert = props.alert as any
-    const src = anyAlert?.source_ipv4 || 'unknown'
-    const dst = anyAlert?.target_ipv4 || 'unknown'
+    const src = props.alert.source_ipv4 ?? 'unknown'
+    const dst = props.alert.target_ipv4 ?? 'unknown'
     id = `${src}-${dst}`
   } else if ('id' in props.alert) {
     id = props.alert.id
@@ -46,9 +45,8 @@ function handleDelete() {
 }
 
 async function viewAllForPair() {
-  const anyAlert = props.alert as any
-  const sourceIp = anyAlert?.source_ipv4
-  const targetIp = anyAlert?.target_ipv4
+  const sourceIp = props.alert.source_ipv4
+  const targetIp = props.alert.target_ipv4
 
   if (!sourceIp || !targetIp) return
 

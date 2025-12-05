@@ -20,43 +20,24 @@
 
         <AlertsFilterPanel />
       </div>
-      
+
       <div class="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-8 px-3 text-xs font-medium"
-            >
-              <Icon 
-                :name="autoRefreshEnabled ? 'lucide:clock' : 'lucide:pause'" 
-                class="mr-2 size-4"
-              />
-              {{ autoRefreshDisplayText }}
-              <Icon name="lucide:chevron-down" class="ml-1 h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Auto-refresh interval</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuRadioGroup
-              :model-value="autoRefreshModel"
-              @update:model-value="handleAutoRefreshChange"
-            >
-              <DropdownMenuRadioItem
-                v-for="option in autoRefreshOptions"
-                :key="option.value"
-                :value="option.value"
-                class="flex items-center"
-              >
-                <Icon :name="option.icon" class="mr-2 size-4" />
-                {{ option.label }}
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        
+        <!-- SSE Connection Status -->
+        <ClientOnly>
+          <div class="flex items-center gap-1.5 text-xs" :class="statusClasses">
+            <span class="size-2 rounded-full" :class="dotClasses" />
+            <span class="font-medium">{{ statusText }}</span>
+          </div>
+          <template #fallback>
+            <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span class="size-2 rounded-full bg-muted-foreground/50" />
+              <span class="font-medium">Connecting...</span>
+            </div>
+          </template>
+        </ClientOnly>
+
+        <Separator orientation="vertical" class="h-6" />
+
         <ClientOnly>
           <Button
             variant="outline"
@@ -81,7 +62,7 @@
             </Button>
           </template>
         </ClientOnly>
-        
+
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="outline" size="sm" class="h-8 px-3 text-xs font-medium">
@@ -106,29 +87,51 @@
 </template>
 
 <script setup lang="ts">
-import type { DropdownMenuCheckboxItemProps } from 'reka-ui'
-import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
-import DateRangePicker from '@/components/DateRangePicker.vue'
-import AlertsFilterPanel from '@/components/alerts/AlertsFilterPanel.vue'
-import { useAlertTableContext } from '@/composables/useAlertTableContext'
-
 interface DateRangeValue {
   from: Date | undefined
   to: Date | undefined
   presetId?: DatePresetId
 }
 
-interface Emits {
-  toggleView: []
-  startAutoRefresh: []
-  stopAutoRefresh: []
-  bulkDelete: []
+interface Props {
+  isConnected?: boolean
+  isConnecting?: boolean
 }
 
-const emit = defineEmits<Emits>()
+interface Emits {
+  toggleView: []
+  bulkDelete: []
+  refresh: []
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  isConnected: false,
+  isConnecting: false
+})
+
+defineEmits<Emits>()
 
 const { urlState, table, isGrouped, pending, relativeRefreshToken } = useAlertTableContext()
 const route = useRoute()
+
+// SSE status display
+const statusText = computed(() => {
+  if (props.isConnecting) return 'Connecting...'
+  if (props.isConnected) return 'Live'
+  return 'Offline'
+})
+
+const statusClasses = computed(() => {
+  if (props.isConnected) return 'text-green-600 dark:text-green-400'
+  if (props.isConnecting) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-muted-foreground'
+})
+
+const dotClasses = computed(() => {
+  if (props.isConnected) return 'bg-green-500 animate-pulse'
+  if (props.isConnecting) return 'bg-yellow-500 animate-pulse'
+  return 'bg-muted-foreground'
+})
 
 // Detect drilldown: ungrouped view with any of the deep-link filters present
 const isDrilldown = computed(() => {
@@ -142,7 +145,7 @@ async function backToGroups() {
   const newQuery: Record<string, any> = {
     ...route.query,
     view: 'grouped',
-    sort: 'detected_at:desc', // Changed from 'total_count:desc' to match default sort order
+    sort: 'detected_at:desc',
     page: '1',
     filter: Object.keys(rest).length > 0 ? JSON.stringify(rest) : undefined,
   }
@@ -204,37 +207,4 @@ const dateRange = computed<DateRangeValue>({
     urlState.filters.value = nextFilters
   }
 })
-
-const autoRefreshOptions = [
-  { value: '0', label: 'Inactive', icon: 'lucide:pause' },
-  { value: '30', label: '30 seconds', icon: 'lucide:clock' },
-  { value: '60', label: '1 minute', icon: 'lucide:clock' },
-  { value: '300', label: '5 minutes', icon: 'lucide:clock' },
-  { value: '600', label: '10 minutes', icon: 'lucide:clock' },
-] as const
-
-const autoRefreshModel = computed(() => String(urlState.autoRefresh.value ?? 0))
-
-const autoRefreshEnabled = computed(() => Number(autoRefreshModel.value) > 0)
-
-const autoRefreshDisplayText = computed(() => {
-  if (!autoRefreshEnabled.value) return 'Off'
-  const value = Number(autoRefreshModel.value)
-  return value >= 60 ? `${value / 60}m` : `${value}s`
-})
-
-function setAutoRefresh(seconds: number) {
-  urlState.autoRefresh.value = seconds
-  if (seconds === 0) {
-    emit('stopAutoRefresh')
-  } else {
-    emit('startAutoRefresh')
-  }
-}
-
-function handleAutoRefreshChange(value: string) {
-  const seconds = Number.parseInt(value, 10)
-  if (Number.isNaN(seconds)) return
-  setAutoRefresh(seconds)
-}
 </script>

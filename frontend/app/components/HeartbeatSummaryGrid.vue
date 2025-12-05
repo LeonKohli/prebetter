@@ -42,9 +42,6 @@
 </template>
 
 <script setup lang="ts">
-import type { PropType } from 'vue'
-import { Card, CardHeader, CardTitle } from '@/components/ui/card'
-import HeartbeatStatusBadge from '@/components/heartbeats/HeartbeatStatusBadge.vue'
 import { formatTimestamp } from '@/utils/timestampFormatter'
 
 type SummaryItem = {
