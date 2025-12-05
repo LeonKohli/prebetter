@@ -1,70 +1,76 @@
 <template>
   <div class="p-4 md:p-6 space-y-6">
-    <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 class="font-display text-2xl font-semibold">Heartbeat Monitor</h1>
-        <p class="text-sm text-muted-foreground max-w-2xl">
-          Monitor analyzer heartbeats across every node. Use the filters to locate agents that are late or offline and drill into their detailed timeline.
-        </p>
+    <!-- Toolbar - matches AlertsToolbar pattern -->
+    <div class="flex items-center justify-between pb-2">
+      <div class="flex items-center gap-3">
+        <Select :model-value="String(days)" @update:model-value="handleDaysChange">
+          <SelectTrigger class="h-8 w-[130px] text-xs font-medium">
+            <SelectValue :placeholder="`${days} days`" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">Last 24 hours</SelectItem>
+            <SelectItem value="3">Last 3 days</SelectItem>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="14">Last 14 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-      <div class="flex flex-wrap items-center gap-3">
-        <!-- SSE Connection Status -->
-        <ClientOnly>
-          <div class="flex items-center gap-1.5 text-xs" :class="sseStatusClasses">
-            <span class="size-2 rounded-full" :class="sseDotClasses" />
-            <span class="font-medium">{{ sseStatusText }}</span>
-          </div>
-          <template #fallback>
-            <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span class="size-2 rounded-full bg-muted-foreground/50" />
-              <span class="font-medium">Connecting...</span>
-            </div>
-          </template>
-        </ClientOnly>
 
-        <Separator orientation="vertical" class="h-6" />
-
-        <ClientOnly>
-          <Button
-            variant="outline"
-            size="sm"
-            :disabled="statusPending"
-            @click="refreshStatus"
-            class="flex items-center gap-2"
-          >
-            <Icon
-              :name="statusPending ? 'lucide:loader-2' : 'lucide:refresh-cw'"
-              class="size-4"
-              :class="{ 'animate-spin': statusPending }"
-            />
-            Refresh
-          </Button>
-          <template #fallback>
-            <Button variant="outline" size="sm" class="flex items-center gap-2" disabled>
-              <Icon name="lucide:refresh-cw" class="size-4" />
-              Refresh
-            </Button>
-          </template>
-        </ClientOnly>
-
-        <div class="flex items-center gap-2 text-sm">
-          <span class="text-muted-foreground">Lookback</span>
-          <Select :model-value="String(days)" @update:model-value="handleDaysChange">
-            <SelectTrigger class="h-8 w-[120px] text-xs">
-              <SelectValue :placeholder="`${days}`" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">24 hours</SelectItem>
-              <SelectItem value="3">3 days</SelectItem>
-              <SelectItem value="7">7 days</SelectItem>
-              <SelectItem value="14">14 days</SelectItem>
-              <SelectItem value="30">30 days</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
+      <div class="flex items-center gap-2">
+        <!-- Live/Pause Toggle with Connection Status -->
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-8 px-3 text-xs font-medium"
+                @click="toggleLive"
+              >
+                <!-- Paused: user disabled live mode -->
+                <template v-if="!isLive">
+                  <Icon name="lucide:pause" class="mr-2 size-4 text-muted-foreground" />
+                  Paused
+                </template>
+                <!-- Live + Connected: green pulsing dot -->
+                <template v-else-if="sseStatus === 'OPEN'">
+                  <span class="mr-2 size-2 rounded-full bg-green-500 animate-pulse" />
+                  Live
+                </template>
+                <!-- Live + Connecting: yellow spinner -->
+                <template v-else-if="sseStatus === 'CONNECTING'">
+                  <Icon name="lucide:loader-2" class="mr-2 size-4 text-yellow-500 animate-spin" />
+                  Connecting
+                </template>
+                <!-- Live + Closed/Error: red dot -->
+                <template v-else>
+                  <span class="mr-2 size-2 rounded-full bg-red-500" />
+                  Offline
+                </template>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" :side-offset="4">
+              <template v-if="!isLive">
+                Click to enable real-time updates
+              </template>
+              <template v-else-if="sseStatus === 'OPEN'">
+                Connected - receiving live updates
+              </template>
+              <template v-else-if="sseStatus === 'CONNECTING'">
+                Establishing connection...
+              </template>
+              <template v-else-if="sseError">
+                Connection error - will retry automatically
+              </template>
+              <template v-else>
+                Disconnected - will retry automatically
+              </template>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
-    </header>
+    </div>
 
     <HeartbeatSummaryGrid
       :total-nodes="totalNodes"
@@ -73,72 +79,20 @@
       :last-updated="lastUpdatedAt"
     />
 
-    <section class="space-y-3">
-      <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center gap-2 text-sm">
-            <span class="text-muted-foreground">Filter status</span>
-            <Select :model-value="statusFilter" @update:model-value="handleStatusFilterChange">
-              <SelectTrigger class="h-8 w-[140px] text-xs">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem v-for="option in statusOptions" :key="option" :value="option">
-                  {{ option.charAt(0).toUpperCase() + option.slice(1) }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="relative">
-            <Icon name="lucide:search" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              v-model="searchTerm"
-              placeholder="Search nodes or agents"
-              class="h-9 w-[220px] pl-9"
-              type="search"
-            />
-          </div>
-        </div>
-        <div class="text-xs text-muted-foreground">
-          Showing {{ filteredAgentCount }} of {{ totalAgents }} agents
-        </div>
-      </header>
-
-      <HeartbeatNodeList
-        :nodes="filteredNodes"
-        :total-agents="filteredAgentCount"
-        @agent-select="handleAgentSelect"
-      />
-    </section>
+    <HeartbeatNodeList
+      :nodes="nodes"
+      :total-agents="totalAgents"
+      @agent-select="handleAgentSelect"
+    />
 
     <HeartbeatTimelineTable
       title="Recent heartbeats"
-      subtitle="Latest heartbeats within the selected window"
       :items="timelineItems"
       :pending="timelinePending"
       :error="timelineErrorNormalized"
       :pagination="timelinePagination"
       @update:page="timelineSetPage"
-    >
-      <template #actions>
-        <div class="flex items-center gap-2 text-sm">
-          <span class="text-muted-foreground">Window</span>
-          <Select :model-value="String(timelineHours)" @update:model-value="handleHoursChange">
-            <SelectTrigger class="h-8 w-[110px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="6">6 hours</SelectItem>
-              <SelectItem value="12">12 hours</SelectItem>
-              <SelectItem value="24">24 hours</SelectItem>
-              <SelectItem value="48">48 hours</SelectItem>
-              <SelectItem value="72">72 hours</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </template>
-    </HeartbeatTimelineTable>
+    />
   </div>
 </template>
 
@@ -159,7 +113,6 @@ const {
   totalNodes,
   totalAgents,
   statusSummaryList,
-  pending: statusPending,
   refresh: refreshStatus,
   days,
   setDays,
@@ -171,14 +124,22 @@ const {
   pending: timelinePending,
   error: timelineError,
   pagination: timelinePagination,
-  hours: timelineHours,
-  setHours: setTimelineHours,
   setPage: setTimelinePage,
   refresh: refreshTimeline,
+  setHours: setTimelineHours,
 } = useHeartbeatTimeline({ hours: 24, pageSize: 50 })
+
+// Sync timeline hours when lookback days change (days * 24 = hours)
+watch(days, (newDays) => {
+  setTimelineHours(newDays * 24)
+}, { immediate: true })
+
+// Live mode state - controls whether real-time updates are active
+const isLive = ref(true)
 
 // SSE refresh handler - refresh both status and timeline
 async function performSseRefresh() {
+  if (!isLive.value) return // Skip if paused
   await Promise.all([
     refreshStatus(),
     refreshTimeline(),
@@ -187,77 +148,38 @@ async function performSseRefresh() {
 
 // Initialize SSE stream for real-time heartbeat updates
 // Only on client side - SSE doesn't work during SSR
-const { isConnected, isConnecting } = import.meta.client
+const sseStream = import.meta.client
   ? useHeartbeatStream({
       onNewHeartbeats: performSseRefresh,
       debounceMs: 2000, // Wait 2s after last update before refreshing (batches rapid heartbeats)
     })
-  : { isConnected: ref(false), isConnecting: ref(false) }
+  : {
+      status: ref('CLOSED' as const),
+      error: ref<Event | null>(null),
+      close: () => {},
+      open: () => {},
+    }
 
-// SSE status display
-const sseStatusText = computed(() => {
-  if (isConnecting.value) return 'Connecting...'
-  if (isConnected.value) return 'Live'
-  return 'Offline'
-})
+const sseStatus = computed(() => sseStream.status.value)
+const sseError = computed(() => sseStream.error?.value ?? null)
 
-const sseStatusClasses = computed(() => {
-  if (isConnected.value) return 'text-green-600 dark:text-green-400'
-  if (isConnecting.value) return 'text-yellow-600 dark:text-yellow-400'
-  return 'text-muted-foreground'
-})
+// Toggle live mode - pauses/resumes SSE stream
+function toggleLive() {
+  isLive.value = !isLive.value
 
-const sseDotClasses = computed(() => {
-  if (isConnected.value) return 'bg-green-500 animate-pulse'
-  if (isConnecting.value) return 'bg-yellow-500 animate-pulse'
-  return 'bg-muted-foreground'
-})
+  if (isLive.value) {
+    // Resume: reopen SSE and refresh data
+    sseStream.open()
+    refreshStatus()
+    refreshTimeline()
+  } else {
+    // Pause: close SSE connection
+    sseStream.close()
+  }
+}
 
-const searchTerm = ref('')
-const statusFilter = ref<StatusFilter>('all')
 const lastUpdatedAt = computed(() => lastUpdated.value)
 const timelineErrorNormalized = computed(() => timelineError.value ?? null)
-
-const statusOptions = computed(() => {
-  const options = new Set<string>()
-  statusSummaryList.value.forEach((item) => options.add(item.status))
-  return Array.from(options)
-})
-
-type StatusFilter = 'all' | string
-
-const filteredNodes = computed<HeartbeatNode[]>(() => {
-  const term = searchTerm.value.trim().toLowerCase()
-  return nodes.value
-    .map((node) => {
-      const filteredAgents = node.agents.filter((agent) => {
-        const matchesStatus = statusFilter.value === 'all' || agent.status === statusFilter.value
-        if (!matchesStatus) return false
-
-        if (!term) return true
-        return (
-          node.name.toLowerCase().includes(term) ||
-          agent.name.toLowerCase().includes(term) ||
-          (agent.model?.toLowerCase().includes(term) ?? false) ||
-          (agent.version?.toLowerCase().includes(term) ?? false)
-        )
-      })
-
-      if (filteredAgents.length === 0) {
-        return null
-      }
-
-      return {
-        ...node,
-        agents: filteredAgents,
-      }
-    })
-    .filter((value): value is HeartbeatNode => Boolean(value))
-})
-
-const filteredAgentCount = computed(() =>
-  filteredNodes.value.reduce((total, node) => total + node.agents.length, 0)
-)
 
 function handleAgentSelect(payload: { node: string; agent: string }) {
   router.push({
@@ -270,17 +192,7 @@ function handleDaysChange(value: unknown) {
   setDays(Number(value))
 }
 
-function handleHoursChange(value: unknown) {
-  if (value == null) return
-  setTimelineHours(Number(value))
-}
-
 function timelineSetPage(value: number) {
   setTimelinePage(value)
-}
-
-function handleStatusFilterChange(value: unknown) {
-  const next = value == null ? 'all' : String(value)
-  statusFilter.value = next as StatusFilter
 }
 </script>
