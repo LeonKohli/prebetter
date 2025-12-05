@@ -1,5 +1,3 @@
-import { useIntervalFn } from '@vueuse/core'
-
 const WELL_KNOWN_STATUSES = ['active', 'inactive', 'offline', 'unknown'] as const
 
 type WellKnownStatus = (typeof WELL_KNOWN_STATUSES)[number]
@@ -92,6 +90,8 @@ export function useHeartbeatStatus(options: HeartbeatStatusOptions = {}) {
     { flush: 'post', immediate: false }
   )
 
+  // Only set up interval-based refresh if autoRefreshMs > 0
+  // When SSE is used, pass autoRefreshMs: 0 to disable polling
   const { pause: pauseAutoRefresh, resume: resumeAutoRefresh } = useIntervalFn(
     () => {
       refresh()
@@ -103,7 +103,8 @@ export function useHeartbeatStatus(options: HeartbeatStatusOptions = {}) {
   watch(
     autoRefreshEnabled,
     (enabled) => {
-      if (enabled) {
+      // Don't start polling if interval is 0 (SSE mode)
+      if (enabled && autoRefreshInterval.value > 0) {
         resumeAutoRefresh()
       } else {
         pauseAutoRefresh()

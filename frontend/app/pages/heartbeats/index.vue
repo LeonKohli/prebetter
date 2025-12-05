@@ -8,6 +8,22 @@
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-3">
+        <!-- SSE Connection Status -->
+        <ClientOnly>
+          <div class="flex items-center gap-1.5 text-xs" :class="sseStatusClasses">
+            <span class="size-2 rounded-full" :class="sseDotClasses" />
+            <span class="font-medium">{{ sseStatusText }}</span>
+          </div>
+          <template #fallback>
+            <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span class="size-2 rounded-full bg-muted-foreground/50" />
+              <span class="font-medium">Connecting...</span>
+            </div>
+          </template>
+        </ClientOnly>
+
+        <Separator orientation="vertical" class="h-6" />
+
         <ClientOnly>
           <Button
             variant="outline"
@@ -47,24 +63,6 @@
           </Select>
         </div>
 
-        <div class="flex items-center gap-2 text-sm">
-          <span class="text-muted-foreground">Auto refresh</span>
-          <Switch
-            :checked="autoRefreshEnabled"
-            @update:checked="updateAutoRefresh"
-          />
-          <Select :model-value="String(autoRefreshInterval)" @update:model-value="handleIntervalChange">
-            <SelectTrigger class="h-8 w-[110px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="15000">15 seconds</SelectItem>
-              <SelectItem value="30000">30 seconds</SelectItem>
-              <SelectItem value="60000">60 seconds</SelectItem>
-              <SelectItem value="120000">2 minutes</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
     </header>
 
@@ -145,17 +143,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from '#imports'
-import { useHeartbeatStatus, useHeartbeatTimeline } from '@/composables/useHeartbeats'
-import HeartbeatSummaryGrid from '@/components/heartbeats/HeartbeatSummaryGrid.vue'
-import HeartbeatNodeList from '@/components/heartbeats/HeartbeatNodeList.vue'
-import HeartbeatTimelineTable from '@/components/heartbeats/HeartbeatTimelineTable.vue'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-
 definePageMeta({
   requiresAuth: true,
 })
@@ -177,9 +164,7 @@ const {
   days,
   setDays,
   lastUpdated,
-  autoRefreshEnabled,
-  autoRefreshInterval,
-} = useHeartbeatStatus({ autoRefreshMs: 60_000 })
+} = useHeartbeatStatus({ autoRefreshMs: 0 }) // SSE handles refresh, disable polling
 
 const {
   items: timelineItems,
@@ -189,7 +174,44 @@ const {
   hours: timelineHours,
   setHours: setTimelineHours,
   setPage: setTimelinePage,
+  refresh: refreshTimeline,
 } = useHeartbeatTimeline({ hours: 24, pageSize: 50 })
+
+// SSE refresh handler - refresh both status and timeline
+async function performSseRefresh() {
+  await Promise.all([
+    refreshStatus(),
+    refreshTimeline(),
+  ])
+}
+
+// Initialize SSE stream for real-time heartbeat updates
+// Only on client side - SSE doesn't work during SSR
+const { isConnected, isConnecting } = import.meta.client
+  ? useHeartbeatStream({
+      onNewHeartbeats: performSseRefresh,
+      debounceMs: 2000, // Wait 2s after last update before refreshing (batches rapid heartbeats)
+    })
+  : { isConnected: ref(false), isConnecting: ref(false) }
+
+// SSE status display
+const sseStatusText = computed(() => {
+  if (isConnecting.value) return 'Connecting...'
+  if (isConnected.value) return 'Live'
+  return 'Offline'
+})
+
+const sseStatusClasses = computed(() => {
+  if (isConnected.value) return 'text-green-600 dark:text-green-400'
+  if (isConnecting.value) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-muted-foreground'
+})
+
+const sseDotClasses = computed(() => {
+  if (isConnected.value) return 'bg-green-500 animate-pulse'
+  if (isConnecting.value) return 'bg-yellow-500 animate-pulse'
+  return 'bg-muted-foreground'
+})
 
 const searchTerm = ref('')
 const statusFilter = ref<StatusFilter>('all')
@@ -248,11 +270,6 @@ function handleDaysChange(value: unknown) {
   setDays(Number(value))
 }
 
-function handleIntervalChange(value: unknown) {
-  if (value == null) return
-  autoRefreshInterval.value = Number(value)
-}
-
 function handleHoursChange(value: unknown) {
   if (value == null) return
   setTimelineHours(Number(value))
@@ -260,10 +277,6 @@ function handleHoursChange(value: unknown) {
 
 function timelineSetPage(value: number) {
   setTimelinePage(value)
-}
-
-function updateAutoRefresh(value: boolean) {
-  autoRefreshEnabled.value = value
 }
 
 function handleStatusFilterChange(value: unknown) {

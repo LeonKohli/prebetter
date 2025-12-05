@@ -1,5 +1,3 @@
-import { useNow } from '@vueuse/core'
-
 export interface DateRange {
   from: Date | undefined
   to: Date | undefined
