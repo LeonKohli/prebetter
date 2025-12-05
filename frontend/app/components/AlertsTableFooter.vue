@@ -7,11 +7,7 @@
 
       <!-- Summary Text -->
       <div class="text-muted-foreground text-center sm:text-left min-w-0 text-sm">
-        <span v-if="pending" class="flex items-center justify-center sm:justify-start gap-2 animate-pulse">
-          <Icon name="lucide:loader-2" class="h-3.5 w-3.5 animate-spin" />
-          Loading...
-        </span>
-        <span v-else class="truncate block">{{ summaryText }}</span>
+        <span class="truncate block">{{ summaryText }}</span>
       </div>
 
       <!-- Page Size Selector -->
