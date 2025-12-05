@@ -223,14 +223,46 @@ const performSseRefresh = async () => {
   }
 }
 
+// Live mode state - controls whether real-time updates are active
+const isLive = ref(true)
+
 // Initialize SSE stream with auto-refresh callback
 // Only on client side - SSE doesn't work during SSR
-const { isConnected, isConnecting, clearAlerts } = process.client
+const sseStream = process.client
   ? useAlertStream({
-      onNewAlerts: performSseRefresh,
+      onNewAlerts: () => {
+        // Only trigger refresh if live mode is active
+        if (isLive.value) {
+          performSseRefresh()
+        }
+      },
       debounceMs: 2000, // Wait 2s after last alert before refreshing (batches rapid alerts)
     })
-  : { isConnected: ref(false), isConnecting: ref(false), clearAlerts: () => {} }
+  : {
+      status: ref('CLOSED' as const),
+      error: ref<Event | null>(null),
+      isConnected: ref(false),
+      isConnecting: ref(false),
+      clearAlerts: () => {},
+      close: () => {},
+      open: () => {},
+    }
+
+const { status: sseStatus, error: sseError, clearAlerts } = sseStream
+
+// Toggle live mode - pauses/resumes SSE stream
+function handleToggleLive() {
+  isLive.value = !isLive.value
+
+  if (isLive.value) {
+    // Resume: reopen SSE and refresh data
+    sseStream.open()
+    refresh()
+  } else {
+    // Pause: close SSE connection
+    sseStream.close()
+  }
+}
 
 // Simple loading state - show overlay only for user actions
 const showLoadingOverlay = computed(() => 
@@ -517,10 +549,12 @@ if (process.client) {
   <div class="w-full h-full flex flex-col">
     <!-- Toolbar -->
     <AlertsToolbar
-      :is-connected="isConnected"
-      :is-connecting="isConnecting"
-      @toggleView="handleToggleView"
-      @bulkDelete="handleBulkDelete"
+      :is-live="isLive"
+      :sse-status="sseStatus"
+      :sse-error="sseError"
+      @toggle-view="handleToggleView"
+      @toggle-live="handleToggleLive"
+      @bulk-delete="handleBulkDelete"
       @refresh="refresh"
     />
 

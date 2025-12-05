@@ -22,21 +22,57 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <!-- SSE Connection Status -->
-        <ClientOnly>
-          <div class="flex items-center gap-1.5 text-xs" :class="statusClasses">
-            <span class="size-2 rounded-full" :class="dotClasses" />
-            <span class="font-medium">{{ statusText }}</span>
-          </div>
-          <template #fallback>
-            <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span class="size-2 rounded-full bg-muted-foreground/50" />
-              <span class="font-medium">Connecting...</span>
-            </div>
-          </template>
-        </ClientOnly>
-
-        <Separator orientation="vertical" class="h-6" />
+        <!-- Live/Pause Toggle Button with Connection Status -->
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-8 px-3 text-xs font-medium"
+                @click="toggleLive"
+              >
+                <!-- Paused: user disabled live mode -->
+                <template v-if="!isLive">
+                  <Icon name="lucide:pause" class="mr-2 size-4 text-muted-foreground" />
+                  Paused
+                </template>
+                <!-- Live + Connected: green pulsing dot -->
+                <template v-else-if="sseStatus === 'OPEN'">
+                  <span class="mr-2 size-2 rounded-full bg-green-500 animate-pulse" />
+                  Live
+                </template>
+                <!-- Live + Connecting: yellow spinner -->
+                <template v-else-if="sseStatus === 'CONNECTING'">
+                  <Icon name="lucide:loader-2" class="mr-2 size-4 text-yellow-500 animate-spin" />
+                  Connecting
+                </template>
+                <!-- Live + Closed/Error: red dot with reconnecting state -->
+                <template v-else>
+                  <span class="mr-2 size-2 rounded-full bg-red-500" />
+                  Offline
+                </template>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" :side-offset="4">
+              <template v-if="!isLive">
+                Click to enable real-time updates
+              </template>
+              <template v-else-if="sseStatus === 'OPEN'">
+                Connected - receiving live updates
+              </template>
+              <template v-else-if="sseStatus === 'CONNECTING'">
+                Establishing connection...
+              </template>
+              <template v-else-if="sseError">
+                Connection error - will retry automatically
+              </template>
+              <template v-else>
+                Disconnected - will retry automatically
+              </template>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <ClientOnly>
           <Button
@@ -93,45 +129,35 @@ interface DateRangeValue {
   presetId?: DatePresetId
 }
 
+type SseStatus = 'CONNECTING' | 'OPEN' | 'CLOSED'
+
 interface Props {
-  isConnected?: boolean
-  isConnecting?: boolean
+  isLive?: boolean
+  sseStatus?: SseStatus
+  sseError?: Event | null
 }
 
 interface Emits {
   toggleView: []
+  toggleLive: []
   bulkDelete: []
   refresh: []
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  isConnected: false,
-  isConnecting: false
+  isLive: false,
+  sseStatus: 'CLOSED',
+  sseError: null,
 })
 
-defineEmits<Emits>()
+const emit = defineEmits<Emits>()
 
 const { urlState, table, isGrouped, pending, relativeRefreshToken } = useAlertTableContext()
 const route = useRoute()
 
-// SSE status display
-const statusText = computed(() => {
-  if (props.isConnecting) return 'Connecting...'
-  if (props.isConnected) return 'Live'
-  return 'Offline'
-})
-
-const statusClasses = computed(() => {
-  if (props.isConnected) return 'text-green-600 dark:text-green-400'
-  if (props.isConnecting) return 'text-yellow-600 dark:text-yellow-400'
-  return 'text-muted-foreground'
-})
-
-const dotClasses = computed(() => {
-  if (props.isConnected) return 'bg-green-500 animate-pulse'
-  if (props.isConnecting) return 'bg-yellow-500 animate-pulse'
-  return 'bg-muted-foreground'
-})
+function toggleLive() {
+  emit('toggleLive')
+}
 
 // Detect drilldown: ungrouped view with any of the deep-link filters present
 const isDrilldown = computed(() => {
