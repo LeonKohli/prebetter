@@ -1,11 +1,12 @@
 import { joinURL } from 'ufo'
-import { proxyRequest } from 'h3'
 
 const REFRESH_BUFFER_MS = 2 * 60 * 1000
 
 /**
  * SSE Proxy for real-time alert streaming.
- * Refreshes token inline if expired.
+ *
+ * Uses manual fetch + streaming instead of proxyRequest which has
+ * known issues with SSE connections in Nuxt/h3.
  */
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -36,16 +37,28 @@ export default defineEventHandler(async (event) => {
 
   const target = joinURL(config.apiBase as string, 'api/v1/alerts/stream')
 
-  // Critical headers to prevent proxy buffering on corporate networks
-  setResponseHeader(event, 'X-Accel-Buffering', 'no')
-  setResponseHeader(event, 'Cache-Control', 'no-cache, no-transform')
-  setResponseHeader(event, 'Connection', 'keep-alive')
-
-  return proxyRequest(event, target, {
+  // Fetch SSE from backend
+  const response = await fetch(target, {
     headers: {
       'Authorization': `Bearer ${session.secure!.apiToken}`,
       'Accept': 'text/event-stream',
       'Cache-Control': 'no-cache',
     },
   })
+
+  if (!response.ok || !response.body) {
+    throw createError({
+      statusCode: response.status,
+      statusMessage: response.statusText || 'Failed to connect to SSE stream',
+    })
+  }
+
+  // Set SSE headers - critical for proper streaming
+  setResponseHeader(event, 'Content-Type', 'text/event-stream')
+  setResponseHeader(event, 'Cache-Control', 'no-cache, no-transform')
+  setResponseHeader(event, 'Connection', 'keep-alive')
+  setResponseHeader(event, 'X-Accel-Buffering', 'no')
+
+  // Stream the response body directly
+  return sendStream(event, response.body)
 })
