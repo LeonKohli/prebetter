@@ -82,11 +82,6 @@
 </template>
 
 <script setup lang="ts">
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
-import { formatTimestamp } from '@/utils/timestampFormatter'
-
 interface Props {
   title: string
   subtitle?: string

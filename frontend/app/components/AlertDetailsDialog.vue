@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import HexAsciiPayload from '@/components/alerts/HexAsciiPayload.vue'
 import { formatTimestamp } from '@/utils/timestampFormatter'
 
 const props = defineProps<{
@@ -556,9 +555,9 @@ function formatHttpLikePayload(raw: string): string {
                       <div class="min-w-0">
                         <!-- Dual-format payload (readable + original base64) -->
                         <HexAsciiPayload
-                          v-if="value && typeof value === 'object' && ('readable' in (value as any) || 'original' in (value as any))"
-                          :readable="(value as any).readable"
-                          :original="(value as any).original"
+                          v-if="value && typeof value === 'object' && ('readable' in value || 'original' in value)"
+                          :readable="value.readable"
+                          :original="value.original"
                           :name="`${String(key)}.bin`"
                           class="max-w-full"
                         />

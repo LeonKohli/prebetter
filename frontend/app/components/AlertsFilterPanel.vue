@@ -256,17 +256,6 @@
 </template>
 
 <script setup lang="ts">
-import { useVirtualList } from '@vueuse/core'
-import { useAlertTableContext } from '@/composables/useAlertTableContext'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
-
 const { urlState } = useAlertTableContext()
 
 const isOpen = ref(false)

@@ -14,12 +14,7 @@ import {
   getSortedRowModel,
   useVueTable,
 } from '@tanstack/vue-table'
-import { useIntervalFn, useDocumentVisibility, useEventListener, watchDebounced } from '@vueuse/core'
 import type { FetchError } from 'ofetch'
-import AlertDetailsDialog from '@/components/alerts/AlertDetailsDialog.vue'
-import AlertsSelectionBar from '@/components/alerts/AlertsSelectionBar.vue'
-import { valueUpdater } from '@/utils/utils'
-import { getPresetRange, isRelativePreset, isValidPresetId, type DatePresetId } from '@/utils/datePresets'
 
 // URL state synchronization with proper browser navigation
 const router = useRouter()
@@ -204,12 +199,38 @@ const displayError = computed(() => {
   return error.value
 })
 
-// Auto-refresh configuration
-const autoRefreshInterval = computed(() => urlState.autoRefresh.value * 1000) // Convert to milliseconds
-const autoRefreshEnabled = computed(() => urlState.autoRefresh.value > 0)
-
 // Track if current refresh is auto-refresh (silent)
 const isSilentRefresh = ref(false)
+
+// SSE-based real-time updates - replaces polling entirely
+// When new alerts arrive via SSE, automatically refresh the table
+const performSseRefresh = async () => {
+  // Skip if already loading or user has active selections
+  if (status.value === 'pending' || Object.keys(rowSelection.value).length > 0) return
+
+  const presetId = getActivePresetId()
+  if (presetId && isRelativePreset(presetId)) {
+    isSilentRefresh.value = true
+    relativeRefreshToken.value = Date.now()
+    return
+  }
+
+  try {
+    isSilentRefresh.value = true
+    await refresh()
+  } finally {
+    isSilentRefresh.value = false
+  }
+}
+
+// Initialize SSE stream with auto-refresh callback
+// Only on client side - SSE doesn't work during SSR
+const { isConnected, isConnecting, clearAlerts } = process.client
+  ? useAlertStream({
+      onNewAlerts: performSseRefresh,
+      debounceMs: 2000, // Wait 2s after last alert before refreshing (batches rapid alerts)
+    })
+  : { isConnected: ref(false), isConnecting: ref(false), clearAlerts: () => {} }
 
 // Simple loading state - show overlay only for user actions
 const showLoadingOverlay = computed(() => 
@@ -358,36 +379,6 @@ const handleToggleView = () => {
   router.push({ query: newQuery })
 }
 
-// Auto-refresh functionality using VueUse
-const performAutoRefresh = async () => {
-  // Skip if already loading or user has active selections
-  if (status.value === 'pending' || Object.keys(rowSelection.value).length > 0) return
-  const presetId = getActivePresetId()
-  if (presetId && isRelativePreset(presetId)) {
-    isSilentRefresh.value = true
-    relativeRefreshToken.value = Date.now()
-    return
-  }
-  
-  try {
-    isSilentRefresh.value = true
-    await refresh()
-  } catch (error) {
-    console.error('Auto-refresh failed:', error)
-  } finally {
-    isSilentRefresh.value = false
-  }
-}
-
-// Declarative auto-refresh with useIntervalFn
-const { pause: stopAutoRefresh, resume: startAutoRefresh, isActive: isAutoRefreshActive } = useIntervalFn(
-  performAutoRefresh,
-  autoRefreshInterval,
-  { 
-    immediate: false,
-    immediateCallback: false 
-  }
-)
 
 // Use watchDebounced to handle key changes with a small delay
 // This prevents rapid request triggering when multiple state values change
@@ -409,27 +400,14 @@ watch(status, (newStatus) => {
   }
 })
 
-// Watch for auto-refresh enable/disable
-watch(autoRefreshEnabled, (enabled) => {
-  if (enabled) {
-    startAutoRefresh()
-  } else {
-    stopAutoRefresh()
-  }
-})
-
-// Document visibility handling - only on client to avoid SSR issues
+// Document visibility handling - refresh when user returns to tab
 const documentVisibility = process.client ? useDocumentVisibility() : ref('visible')
 
-// Watch document visibility and handle auto-refresh - only on client
 if (process.client) {
   watch(documentVisibility, async (visibility) => {
-    if (visibility === 'hidden') {
-      stopAutoRefresh()
-    } else if (visibility === 'visible' && autoRefreshEnabled.value) {
-      startAutoRefresh()
-      // Refresh immediately when coming back to tab
-      await performAutoRefresh()
+    if (visibility === 'visible') {
+      // Refresh when coming back to tab to catch any missed updates
+      await performSseRefresh()
     }
   })
 }
@@ -532,27 +510,18 @@ if (process.client) {
   useEventListener(window, 'alertDeletionRequest', handleDeletionRequest)
 }
 
-// Start auto-refresh on mount
-onMounted(() => {
-  if (autoRefreshEnabled.value) {
-    startAutoRefresh()
-  }
-})
-
-// Cleanup on unmount
-onUnmounted(() => {
-  stopAutoRefresh()
-})
+// SSE cleanup happens automatically via VueUse's useEventSource
 </script>
 
 <template>
   <div class="w-full h-full flex flex-col">
     <!-- Toolbar -->
     <AlertsToolbar
+      :is-connected="isConnected"
+      :is-connecting="isConnecting"
       @toggleView="handleToggleView"
-      @startAutoRefresh="startAutoRefresh"
-      @stopAutoRefresh="stopAutoRefresh"
       @bulkDelete="handleBulkDelete"
+      @refresh="refresh"
     />
 
     <!-- Table + Pagination unified card -->
@@ -647,7 +616,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Alert Details Dialog -->
-    <AlertDetailsDialog 
+    <AlertDetailsDialog
       v-model:open="detailsDialogOpen"
       :alert-id="selectedAlertId"
     />

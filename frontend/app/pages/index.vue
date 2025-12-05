@@ -31,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import AlertsTable from '@/components/alerts/AlertsTable.vue'
+import AlertsTable from '@/components/AlertsTable.vue'
 
 definePageMeta({
   requiresAuth: true,
