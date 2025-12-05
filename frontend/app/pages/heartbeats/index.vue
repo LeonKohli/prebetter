@@ -107,6 +107,7 @@ useSeoMeta({
 })
 
 const router = useRouter()
+const { loggedIn, ready } = useUserSession()
 
 const {
   nodes,
@@ -147,7 +148,7 @@ async function performSseRefresh() {
 }
 
 // Initialize SSE stream for real-time heartbeat updates
-// VueUse's useEventSource is SSR-safe - it checks isClient internally
+// immediate: false by default - opened via watch when session is ready
 const {
   status: sseStatus,
   error: sseError,
@@ -157,6 +158,18 @@ const {
   onNewHeartbeats: performSseRefresh,
   debounceMs: 2000,
 })
+
+// Open SSE only when session is ready and user is logged in
+// Prevents 401 race condition on hard page refresh
+watch(
+  () => ready.value && loggedIn.value && isLive.value,
+  (shouldConnect) => {
+    if (shouldConnect) {
+      sseOpen()
+    }
+  },
+  { immediate: true }
+)
 
 // Toggle live mode - pauses/resumes SSE stream
 function toggleLive() {
