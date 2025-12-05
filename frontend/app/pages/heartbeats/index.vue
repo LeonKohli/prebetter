@@ -151,7 +151,7 @@ async function performSseRefresh() {
 const sseStream = import.meta.client
   ? useHeartbeatStream({
       onNewHeartbeats: performSseRefresh,
-      debounceMs: 2000, // Wait 2s after last update before refreshing (batches rapid heartbeats)
+      debounceMs: 2000,
     })
   : {
       status: ref('CLOSED' as const),
