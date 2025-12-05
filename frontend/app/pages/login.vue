@@ -13,12 +13,7 @@
           <CardDescription>Enter your credentials to continue.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Form
-            :validation-schema="formSchema"
-            :initial-values="initialValues"
-            @submit="submitLoginHandler"
-            v-slot="{ isSubmitting }"
-          >
+          <form @submit="onSubmit">
             <div class="grid gap-4">
               <Alert v-if="authError" variant="destructive">
                 <AlertTriangle class="h-4 w-4" aria-hidden="true" />
@@ -83,7 +78,7 @@
                 {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
               </Button>
             </div>
-          </Form>
+          </form>
         </CardContent>
       </Card>
     </div>
@@ -93,10 +88,7 @@
 <script setup lang="ts">
 import { AlertTriangle, Eye, EyeOff } from 'lucide-vue-next'
 import { toTypedSchema } from '@vee-validate/zod'
-import type { SubmissionContext, SubmissionHandler } from 'vee-validate'
-import type { z } from 'zod'
-import { Form } from '@/components/ui/form'
-import { loginSchema } from '@/utils/validation'
+import { useForm } from 'vee-validate'
 
 definePageMeta({
   layout: false,
@@ -110,13 +102,6 @@ useHead({
 const session = useUserSession()
 const route = useRoute()
 
-type LoginFormValues = z.infer<typeof loginSchema>
-
-const formSchema = toTypedSchema(loginSchema)
-const initialValues: LoginFormValues = {
-  username: '',
-  password: '',
-}
 const authError = ref('')
 const showPassword = ref(false)
 
@@ -124,10 +109,19 @@ const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value
 }
 
-const submitLogin: SubmissionHandler<LoginFormValues> = async (
-  values,
-  { setFieldError }: SubmissionContext<LoginFormValues>,
-) => {
+// Form setup with useForm - the canonical vee-validate pattern
+const form = useForm({
+  validationSchema: toTypedSchema(loginSchema),
+  initialValues: {
+    username: '',
+    password: '',
+  },
+})
+
+const { isSubmitting, setFieldError } = form
+
+// handleSubmit returns a properly typed submit handler
+const onSubmit = form.handleSubmit(async (values) => {
   authError.value = ''
 
   try {
@@ -151,7 +145,7 @@ const submitLogin: SubmissionHandler<LoginFormValues> = async (
     } catch {
       window.location.href = redirect
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Login error:', error)
     const fetchError = error as { data?: { message?: string; detail?: string }; statusMessage?: string }
     const message =
@@ -162,7 +156,5 @@ const submitLogin: SubmissionHandler<LoginFormValues> = async (
     authError.value = message
     setFieldError('password', 'Check your credentials and try again.')
   }
-}
-
-const submitLoginHandler = submitLogin as SubmissionHandler
+})
 </script>

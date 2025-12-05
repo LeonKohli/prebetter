@@ -13,8 +13,8 @@
           Enter your current password and choose a new one.
         </DialogDescription>
       </DialogHeader>
-      
-      <Form v-slot="{ setFieldError }" :validation-schema="formSchema" :initial-values="initialValues" @submit="onSubmit">
+
+      <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
           <FormField v-slot="{ componentField }" name="currentPassword">
             <FormItem>
@@ -46,7 +46,7 @@
             </FormItem>
           </FormField>
         </div>
-        
+
         <DialogFooter>
           <DialogClose as-child>
             <Button type="button" variant="outline" :disabled="isSubmitting">
@@ -58,14 +58,14 @@
             {{ isSubmitting ? 'Changing...' : 'Change Password' }}
           </Button>
         </DialogFooter>
-      </Form>
+      </form>
     </DialogContent>
   </Dialog>
 </template>
 
 <script setup lang="ts">
 import { toTypedSchema } from '@vee-validate/zod'
-import { Form } from '@/components/ui/form'
+import { useForm } from 'vee-validate'
 
 // Emits
 const emit = defineEmits<{
@@ -74,21 +74,21 @@ const emit = defineEmits<{
 
 // State
 const isOpen = ref(false)
-const isSubmitting = ref(false)
 
-// Form validation
-const formSchema = toTypedSchema(changePasswordSchema)
+// Form setup with useForm - the canonical vee-validate pattern
+const form = useForm({
+  validationSchema: toTypedSchema(changePasswordSchema),
+  initialValues: {
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  },
+})
 
-// Initial form values
-const initialValues = {
-  currentPassword: '',
-  newPassword: '',
-  confirmPassword: '',
-}
+const { isSubmitting, setFieldError } = form
 
-const onSubmit = async (values: any, { setFieldError }: any) => {
-  isSubmitting.value = true
-  
+// handleSubmit returns a properly typed submit handler
+const onSubmit = form.handleSubmit(async (values) => {
   try {
     await $fetch('/api/users/change-password', {
       method: 'POST',
@@ -100,12 +100,12 @@ const onSubmit = async (values: any, { setFieldError }: any) => {
 
     // Emit success event
     emit('updateSuccess')
-    
+
     // Close dialog
     isOpen.value = false
   } catch (error) {
     console.error('Password change error:', error)
-    
+
     // Handle specific errors
     const fetchError = error as { data?: { detail?: string } }
     if (fetchError.data?.detail) {
@@ -116,8 +116,6 @@ const onSubmit = async (values: any, { setFieldError }: any) => {
         setFieldError('currentPassword', detail)
       }
     }
-  } finally {
-    isSubmitting.value = false
   }
-}
+})
 </script>

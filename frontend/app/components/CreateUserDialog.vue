@@ -13,8 +13,8 @@
           Create a new user account with the specified credentials.
         </DialogDescription>
       </DialogHeader>
-      
-      <Form v-slot="{ resetForm }" :validation-schema="formSchema" :initial-values="initialValues" @submit="onSubmit">
+
+      <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
           <FormField v-slot="{ componentField }" name="username">
             <FormItem>
@@ -70,10 +70,10 @@
             </FormItem>
           </FormField>
         </div>
-        
+
         <DialogFooter>
           <DialogClose as-child>
-            <Button type="button" variant="outline" @click="handleCancel(resetForm)" :disabled="isSubmitting">
+            <Button type="button" variant="outline" @click="handleCancel" :disabled="isSubmitting">
               Cancel
             </Button>
           </DialogClose>
@@ -82,15 +82,15 @@
             {{ isSubmitting ? 'Creating...' : 'Create User' }}
           </Button>
         </DialogFooter>
-      </Form>
+      </form>
     </DialogContent>
   </Dialog>
 </template>
 
 <script setup lang="ts">
 import { toTypedSchema } from '@vee-validate/zod'
+import { useForm } from 'vee-validate'
 import type { User } from '#auth-utils'
-import { Form } from '@/components/ui/form'
 
 const emit = defineEmits<{
   createSuccess: [user: User]
@@ -98,27 +98,27 @@ const emit = defineEmits<{
 
 // Dialog state
 const isOpen = ref(false)
-const isSubmitting = ref(false)
 
-const formSchema = toTypedSchema(userCreateSchema)
+// Form setup with useForm - the canonical vee-validate pattern
+const form = useForm({
+  validationSchema: toTypedSchema(userCreateSchema),
+  initialValues: {
+    username: '',
+    email: '',
+    fullName: '',
+    password: '',
+    isSuperuser: false,
+  },
+})
 
-// Initial form values
-const initialValues = {
-  username: '',
-  email: '',
-  fullName: '',
-  password: '',
-  isSuperuser: false,
-}
+const { isSubmitting, setFieldError, resetForm } = form
 
-
-const handleCancel = (resetForm: () => void) => {
+const handleCancel = () => {
   resetForm()
 }
 
-const onSubmit = async (values: any, { resetForm, setFieldError }: any) => {
-  isSubmitting.value = true
-  
+// handleSubmit returns a properly typed submit handler
+const onSubmit = form.handleSubmit(async (values) => {
   try {
     const data = await $fetch('/api/users', {
       method: 'POST',
@@ -133,13 +133,13 @@ const onSubmit = async (values: any, { resetForm, setFieldError }: any) => {
 
     // Emit success event
     emit('createSuccess', data as User)
-    
+
     // Reset form and close dialog
     resetForm()
     isOpen.value = false
   } catch (error) {
     console.error('Create user error:', error)
-    
+
     // Handle specific errors
     const fetchError = error as { data?: { detail?: string } }
     if (fetchError.data?.detail) {
@@ -152,8 +152,6 @@ const onSubmit = async (values: any, { resetForm, setFieldError }: any) => {
         setFieldError('username', detail)
       }
     }
-  } finally {
-    isSubmitting.value = false
   }
-}
+})
 </script>

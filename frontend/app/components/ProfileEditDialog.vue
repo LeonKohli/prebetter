@@ -13,8 +13,8 @@
           Update your profile information below. Your current information is already filled in. Click save when you're done.
         </DialogDescription>
       </DialogHeader>
-      
-      <Form v-slot="{ meta }" :validation-schema="formSchema" :initial-values="initialValues" @submit="onSubmit">
+
+      <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
           <FormField v-slot="{ componentField }" name="username">
             <FormItem>
@@ -46,7 +46,7 @@
             </FormItem>
           </FormField>
         </div>
-        
+
         <DialogFooter>
           <DialogClose as-child>
             <Button type="button" variant="outline" :disabled="isSubmitting">
@@ -58,15 +58,15 @@
             {{ isSubmitting ? 'Saving...' : 'Save changes' }}
           </Button>
         </DialogFooter>
-      </Form>
+      </form>
     </DialogContent>
   </Dialog>
 </template>
 
 <script setup lang="ts">
 import { toTypedSchema } from '@vee-validate/zod'
+import { useForm } from 'vee-validate'
 import type { User } from '#auth-utils'
-import { Form } from '@/components/ui/form'
 
 interface Props {
   user: User
@@ -79,20 +79,38 @@ const emit = defineEmits<{
 
 // Dialog state
 const isOpen = ref(false)
-const isSubmitting = ref(false)
 
-const formSchema = toTypedSchema(profileEditSchema)
+// Form setup with useForm - the canonical vee-validate pattern
+const form = useForm({
+  validationSchema: toTypedSchema(profileEditSchema),
+  initialValues: {
+    username: props.user.username,
+    email: props.user.email,
+    fullName: props.user.full_name ?? '',
+  },
+})
 
-// Initial values
-const initialValues = computed(() => ({
-  username: props.user.username,
-  email: props.user.email,
-  fullName: props.user.full_name || '',
-}))
+const { isSubmitting, setFieldError, meta, resetForm, setValues } = form
 
-const onSubmit = async (values: any, { setFieldError }: any) => {
-  isSubmitting.value = true
-  
+// Update form values when user prop changes
+watch(() => props.user, (newUser) => {
+  setValues({
+    username: newUser.username,
+    email: newUser.email,
+    fullName: newUser.full_name ?? '',
+  })
+  // Reset dirty state after setting values from prop
+  resetForm({
+    values: {
+      username: newUser.username,
+      email: newUser.email,
+      fullName: newUser.full_name ?? '',
+    },
+  })
+}, { deep: true })
+
+// handleSubmit returns a properly typed submit handler
+const onSubmit = form.handleSubmit(async (values) => {
   try {
     // Clean up values - only send changed fields
     const updates: Record<string, string | null> = {}
@@ -114,12 +132,12 @@ const onSubmit = async (values: any, { setFieldError }: any) => {
 
     // Emit success event (parent will handle session refresh)
     emit('updateSuccess')
-    
+
     // Close dialog
     isOpen.value = false
   } catch (error) {
     console.error('Profile update error:', error)
-    
+
     // Handle specific errors
     const fetchError = error as { data?: { detail?: string } }
     if (fetchError.data?.detail) {
@@ -133,8 +151,6 @@ const onSubmit = async (values: any, { setFieldError }: any) => {
         setFieldError('username', detail)
       }
     }
-  } finally {
-    isSubmitting.value = false
   }
-}
+})
 </script>
