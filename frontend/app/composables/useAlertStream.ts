@@ -1,8 +1,6 @@
 interface UseAlertStreamOptions {
   /** Auto-connect on mount (default: true) */
   immediate?: boolean
-  /** Initial last known alert ID */
-  lastId?: number | null
   /** Callback when new alerts arrive (debounced) */
   onNewAlerts?: () => void
   /** Debounce delay for onNewAlerts callback (default: 1000ms) */
@@ -27,7 +25,6 @@ interface UseAlertStreamOptions {
 export function useAlertStream(options: UseAlertStreamOptions = {}) {
   const {
     immediate = true,
-    lastId: initialLastId = null,
     onNewAlerts,
     debounceMs = 1000
   } = options
@@ -36,9 +33,6 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
   const debouncedOnNewAlerts = onNewAlerts
     ? useDebounceFn(onNewAlerts, debounceMs)
     : undefined
-
-  // Track the last known alert ID for reconnection
-  const lastKnownId = ref<number | null>(initialLastId)
 
   const url = '/api/alerts-stream'
 
@@ -74,12 +68,6 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
   watch(latestAlert, (alert) => {
     if (!alert) return
 
-    // Update last known ID for reconnection
-    const alertId = parseInt(alert.id, 10)
-    if (!Number.isNaN(alertId)) {
-      lastKnownId.value = alertId
-    }
-
     // Prepend to alerts buffer (newest first)
     alerts.value = [alert, ...alerts.value].slice(0, maxBufferSize)
 
@@ -99,16 +87,6 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
     alerts.value = []
   }
 
-  // Set last known ID (useful when loading initial data)
-  function setLastKnownId(id: number | null) {
-    lastKnownId.value = id
-  }
-
-  // Manually force a reconnect (Last-Event-ID header handled by browser)
-  function reconnect() {
-    open()
-  }
-
   return {
     // Connection state
     status,
@@ -124,8 +102,6 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
     // Actions
     close,
     open,
-    reconnect,
     clearAlerts,
-    setLastKnownId,
   }
 }
