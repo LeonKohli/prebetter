@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -127,6 +127,10 @@ async def stream_heartbeats(
                 )
                 if max_ts:
                     current_last_ts = ensure_timezone(max_ts)
+
+        # Send immediate heartbeat to establish connection
+        # This transitions EventSource from CONNECTING to OPEN instantly
+        yield ": connected\n\n"
 
         heartbeat_counter = 0
 
@@ -288,7 +292,7 @@ async def timeline_heartbeats(
         analyzer_name = result.analyzer_name or "Unknown analyzer"
 
         item = {
-            "timestamp": result.timestamp,
+            "timestamp": ensure_timezone(result.timestamp),
             "host_name": host_name,
             "analyzer_name": analyzer_name,
             "model": result.model or "",
