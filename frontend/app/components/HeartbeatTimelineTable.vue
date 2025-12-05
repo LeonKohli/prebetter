@@ -11,48 +11,64 @@
     </CardHeader>
 
     <CardContent class="px-0">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead v-if="showHost">Node</TableHead>
-            <TableHead>Agent</TableHead>
-            <TableHead>Timestamp</TableHead>
-            <TableHead>Model</TableHead>
-            <TableHead>Version</TableHead>
-            <TableHead>Class</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow v-if="pending">
-            <TableCell :colspan="showHost ? 6 : 5" class="py-12 text-center text-sm text-muted-foreground">
-              <div class="flex items-center justify-center gap-2">
-                <Icon name="lucide:loader-2" class="size-4 animate-spin" />
-                Loading timeline…
-              </div>
-            </TableCell>
-          </TableRow>
-          <TableRow v-else-if="error">
-            <TableCell :colspan="showHost ? 6 : 5" class="py-12 text-center text-sm text-destructive">
-              Failed to load timeline. {{ error.message || 'Please try again.' }}
-            </TableCell>
-          </TableRow>
-          <TableRow v-else-if="items.length === 0">
-            <TableCell :colspan="showHost ? 6 : 5" class="py-12 text-center text-sm text-muted-foreground">
-              {{ emptyMessage }}
-            </TableCell>
-          </TableRow>
-          <TableRow v-else v-for="item in items" :key="itemKey(item)">
-            <TableCell v-if="showHost" class="align-middle font-medium">{{ item.host_name }}</TableCell>
-            <TableCell class="align-middle">{{ item.analyzer_name }}</TableCell>
-            <TableCell class="align-middle text-sm">
-              {{ formatAbsolute(item.timestamp) }}
-            </TableCell>
-            <TableCell class="align-middle text-sm text-muted-foreground">{{ item.model || '—' }}</TableCell>
-            <TableCell class="align-middle text-sm text-muted-foreground">{{ item.version || '—' }}</TableCell>
-            <TableCell class="align-middle text-sm text-muted-foreground">{{ item.class_ || '—' }}</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <div class="relative">
+        <!-- Loading overlay - shows when refreshing existing data -->
+        <Transition name="fade">
+          <div
+            v-if="pending && items.length > 0"
+            class="absolute inset-0 bg-background/40 z-10 pointer-events-none"
+          />
+        </Transition>
+
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead v-if="showHost">Node</TableHead>
+              <TableHead>Agent</TableHead>
+              <TableHead>Timestamp</TableHead>
+              <TableHead>Model</TableHead>
+              <TableHead>Version</TableHead>
+              <TableHead>Class</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <!-- Initial loading: show skeleton rows -->
+            <template v-if="pending && items.length === 0">
+              <TableRow v-for="i in 10" :key="`skeleton-${i}`">
+                <TableCell v-if="showHost"><div class="h-4 w-24 bg-muted animate-pulse rounded" /></TableCell>
+                <TableCell><div class="h-4 w-32 bg-muted animate-pulse rounded" /></TableCell>
+                <TableCell><div class="h-4 w-36 bg-muted animate-pulse rounded" /></TableCell>
+                <TableCell><div class="h-4 w-20 bg-muted animate-pulse rounded" /></TableCell>
+                <TableCell><div class="h-4 w-16 bg-muted animate-pulse rounded" /></TableCell>
+                <TableCell><div class="h-4 w-16 bg-muted animate-pulse rounded" /></TableCell>
+              </TableRow>
+            </template>
+            <!-- Error state -->
+            <TableRow v-else-if="error && items.length === 0">
+              <TableCell :colspan="showHost ? 6 : 5" class="py-12 text-center text-sm text-destructive">
+                Failed to load timeline. {{ error.message || 'Please try again.' }}
+              </TableCell>
+            </TableRow>
+            <!-- Empty state -->
+            <TableRow v-else-if="!pending && items.length === 0">
+              <TableCell :colspan="showHost ? 6 : 5" class="py-12 text-center text-sm text-muted-foreground">
+                {{ emptyMessage }}
+              </TableCell>
+            </TableRow>
+            <!-- Data rows -->
+            <TableRow v-else v-for="item in items" :key="itemKey(item)">
+              <TableCell v-if="showHost" class="align-middle font-medium">{{ item.host_name }}</TableCell>
+              <TableCell class="align-middle">{{ item.analyzer_name }}</TableCell>
+              <TableCell class="align-middle text-sm">
+                {{ formatAbsolute(item.timestamp) }}
+              </TableCell>
+              <TableCell class="align-middle text-sm text-muted-foreground">{{ item.model || '—' }}</TableCell>
+              <TableCell class="align-middle text-sm text-muted-foreground">{{ item.version || '—' }}</TableCell>
+              <TableCell class="align-middle text-sm text-muted-foreground">{{ item.class_ || '—' }}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
     </CardContent>
 
     <CardFooter v-if="pagination.pages > 1" class="flex flex-col gap-3 border-t border-border/80 py-4 md:flex-row md:items-center md:justify-between">
@@ -113,3 +129,15 @@ function itemKey(item: HeartbeatTimelineItem) {
   return `${item.host_name}-${item.analyzer_name}-${item.timestamp}`
 }
 </script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
