@@ -231,12 +231,9 @@ const isLive = ref(true)
 const sseStream = process.client
   ? useAlertStream({
       onNewAlerts: () => {
-        // Only trigger refresh if live mode is active
-        if (isLive.value) {
-          performSseRefresh()
-        }
+        if (isLive.value) performSseRefresh()
       },
-      debounceMs: 2000, // Wait 2s after last alert before refreshing (batches rapid alerts)
+      debounceMs: 2000,
     })
   : {
       status: ref('CLOSED' as const),
@@ -431,18 +428,6 @@ watch(status, (newStatus) => {
     isSilentRefresh.value = false
   }
 })
-
-// Document visibility handling - refresh when user returns to tab
-const documentVisibility = process.client ? useDocumentVisibility() : ref('visible')
-
-if (process.client) {
-  watch(documentVisibility, async (visibility) => {
-    if (visibility === 'visible') {
-      // Refresh when coming back to tab to catch any missed updates
-      await performSseRefresh()
-    }
-  })
-}
 
 // Provide context for child components
 provideAlertTableContext({
