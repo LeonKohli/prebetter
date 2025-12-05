@@ -4,7 +4,7 @@ interface HeartbeatUpdateEvent {
 }
 
 interface UseHeartbeatStreamOptions {
-  /** Auto-connect on mount (default: false to avoid 401 race on page load) */
+  /** Auto-connect on mount (default: true) */
   immediate?: boolean
   /** Callback when new heartbeats arrive (debounced) */
   onNewHeartbeats?: () => void
@@ -31,7 +31,7 @@ interface UseHeartbeatStreamOptions {
  */
 export function useHeartbeatStream(options: UseHeartbeatStreamOptions = {}) {
   const {
-    immediate = false,
+    immediate = true,
     onNewHeartbeats,
     debounceMs = 1000
   } = options
