@@ -13,9 +13,9 @@ interface FastAPIErrorData {
   detail?: string | ValidationError[]
 }
 
-const props = defineProps({
-  error: Object as () => NuxtError<FastAPIErrorData>
-})
+const props = defineProps<{
+  error?: NuxtError<FastAPIErrorData> | null
+}>()
 
 const router = useRouter()
 const isDev = process.dev
