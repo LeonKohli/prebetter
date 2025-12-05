@@ -1,40 +1,5 @@
-import type { Ref, ComputedRef, WritableComputedRef } from 'vue'
 import type { LocationQuery } from 'vue-router'
 import type { SortingState, ColumnFiltersState, VisibilityState } from '@tanstack/vue-table'
-
-interface NavigableUrlStateOptions {
-  defaultView?: 'grouped' | 'ungrouped'
-  defaultPageSize?: number
-  defaultSortBy?: string
-  defaultSortOrder?: 'asc' | 'desc'
-  defaultGroupedSortBy?: string
-  defaultUngroupedSortBy?: string
-}
-
-interface NavigableUrlState {
-  view: WritableComputedRef<'grouped' | 'ungrouped'>
-  page: WritableComputedRef<number>
-  pageSize: WritableComputedRef<number>
-  sortBy: WritableComputedRef<string>
-  sortOrder: WritableComputedRef<'asc' | 'desc'>
-  filters: WritableComputedRef<Record<string, string | number>>
-  hiddenColumns: WritableComputedRef<string[]>
-  autoRefresh: WritableComputedRef<number>
-  
-  toSortingState: ComputedRef<SortingState>
-  fromSortingState: (state: SortingState, isUserAction?: boolean) => void
-  toFilterState: ComputedRef<ColumnFiltersState>
-  fromFilterState: (state: ColumnFiltersState, isUserAction?: boolean) => void
-  toVisibilityState: ComputedRef<VisibilityState>
-  fromVisibilityState: (state: VisibilityState, isUserAction?: boolean) => void
-  toPaginationState: ComputedRef<{ pageIndex: number; pageSize: number }>
-  fromPaginationState: (pageIndex: number, size: number, isUserAction?: boolean) => void
-  
-  updateFilters: (filters: Record<string, string | number>, isUserAction?: boolean) => void
-  updateView: (view: 'grouped' | 'ungrouped', isUserAction?: boolean) => void
-  navigateToDetails: (details: { sourceIp: string; targetIp: string; classification: string }) => void
-  resetToDefaults: () => void
-}
 
 type PageSize = 10 | 20 | 50 | 100
 type SortOrder = 'asc' | 'desc'
@@ -42,7 +7,14 @@ type ViewMode = 'grouped' | 'ungrouped'
 
 const VALID_PAGE_SIZES: readonly PageSize[] = [10, 20, 50, 100] as const
 
-export function useNavigableUrlState(options: NavigableUrlStateOptions = {}): NavigableUrlState {
+export function useNavigableUrlState(options: {
+  defaultView?: ViewMode
+  defaultPageSize?: number
+  defaultSortBy?: string
+  defaultSortOrder?: SortOrder
+  defaultGroupedSortBy?: string
+  defaultUngroupedSortBy?: string
+} = {}) {
   const route = useRoute()
   const router = useRouter()
   
