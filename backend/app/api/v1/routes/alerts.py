@@ -208,6 +208,10 @@ async def stream_alerts(
                 max_id = db.scalar(select(func.max(Alert._ident)))
                 current_last_id = max_id or 0
 
+        # Send immediate heartbeat to establish connection
+        # This transitions EventSource from CONNECTING to OPEN instantly
+        yield ": connected\n\n"
+
         heartbeat_counter = 0
 
         while True:
