@@ -139,18 +139,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from '#imports'
-import HeartbeatStatusBadge from '@/components/heartbeats/HeartbeatStatusBadge.vue'
-import HeartbeatTimelineTable from '@/components/heartbeats/HeartbeatTimelineTable.vue'
-import { useHeartbeatStatus, useHeartbeatTimeline, formatRelativeFromSeconds } from '@/composables/useHeartbeats'
-import { formatTimestamp } from '@/utils/timestampFormatter'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
 definePageMeta({
   requiresAuth: true,
 })
