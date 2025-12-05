@@ -90,18 +90,14 @@
 </template>
 
 <script setup lang="ts">
-import type { PropType } from 'vue'
 import { formatRelativeFromSeconds } from '@/composables/useHeartbeats'
 
-const props = defineProps({
-  nodes: {
-    type: Array as PropType<HeartbeatNode[]>,
-    default: () => [],
-  },
-  totalAgents: {
-    type: Number,
-    default: 0,
-  },
+const props = withDefaults(defineProps<{
+  nodes?: HeartbeatNode[]
+  totalAgents?: number
+}>(), {
+  nodes: () => [],
+  totalAgents: 0,
 })
 
 const emit = defineEmits<{

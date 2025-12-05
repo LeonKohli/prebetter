@@ -120,7 +120,7 @@ const handleCancel = () => {
 // handleSubmit returns a properly typed submit handler
 const onSubmit = form.handleSubmit(async (values) => {
   try {
-    const data = await $fetch('/api/users', {
+    const data = await $fetch<User>('/api/users', {
       method: 'POST',
       body: {
         username: values.username,
@@ -132,7 +132,7 @@ const onSubmit = form.handleSubmit(async (values) => {
     })
 
     // Emit success event
-    emit('createSuccess', data as User)
+    emit('createSuccess', data)
 
     // Reset form and close dialog
     resetForm()

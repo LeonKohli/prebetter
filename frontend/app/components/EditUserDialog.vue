@@ -142,13 +142,13 @@ const onSubmit = form.handleSubmit(async (values) => {
       return
     }
 
-    const data = await $fetch(`/api/users/${props.user.id}`, {
+    const data = await $fetch<User>(`/api/users/${props.user.id}`, {
       method: 'PUT',
       body: updates,
     })
 
     // Emit success event
-    emit('updateSuccess', data as User)
+    emit('updateSuccess', data)
     isOpen.value = false
   } catch (error) {
     console.error('Update user error:', error)

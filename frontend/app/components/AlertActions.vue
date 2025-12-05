@@ -37,10 +37,11 @@ function handleViewDetails() {
 const deleteLabel = computed(() => (props.isGrouped ? 'Delete IP pair' : 'Delete alert'))
 
 function handleDelete() {
-  if (props.isGrouped) {
-    emit('requestDeleteGroup', props.alert as FlattenedGroupedAlert | CompactGroupedAlert)
-  } else if ('id' in props.alert) {
-    emit('requestDeleteSingle', props.alert as AlertListItem)
+  // 'id' property only exists on AlertListItem - proper discriminant
+  if ('id' in props.alert) {
+    emit('requestDeleteSingle', props.alert)
+  } else {
+    emit('requestDeleteGroup', props.alert)
   }
 }
 
