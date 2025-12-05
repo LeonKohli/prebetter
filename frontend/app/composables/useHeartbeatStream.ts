@@ -57,6 +57,17 @@ export function useHeartbeatStream(options: UseHeartbeatStreamOptions = {}) {
     },
   })
 
+  // Close SSE before page unload to prevent Firefox error:
+  // "The connection was interrupted while the page was loading"
+  // See: https://bugzilla.mozilla.org/show_bug.cgi?id=833462
+  if (import.meta.client) {
+    window.addEventListener('beforeunload', close)
+    onScopeDispose(() => {
+      window.removeEventListener('beforeunload', close)
+      close()
+    })
+  }
+
   // Parse incoming heartbeat update data
   const latestUpdate = computed<HeartbeatUpdateEvent | null>(() => {
     if (!data.value) return null
