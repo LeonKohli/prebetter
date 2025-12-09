@@ -1,7 +1,7 @@
 <template>
-    <NuxtLayout>
-      <NuxtPage />
-    </NuxtLayout>
+  <NuxtLayout>
+    <NuxtPage />
+  </NuxtLayout>
 </template>
 
 <script setup lang="ts">
@@ -19,7 +19,3 @@ useHead({
   }
 })
 </script>
-
-<style>
-
-</style>
