@@ -10,9 +10,13 @@ export function useAlertsLiveMode(opts: {
 }) {
   const isSilentRefresh = ref(false)
   const isLive = ref(true)
+  const { bump: bumpSseToken } = useSseRefreshToken()
 
   async function performSseRefresh() {
     if (opts.status.value === 'pending' || Object.keys(opts.rowSelection.value).length > 0) return
+
+    // Bump shared token so timeline chart also refreshes
+    bumpSseToken()
 
     const presetId = opts.getActivePresetId()
     if (presetId && isRelativePreset(presetId)) {
