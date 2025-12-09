@@ -184,27 +184,32 @@ async function backToGroups() {
   await navigateTo({ query: newQuery })
 }
 
+// Separate ref to hold stable object reference (prevents re-render loops)
+const dateRangeRef = shallowRef<DateRangeValue>({ from: undefined, to: undefined })
+
+// Update dateRangeRef when filters change
+watchEffect(() => {
+  const filters = urlState.filters.value
+  const presetId = filters.date_preset as string | undefined
+  relativeRefreshToken.value // track for relative preset refresh
+
+  if (isValidPresetId(presetId)) {
+    const { from, to } = getPresetRange(presetId)
+    dateRangeRef.value = { from, to, presetId }
+  } else if (filters.start_date && filters.end_date) {
+    dateRangeRef.value = {
+      from: new Date(filters.start_date as string),
+      to: new Date(filters.end_date as string)
+    }
+  } else {
+    const { from, to } = getPresetRange('last-24-hours')
+    dateRangeRef.value = { from, to, presetId: 'last-24-hours' as DatePresetId }
+  }
+})
+
+// v-model binding - getter returns stable ref, setter updates URL
 const dateRange = computed<DateRangeValue>({
-  get: () => {
-    const filters = urlState.filters.value
-    const presetId = filters.date_preset as string | undefined
-
-    if (isValidPresetId(presetId)) {
-      relativeRefreshToken.value // Track dependency for relative preset updates
-      const { from, to } = getPresetRange(presetId)
-      return { from, to, presetId }
-    }
-
-    const from = filters.start_date ? new Date(filters.start_date as string) : undefined
-    const to = filters.end_date ? new Date(filters.end_date as string) : undefined
-
-    if (from && to) {
-      return { from, to }
-    }
-
-    const { from: defaultFrom, to: defaultTo } = getPresetRange('last-24-hours')
-    return { from: defaultFrom, to: defaultTo, presetId: 'last-24-hours' as DatePresetId }
-  },
+  get: () => dateRangeRef.value,
   set: (value: DateRangeValue) => {
     const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
 
@@ -214,16 +219,11 @@ const dateRange = computed<DateRangeValue>({
 
     if (value.presetId && isValidPresetId(value.presetId)) {
       const presetId = value.presetId as DatePresetId
-      const { from, to } = getPresetRange(presetId)
-
-      if (isRelativePreset(presetId)) {
-        delete nextFilters.start_date
-        delete nextFilters.end_date
-      } else {
+      if (!isRelativePreset(presetId)) {
+        const { from, to } = getPresetRange(presetId)
         nextFilters.start_date = from.toISOString()
         nextFilters.end_date = to.toISOString()
       }
-
       nextFilters.date_preset = presetId
     } else if (value.from && value.to) {
       nextFilters.start_date = value.from.toISOString()
