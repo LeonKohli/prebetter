@@ -197,7 +197,8 @@ export function getPresetRange(id: DatePresetId, now = new Date()): { from: Date
   return preset.computeRange(now)
 }
 
-export function isRelativePreset(id: DatePresetId): boolean {
+export function isRelativePreset(id: DatePresetId | null | undefined): boolean {
+  if (!id) return false
   const preset = PRESET_MAP.get(id)
   return preset?.relative ?? false
 }
