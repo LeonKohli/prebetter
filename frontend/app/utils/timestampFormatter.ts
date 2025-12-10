@@ -1,14 +1,15 @@
 /**
  * Centralized timestamp formatting utility for consistent time display
  * across the application with proper timezone handling
+ *
+ * Note: For relative time ("5 minutes ago"), use the TimeAgo component
+ * which uses VueUse's useTimeAgo for reactive updates.
  */
 
 export interface TimestampOptions {
   /** Display timezone indicator (default: true) */
   showTimezone?: boolean
-  /** Use relative time for recent timestamps (default: false) */
-  useRelative?: boolean
-  /** Custom locale (default: browser locale or 'en-US') */
+  /** Custom locale (default: 'de-DE') */
   locale?: string
   /** Display format style */
   style?: 'full' | 'long' | 'medium' | 'short'
@@ -19,7 +20,6 @@ export interface TimestampOptions {
  * Always returns German locale as per system requirements
  */
 function getUserLocale(): string {
-  // Always use German locale as per system configuration
   return 'de-DE'
 }
 
@@ -37,7 +37,6 @@ export function formatTimestamp(
 
   const {
     showTimezone = true,
-    useRelative = false,
     locale = getUserLocale(),
     style = 'medium'
   } = options
@@ -47,28 +46,10 @@ export function formatTimestamp(
       ? timestamp
       : new Date(timestamp)
 
-    // Check if date is valid
     if (isNaN(date.getTime())) {
       return 'Invalid date'
     }
 
-    // Use relative time for recent timestamps if requested
-    if (useRelative) {
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
-      const diffMins = Math.floor(diffMs / 60000)
-
-      if (diffMins < 1) return 'Just now'
-      if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
-
-      const diffHours = Math.floor(diffMins / 60)
-      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
-
-      const diffDays = Math.floor(diffHours / 24)
-      if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-    }
-
-    // Format with locale and timezone
     // Note: Cannot use dateStyle/timeStyle with timeZoneName
     // Must use component options instead
     const formatOptions: Intl.DateTimeFormatOptions = showTimezone ? {
@@ -97,7 +78,7 @@ export function formatTimestamp(
 export function formatTimestampCompact(timestamp: string | Date | number | undefined | null): string {
   return formatTimestamp(timestamp, {
     style: 'short',
-    showTimezone: false // Omit timezone in tables for space
+    showTimezone: false
   })
 }
 
@@ -108,16 +89,6 @@ export function formatTimestampDetailed(timestamp: string | Date | number | unde
   return formatTimestamp(timestamp, {
     style: 'long',
     showTimezone: true
-  })
-}
-
-/**
- * Get a human-readable relative time string
- */
-export function getRelativeTime(timestamp: string | Date | number | undefined | null): string {
-  return formatTimestamp(timestamp, {
-    useRelative: true,
-    showTimezone: false
   })
 }
 
