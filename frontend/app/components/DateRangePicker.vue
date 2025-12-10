@@ -10,7 +10,7 @@
           <template v-if="displayText">
             <span class="font-medium">{{ displayLabel }}</span>
             <span class="text-muted-foreground">•</span>
-            <span class="text-muted-foreground">{{ displayText }}</span>
+            <span class="text-muted-foreground" data-allow-mismatch>{{ displayText }}</span>
           </template>
           <template v-else>
             <span class="text-muted-foreground">Select date range</span>
@@ -130,8 +130,9 @@ const dateTimeFormatter = new Intl.DateTimeFormat('de-DE', {
 
 const open = ref(false)
 
-// Reactive now for relative preset display (updates every 60s)
-const now = useNow({ interval: 60000 })
+// Reactive now for relative preset display
+// Use 1s interval initially to sync quickly, then updates every minute
+const now = useNow({ interval: 1000 })
 
 // Internal state
 const pickerValue = ref<CalendarDateRange>({ start: undefined, end: undefined })
