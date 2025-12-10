@@ -1,18 +1,12 @@
 import type { ColumnDef } from "@tanstack/vue-table";
-import type { Ref } from "vue";
 import AlertActions from "@/components/AlertActions.vue";
 import ClassificationBadges from "@/components/ClassificationBadges.vue";
 import DataTableColumnHeader from "@/components/DataTableColumnHeader.vue";
+import TimeAgo from "@/components/TimeAgo.vue";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  formatTimestampCompact,
-  getRelativeTime,
-} from "@/utils/timestampFormatter";
+import { formatTimestampCompact } from "@/utils/timestampFormatter";
 
-/**
- * @param timeTick - Reactive ref that ticks every 60s to force relative time updates (optional)
- */
-export const useAlertTableColumns = (timeTick?: Ref<number>) => {
+export const useAlertTableColumns = () => {
   // Helper to handle view details action
   const handleViewDetails = (alertId: string) => {
     // This will be handled by the parent component
@@ -131,21 +125,11 @@ export const useAlertTableColumns = (timeTick?: Ref<number>) => {
         if (!dateStr)
           return h("span", { class: "text-muted-foreground" }, "Unknown");
 
-        // Touch timeTick to trigger re-render every 60s
-        if (timeTick) void timeTick.value;
-        const formatted = formatTimestampCompact(dateStr);
-        const relative = getRelativeTime(dateStr);
-
         return h("div", { class: "text-sm" }, [
-          h("div", { class: "font-medium" }, formatted),
-          h(
-            "div",
-            {
-              class: "text-xs text-muted-foreground",
-              "data-allow-mismatch": "",
-            },
-            relative,
-          ),
+          h("div", { class: "font-medium" }, formatTimestampCompact(dateStr)),
+          h("div", { class: "text-xs text-muted-foreground" }, [
+            h(TimeAgo, { time: dateStr }),
+          ]),
         ]);
       },
       size: 140,
@@ -257,21 +241,11 @@ export const useAlertTableColumns = (timeTick?: Ref<number>) => {
         if (!dateStr)
           return h("span", { class: "text-muted-foreground" }, "Unknown");
 
-        // Touch timeTick to trigger re-render every 60s
-        if (timeTick) void timeTick.value;
-        const formatted = formatTimestampCompact(dateStr);
-        const relative = getRelativeTime(dateStr);
-
         return h("div", { class: "text-sm" }, [
-          h("div", { class: "font-medium" }, formatted),
-          h(
-            "div",
-            {
-              class: "text-xs text-muted-foreground",
-              "data-allow-mismatch": "",
-            },
-            relative,
-          ),
+          h("div", { class: "font-medium" }, formatTimestampCompact(dateStr)),
+          h("div", { class: "text-xs text-muted-foreground" }, [
+            h(TimeAgo, { time: dateStr }),
+          ]),
         ]);
       },
     },
@@ -330,21 +304,11 @@ export const useAlertTableColumns = (timeTick?: Ref<number>) => {
         if (!timestamp)
           return h("span", { class: "text-muted-foreground" }, "Unknown");
 
-        // Touch timeTick to trigger re-render every 60s
-        if (timeTick) void timeTick.value;
-        const formatted = formatTimestampCompact(timestamp);
-        const relative = getRelativeTime(timestamp);
-
         return h("div", { class: "text-sm" }, [
-          h("div", { class: "font-medium" }, formatted),
-          h(
-            "div",
-            {
-              class: "text-xs text-muted-foreground",
-              "data-allow-mismatch": "",
-            },
-            relative,
-          ),
+          h("div", { class: "font-medium" }, formatTimestampCompact(timestamp)),
+          h("div", { class: "text-xs text-muted-foreground" }, [
+            h(TimeAgo, { time: timestamp }),
+          ]),
         ]);
       },
     },
