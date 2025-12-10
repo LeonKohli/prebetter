@@ -181,20 +181,8 @@ export function isValidPresetId(id: string | undefined): id is DatePresetId {
 }
 
 export function getPresetRange(id: DatePresetId, now = new Date()): { from: Date; to: Date } {
-  const preset = PRESET_MAP.get(id)
-  if (!preset) {
-    // Fallback to first preset if somehow an invalid ID gets through
-    // This should never happen in practice since ID is typed as DatePresetId
-    const fallbackPreset = DATE_PRESETS[0]
-    if (!fallbackPreset) {
-      // Ultimate fallback if presets array is somehow empty (should be impossible)
-      const end = new Date(now)
-      const start = new Date(now.getTime() - 24 * MS_IN_HOUR)
-      return { from: start, to: end }
-    }
-    return fallbackPreset.computeRange(now)
-  }
-  return preset.computeRange(now)
+  // TypeScript guarantees id is a valid DatePresetId, so preset always exists
+  return PRESET_MAP.get(id)!.computeRange(now)
 }
 
 export function isRelativePreset(id: DatePresetId | null | undefined): boolean {
