@@ -37,12 +37,13 @@
         </div>
 
         <div class="p-3">
+          <!-- @vue-expect-error reka-ui DateRange type doesn't properly accept CalendarDate/CalendarDateTime union -->
           <RangeCalendar
-            v-model="pickerValue"
+            :model-value="pickerValue"
             :number-of-months="2"
             locale="de-DE"
             :week-starts-on="1"
-            @update:model-value="onCalendarChange"
+            @update:model-value="onCalendarUpdate"
           />
 
           <div v-if="includeTime" class="border-t pt-3 mt-3">
@@ -87,8 +88,15 @@
 </template>
 
 <script setup lang="ts">
-import type { DateRange } from 'reka-ui'
+import type { DateValue } from '@internationalized/date'
 import { CalendarDate, CalendarDateTime, getLocalTimeZone } from '@internationalized/date'
+
+// Define inline to avoid template type inference issues with reka-ui's DateRange
+interface CalendarDateRange {
+  start: DateValue | undefined
+  end: DateValue | undefined
+}
+import { useNow } from '@vueuse/core'
 import { DATE_PRESETS, isRelativePreset, isValidPresetId, getPresetLabel, type DatePreset, type DatePresetId } from '@/utils/datePresets'
 
 interface DateRangeValue {
@@ -122,8 +130,11 @@ const dateTimeFormatter = new Intl.DateTimeFormat('de-DE', {
 
 const open = ref(false)
 
+// Reactive now for relative preset display (updates every 60s)
+const now = useNow({ interval: 60000 })
+
 // Internal state
-const pickerValue = ref<DateRange>({ start: undefined, end: undefined })
+const pickerValue = ref<CalendarDateRange>({ start: undefined, end: undefined })
 const startTime = ref('00:00')
 const endTime = ref('23:59')
 
@@ -154,7 +165,8 @@ const displayText = computed(() => {
   const fromStr = fmt.format(from)
   if (!to) return fromStr
 
-  const endDate = isRelativePreset(currentPresetId.value) ? new Date() : to
+  // Use reactive now for relative presets so it updates every 60s
+  const endDate = isRelativePreset(currentPresetId.value) ? now.value : to
   return `${fromStr} - ${fmt.format(endDate)}`
 })
 
@@ -184,7 +196,7 @@ watch(
   { immediate: true }
 )
 
-function toCalendarDate(date: Date) {
+function toCalendarDate(date: Date): DateValue {
   return props.includeTime
     ? new CalendarDateTime(date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes())
     : new CalendarDate(date.getFullYear(), date.getMonth() + 1, date.getDate())
@@ -199,7 +211,12 @@ function parseTime(time: string): { h: number; m: number } {
   return { h: h || 0, m: m || 0 }
 }
 
-function onCalendarChange(range: DateRange) {
+function onCalendarUpdate(range: CalendarDateRange) {
+  pickerValue.value = range
+  onCalendarChange(range)
+}
+
+function onCalendarChange(range: CalendarDateRange) {
   if (!range.start || !range.end) return
 
   const start = parseTime(startTime.value)
