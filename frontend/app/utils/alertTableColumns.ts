@@ -1,15 +1,18 @@
 import type { ColumnDef } from "@tanstack/vue-table";
+import type { Ref } from "vue";
 import AlertActions from "@/components/AlertActions.vue";
 import ClassificationBadges from "@/components/ClassificationBadges.vue";
 import DataTableColumnHeader from "@/components/DataTableColumnHeader.vue";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  formatTimestamp,
   formatTimestampCompact,
   getRelativeTime,
 } from "@/utils/timestampFormatter";
 
-export const useAlertTableColumns = () => {
+/**
+ * @param timeTick - Reactive ref that ticks every 60s to force relative time updates (optional)
+ */
+export const useAlertTableColumns = (timeTick?: Ref<number>) => {
   // Helper to handle view details action
   const handleViewDetails = (alertId: string) => {
     // This will be handled by the parent component
@@ -128,6 +131,8 @@ export const useAlertTableColumns = () => {
         if (!dateStr)
           return h("span", { class: "text-muted-foreground" }, "Unknown");
 
+        // Touch timeTick to trigger re-render every 60s
+        if (timeTick) void timeTick.value;
         const formatted = formatTimestampCompact(dateStr);
         const relative = getRelativeTime(dateStr);
 
@@ -252,7 +257,8 @@ export const useAlertTableColumns = () => {
         if (!dateStr)
           return h("span", { class: "text-muted-foreground" }, "Unknown");
 
-        // Use centralized formatter with local timezone display
+        // Touch timeTick to trigger re-render every 60s
+        if (timeTick) void timeTick.value;
         const formatted = formatTimestampCompact(dateStr);
         const relative = getRelativeTime(dateStr);
 
@@ -324,7 +330,8 @@ export const useAlertTableColumns = () => {
         if (!timestamp)
           return h("span", { class: "text-muted-foreground" }, "Unknown");
 
-        // Use centralized formatter with local timezone display
+        // Touch timeTick to trigger re-render every 60s
+        if (timeTick) void timeTick.value;
         const formatted = formatTimestampCompact(timestamp);
         const relative = getRelativeTime(timestamp);
 

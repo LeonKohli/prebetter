@@ -50,6 +50,12 @@ const {
 const isChangingView = ref(false)
 const rowSelection = ref<Record<string, boolean>>({})
 
+// Time tick for relative timestamp updates (every 60s)
+const timeTick = ref(0)
+if (import.meta.client) {
+  useIntervalFn(() => { timeTick.value++ }, 60000)
+}
+
 // Live mode / SSE (extracted to composable)
 const {
   isLive,
@@ -78,8 +84,8 @@ type DeleteState =
 const deleteDialogOpen = ref(false)
 const deleteState = ref<DeleteState | null>(null)
 
-// Column definitions
-const { compactGroupedColumns, ungroupedColumns } = useAlertTableColumns()
+// Column definitions (pass timeTick for reactive relative timestamps)
+const { compactGroupedColumns, ungroupedColumns } = useAlertTableColumns(timeTick)
 const columns = computed(() => isGrouped.value ? compactGroupedColumns : ungroupedColumns)
 
 // Table state sync with URL
