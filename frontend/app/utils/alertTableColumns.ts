@@ -148,120 +148,6 @@ export const useAlertTableColumns = () => {
     },
   ];
 
-  // Legacy flattened grouped columns (kept for backward compatibility)
-  const groupedColumns: ColumnDef<FlattenedGroupedAlert>[] = [
-    {
-      accessorKey: "count",
-      header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Count" }),
-      cell: ({ row }) => {
-        const count = row.getValue<number>("count");
-        const isFirstInGroup = row.original.isFirstInGroup;
-        const groupSize = row.original.groupSize;
-        const totalCount = row.original.total_count;
-
-        return h("div", { class: "flex items-center gap-2" }, [
-          h(
-            "span",
-            { class: "font-semibold text-foreground" },
-            count.toString(),
-          ),
-          h("span", { class: "text-muted-foreground text-xs" }, "×"),
-        ]);
-      },
-    },
-    {
-      accessorKey: "classification",
-      header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Classification" }),
-      cell: ({ row }) => {
-        return h(
-          "a",
-          {
-            class: "font-medium text-primary hover:underline cursor-pointer",
-            onClick: () => {
-              const urlState = useNavigableUrlState();
-              urlState.navigateToDetails({
-                sourceIp: row.original.source_ipv4 || "",
-                targetIp: row.original.target_ipv4 || "",
-                classification: row.original.classification,
-              });
-            },
-          },
-          row.getValue("classification"),
-        );
-      },
-    },
-    {
-      accessorKey: "source_ipv4",
-      header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Source IP" }),
-      cell: ({ row }) =>
-        h(
-          "span",
-          { class: "font-mono text-sm" },
-          row.getValue("source_ipv4") || "Unknown",
-        ),
-    },
-    {
-      accessorKey: "target_ipv4",
-      header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Target IP" }),
-      cell: ({ row }) =>
-        h(
-          "span",
-          { class: "font-mono text-sm" },
-          row.getValue("target_ipv4") || "Unknown",
-        ),
-    },
-    {
-      accessorKey: "analyzer",
-      header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Analyzer" }),
-      cell: ({ row }) => {
-        const analyzers = row.original.analyzer || [];
-        const analyzerStr =
-          analyzers.length === 0
-            ? "Unknown"
-            : analyzers.length === 1
-              ? analyzers[0]
-              : analyzers.length <= 3
-                ? analyzers.join(", ")
-                : `${analyzers[0]}, ${analyzers[1]} +${analyzers.length - 2} more`;
-        return h("span", { class: "text-sm" }, analyzerStr);
-      },
-    },
-    {
-      accessorKey: "detected_at",
-      header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Date/Time" }),
-      cell: ({ row }) => {
-        const dateStr = row.getValue("detected_at") as string;
-
-        if (!dateStr)
-          return h("span", { class: "text-muted-foreground" }, "Unknown");
-
-        return h("div", { class: "text-sm" }, [
-          h("div", { class: "font-medium" }, formatTimestampCompact(dateStr)),
-          h("div", { class: "text-xs text-muted-foreground" }, [
-            h(TimeAgo, { time: dateStr }),
-          ]),
-        ]);
-      },
-    },
-    {
-      id: "actions",
-      enableHiding: false,
-      cell: ({ row }) =>
-        h(AlertActions, {
-          alert: row.original,
-          isGrouped: true,
-          onViewDetails: handleViewDetails,
-          onRequestDeleteGroup: handleRequestDeleteGroup,
-        }),
-    },
-  ];
-
   const ungroupedColumns: ColumnDef<AlertListItem>[] = [
     {
       id: "select",
@@ -421,7 +307,6 @@ export const useAlertTableColumns = () => {
 
   return {
     compactGroupedColumns,
-    groupedColumns, // legacy
     ungroupedColumns,
     sortFieldMap,
     filterFieldMap,
