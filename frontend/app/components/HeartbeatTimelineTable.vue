@@ -35,12 +35,12 @@
             <!-- Initial loading: show skeleton rows -->
             <template v-if="pending && items.length === 0">
               <TableRow v-for="i in 10" :key="`skeleton-${i}`">
-                <TableCell v-if="showHost"><div class="h-4 w-24 bg-muted animate-pulse rounded" /></TableCell>
-                <TableCell><div class="h-4 w-32 bg-muted animate-pulse rounded" /></TableCell>
-                <TableCell><div class="h-4 w-36 bg-muted animate-pulse rounded" /></TableCell>
-                <TableCell><div class="h-4 w-20 bg-muted animate-pulse rounded" /></TableCell>
-                <TableCell><div class="h-4 w-16 bg-muted animate-pulse rounded" /></TableCell>
-                <TableCell><div class="h-4 w-16 bg-muted animate-pulse rounded" /></TableCell>
+                <TableCell v-if="showHost"><Skeleton class="h-4 w-24" /></TableCell>
+                <TableCell><Skeleton class="h-4 w-32" /></TableCell>
+                <TableCell><Skeleton class="h-4 w-36" /></TableCell>
+                <TableCell><Skeleton class="h-4 w-20" /></TableCell>
+                <TableCell><Skeleton class="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton class="h-4 w-16" /></TableCell>
               </TableRow>
             </template>
             <!-- Error state -->

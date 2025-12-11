@@ -12,24 +12,24 @@
   <Card class="!py-3 !gap-2">
     <CardContent class="!px-4">
       <div class="flex items-center justify-between mb-2">
-        <div class="h-4 w-24 bg-muted rounded animate-pulse" />
-        <div class="h-3 w-16 bg-muted rounded animate-pulse" />
+        <Skeleton class="h-4 w-24" />
+        <Skeleton class="h-3 w-16" />
       </div>
 
       <!-- Chart skeleton - matches 180px desktop height -->
       <div class="h-[180px] bg-muted/30 rounded animate-pulse flex items-end justify-around gap-1 p-4">
         <!-- Fake bar chart bars -->
-        <div class="w-full h-[40%] bg-muted/50 rounded-t" />
-        <div class="w-full h-[70%] bg-muted/50 rounded-t" />
-        <div class="w-full h-[55%] bg-muted/50 rounded-t" />
-        <div class="w-full h-[85%] bg-muted/50 rounded-t" />
-        <div class="w-full h-[60%] bg-muted/50 rounded-t" />
-        <div class="w-full h-[45%] bg-muted/50 rounded-t" />
-        <div class="w-full h-[75%] bg-muted/50 rounded-t" />
-        <div class="w-full h-[50%] bg-muted/50 rounded-t" />
+        <Skeleton class="w-full h-[40%] rounded-t rounded-b-none" />
+        <Skeleton class="w-full h-[70%] rounded-t rounded-b-none" />
+        <Skeleton class="w-full h-[55%] rounded-t rounded-b-none" />
+        <Skeleton class="w-full h-[85%] rounded-t rounded-b-none" />
+        <Skeleton class="w-full h-[60%] rounded-t rounded-b-none" />
+        <Skeleton class="w-full h-[45%] rounded-t rounded-b-none" />
+        <Skeleton class="w-full h-[75%] rounded-t rounded-b-none" />
+        <Skeleton class="w-full h-[50%] rounded-t rounded-b-none" />
       </div>
 
-      <div class="h-3 w-48 bg-muted rounded animate-pulse mt-2 mx-auto" />
+      <Skeleton class="h-3 w-48 mt-2 mx-auto" />
     </CardContent>
   </Card>
 </template>
