@@ -224,7 +224,7 @@ if (import.meta.client) {
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col gap-2">
+  <div class="w-full flex-1 min-h-0 flex flex-col gap-2">
     <AlertsToolbar
       :is-live="isLive"
       :sse-status="sseStatus"
