@@ -4,7 +4,7 @@
       <Button
         variant="outline"
         size="sm"
-        class="relative"
+        class="relative -ml-px h-8 px-3 text-xs font-medium"
         :class="{ 'border-primary bg-primary/5': activeFilters.length }"
       >
         <Icon name="lucide:filter" />
