@@ -2,15 +2,14 @@
 const props = defineProps<{
   alert: AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert
   isGrouped: boolean
+  // Callbacks passed from TanStack Table meta (type-safe direct invocation)
+  onViewDetails?: (alertId: string) => void
+  onRequestDeleteSingle?: (alert: AlertListItem) => void
+  onRequestDeleteGroup?: (alert: FlattenedGroupedAlert | CompactGroupedAlert) => void
 }>()
 
-const emit = defineEmits<{
-  viewDetails: [alertId: string]
-  requestDeleteSingle: [alert: AlertListItem]
-  requestDeleteGroup: [alert: FlattenedGroupedAlert | CompactGroupedAlert]
-}>()
-
-const urlState = useNavigableUrlState()
+// Use injected context instead of creating new instance
+const { urlState } = useAlertTableContext()
 const route = useRoute()
 const router = useRouter()
 
@@ -29,8 +28,8 @@ function copyId() {
 
 function handleViewDetails() {
   // For ungrouped view, use the alert ID directly
-  if (!props.isGrouped && 'id' in props.alert) {
-    emit('viewDetails', props.alert.id)
+  if (!props.isGrouped && 'id' in props.alert && props.onViewDetails) {
+    props.onViewDetails(props.alert.id)
   }
 }
 
@@ -38,10 +37,10 @@ const deleteLabel = computed(() => (props.isGrouped ? 'Delete IP pair' : 'Delete
 
 function handleDelete() {
   // 'id' property only exists on AlertListItem - proper discriminant
-  if ('id' in props.alert) {
-    emit('requestDeleteSingle', props.alert)
-  } else {
-    emit('requestDeleteGroup', props.alert)
+  if ('id' in props.alert && props.onRequestDeleteSingle) {
+    props.onRequestDeleteSingle(props.alert)
+  } else if (props.onRequestDeleteGroup) {
+    props.onRequestDeleteGroup(props.alert as FlattenedGroupedAlert | CompactGroupedAlert)
   }
 }
 
