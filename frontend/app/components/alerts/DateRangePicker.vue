@@ -130,9 +130,8 @@ const dateTimeFormatter = new Intl.DateTimeFormat('de-DE', {
 
 const open = ref(false)
 
-// Reactive now for relative preset display
-// Use 1s interval initially to sync quickly, then updates every minute
-const now = useNow({ interval: 1000 })
+// Reactive now for relative preset display - updates every 60s (no need for second precision)
+const now = useNow({ interval: 60000 })
 
 // Internal state
 const pickerValue = ref<CalendarDateRange>({ start: undefined, end: undefined })
