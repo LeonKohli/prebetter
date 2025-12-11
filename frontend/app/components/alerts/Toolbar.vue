@@ -1,6 +1,7 @@
 <template>
-  <div class="flex items-center justify-between pb-2">
+  <div class="flex items-center justify-between">
     <div class="flex items-center gap-3">
+        <AlertsFilterPanel />
         <!-- Back to groups when drilled into ungrouped filtered view -->
         <Button
           v-if="isDrilldown"
@@ -17,8 +18,6 @@
           v-model="dateRange"
           :includeTime="true"
         />
-
-        <AlertsFilterPanel />
       </div>
 
       <div class="flex items-center gap-2">
