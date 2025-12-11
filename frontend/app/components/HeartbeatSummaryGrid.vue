@@ -12,7 +12,18 @@
       </div>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <!-- Loading skeleton -->
+    <div v-if="pending" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Card v-for="i in 6" :key="`skeleton-${i}`">
+        <CardHeader class="space-y-2">
+          <Skeleton class="h-4 w-24" />
+          <Skeleton class="h-8 w-16" />
+        </CardHeader>
+      </Card>
+    </div>
+
+    <!-- Loaded content -->
+    <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Card>
         <CardHeader class="space-y-1">
           <CardTitle class="text-sm font-medium text-muted-foreground">Total Nodes</CardTitle>
@@ -54,10 +65,12 @@ interface Props {
   totalAgents: number
   summary: SummaryItem[]
   lastUpdated: Date | null
+  pending?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   summary: () => [],
   lastUpdated: null,
+  pending: false,
 })
 </script>

@@ -5,12 +5,60 @@
         <h2 id="heartbeat-nodes-heading" class="font-display text-lg font-semibold">Nodes &amp; Agents</h2>
         <p class="text-sm text-muted-foreground">Click an agent to view its heartbeat timeline and metadata.</p>
       </div>
-      <div class="text-sm text-muted-foreground">
+      <div v-if="!pending" class="text-sm text-muted-foreground">
         {{ totalAgents }} agents across {{ nodes.length }} nodes
       </div>
     </header>
 
-    <div v-if="nodes.length === 0" class="border border-dashed rounded-md p-6 text-center text-sm text-muted-foreground">
+    <!-- Loading skeleton -->
+    <template v-if="pending">
+      <Card v-for="i in 3" :key="`skeleton-node-${i}`" class="border-border/60">
+        <CardHeader class="pb-3">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <Skeleton class="h-5 w-32" />
+              <Skeleton class="h-3 w-24" />
+            </div>
+            <Skeleton class="h-5 w-16" />
+          </div>
+        </CardHeader>
+        <CardContent class="px-0">
+          <Table class="table-fixed">
+            <TableHeader>
+              <TableRow>
+                <TableHead class="w-[35%]">Agent</TableHead>
+                <TableHead class="w-[20%]">Status</TableHead>
+                <TableHead class="w-[20%]">Last heartbeat</TableHead>
+                <TableHead class="w-[15%]">Interval</TableHead>
+                <TableHead class="w-[10%] text-right">&nbsp;</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="j in 3" :key="`skeleton-agent-${i}-${j}`">
+                <TableCell>
+                  <div class="space-y-1">
+                    <Skeleton class="h-4 w-28" />
+                    <Skeleton class="h-3 w-36" />
+                  </div>
+                </TableCell>
+                <TableCell><Skeleton class="h-5 w-16" /></TableCell>
+                <TableCell>
+                  <div class="space-y-1">
+                    <Skeleton class="h-4 w-20" />
+                    <Skeleton class="h-3 w-24" />
+                  </div>
+                </TableCell>
+                <TableCell><Skeleton class="h-4 w-10" /></TableCell>
+                <TableCell class="text-right"><Skeleton class="h-4 w-4 ml-auto" /></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </template>
+
+    <!-- Empty state -->
+    <div v-else-if="nodes.length === 0" class="border border-dashed rounded-md p-6 text-center text-sm text-muted-foreground">
       No agents match the current filters.
     </div>
 
@@ -95,9 +143,11 @@ import { formatRelativeFromSeconds } from '@/composables/useHeartbeats'
 const props = withDefaults(defineProps<{
   nodes?: HeartbeatNode[]
   totalAgents?: number
+  pending?: boolean
 }>(), {
   nodes: () => [],
   totalAgents: 0,
+  pending: false,
 })
 
 const emit = defineEmits<{
