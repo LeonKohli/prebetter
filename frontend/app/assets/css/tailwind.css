@@ -165,6 +165,28 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Modern scrollbar styling (Chrome 121+, Firefox 64+) */
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+
+  /* Safari fallback - needs webkit prefixes */
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--muted-foreground);
+    border-radius: 4px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--foreground);
   }
 
   html {
