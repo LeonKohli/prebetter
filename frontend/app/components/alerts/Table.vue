@@ -136,6 +136,24 @@ const table = useVueTable({
     }
     return 'unknown'
   },
+  // TanStack Table meta: type-safe callbacks passed to column definitions
+  meta: {
+    onViewDetails: (alertId: string) => {
+      selectedAlertId.value = alertId
+      detailsDialogOpen.value = true
+    },
+    onRequestDeleteSingle: (alert: AlertListItem) => {
+      openDeleteDialog({ mode: 'single', alert })
+    },
+    onRequestDeleteGroup: (group: CompactGroupedAlert | FlattenedGroupedAlert) => {
+      openDeleteDialog({
+        mode: 'grouped',
+        sourceIp: group.source_ipv4 || '',
+        targetIp: group.target_ipv4 || '',
+        totalCount: group.total_count ?? 0,
+      })
+    },
+  },
 })
 
 // Debounced fetch execution
@@ -198,29 +216,6 @@ function handleBulkDelete() {
   if (alerts.length) openDeleteDialog({ mode: 'bulk', alerts })
 }
 
-// Window event listeners (client-side only)
-if (import.meta.client) {
-  useEventListener(window, 'viewAlertDetails', (event: WindowEventMap['viewAlertDetails']) => {
-    selectedAlertId.value = event.detail.alertId
-    detailsDialogOpen.value = true
-  })
-
-  useEventListener(window, 'alertDeletionRequest', (event: WindowEventMap['alertDeletionRequest']) => {
-    const detail = event.detail
-    if (!detail) return
-
-    if (detail.mode === 'single' && detail.alert) {
-      openDeleteDialog({ mode: 'single', alert: detail.alert })
-    } else if (detail.mode === 'grouped' && detail.sourceIp && detail.targetIp) {
-      openDeleteDialog({
-        mode: 'grouped',
-        sourceIp: detail.sourceIp,
-        targetIp: detail.targetIp,
-        totalCount: detail.totalCount ?? 0,
-      })
-    }
-  })
-}
 </script>
 
 <template>
