@@ -145,7 +145,7 @@
                         />
                         <span
                           class="size-2 rounded-full"
-                          :class="getSeverityColor(severity)"
+                          :class="getSeverityDotColor(severity)"
                         />
                         {{ formatSeverity(severity) }}
                       </CommandItem>
@@ -278,7 +278,7 @@ function formatSeverity(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
 }
 
-function getSeverityColor(value: string) {
+function getSeverityDotColor(value: string) {
   return SEVERITY_COLORS[value.toLowerCase()] ?? 'bg-muted-foreground'
 }
 
@@ -387,7 +387,7 @@ const activeFilters = computed(() => {
   const result: { key: string; label: string; color?: string; icon?: string }[] = []
 
   for (const s of selectedSeverities.value) {
-    result.push({ key: `severity:${s}`, label: formatSeverity(s), color: getSeverityColor(s) })
+    result.push({ key: `severity:${s}`, label: formatSeverity(s), color: getSeverityDotColor(s) })
   }
   for (const srv of selectedServers.value) {
     result.push({ key: `server:${srv}`, label: srv, icon: 'lucide:server' })
