@@ -16,6 +16,9 @@ const error = ref<string | null>(null)
 const alertData = ref<AlertDetail | null>(null)
 const activeTab = ref('overview')
 
+// Abort controller for cancelling stale requests
+let abortController: AbortController | null = null
+
 // Model for dialog open state
 const dialogOpen = computed({
   get: () => props.open,
@@ -30,6 +33,9 @@ const hasIpPair = computed(() => Boolean(
 watch(
   [() => props.alertId, () => dialogOpen.value],
   async ([id, isOpen]) => {
+    // Abort any in-flight request before starting a new one
+    abortController?.abort()
+
     if (!id || !isOpen) {
       return
     }
@@ -38,19 +44,37 @@ watch(
   { immediate: true },
 )
 
+// Cleanup on unmount
+onUnmounted(() => {
+  abortController?.abort()
+})
+
 async function fetchAlertDetails(id: string) {
+  // Create new abort controller for this request
+  abortController = new AbortController()
+  const signal = abortController.signal
+
   loading.value = true
   error.value = null
-  
+
   try {
-    // $fetch returns the data directly, not wrapped
-    const data = await $fetch<AlertDetail>(`/api/alerts/${id}`)
-    alertData.value = data
+    const data = await $fetch<AlertDetail>(`/api/alerts/${id}`, { signal })
+    // Only update if request wasn't aborted
+    if (!signal.aborted) {
+      alertData.value = data
+    }
   } catch (err) {
+    // Ignore abort errors - they're expected when user switches alerts quickly
+    if (err instanceof Error && err.name === 'AbortError') {
+      return
+    }
     console.error('Failed to fetch alert details:', err)
     error.value = 'Failed to load alert details. Please try again.'
   } finally {
-    loading.value = false
+    // Only clear loading if this request wasn't aborted
+    if (!signal.aborted) {
+      loading.value = false
+    }
   }
 }
 
@@ -81,7 +105,6 @@ function getSeverityClass(severity?: string): string {
   }
 }
 
-// Match table severity styling for a consistent pill look
 function getSeverityPillClass(severity?: string): string {
   const s = (severity || 'low').toLowerCase()
   const map: Record<string, string> = {
