@@ -312,7 +312,7 @@ if (import.meta.client) {
       />
     </div>
 
-    <AlertDetailsDialog v-model:open="detailsDialogOpen" :alert-id="selectedAlertId" />
+    <AlertsDetailsDialog v-model:open="detailsDialogOpen" :alert-id="selectedAlertId" />
     <AlertsDeleteDialog v-model:open="deleteDialogOpen" :state="deleteState" @deleted="handleDeleteComplete" />
     <AlertsSelectionBar v-if="!isGrouped" @bulk-delete="handleBulkDelete" />
   </div>
