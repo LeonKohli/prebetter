@@ -26,7 +26,7 @@ const icon = computed(() => {
     v-if="column.getCanSort()"
     variant="ghost"
     size="sm"
-    class="-ml-3 h-8 justify-start uppercase"
+    class="-mx-3 h-8 justify-start uppercase"
     @click="column.toggleSorting(isSorted === 'asc')"
   >
     {{ title }}
