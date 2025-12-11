@@ -77,11 +77,13 @@
       :total-agents="totalAgents"
       :summary="statusSummaryList"
       :last-updated="lastUpdatedAt"
+      :pending="statusPending"
     />
 
     <HeartbeatNodeList
       :nodes="nodes"
       :total-agents="totalAgents"
+      :pending="statusPending"
       @agent-select="handleAgentSelect"
     />
 
@@ -113,6 +115,7 @@ const {
   totalNodes,
   totalAgents,
   statusSummaryList,
+  pending: statusPending,
   refresh: refreshStatus,
   days,
   setDays,
