@@ -224,7 +224,7 @@ if (import.meta.client) {
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col">
+  <div class="w-full h-full flex flex-col gap-2">
     <AlertsToolbar
       :is-live="isLive"
       :sse-status="sseStatus"
@@ -235,7 +235,7 @@ if (import.meta.client) {
       @refresh="refresh"
     />
 
-    <div class="flex-1 min-h-0 mt-2 rounded-lg border overflow-hidden flex flex-col">
+    <div class="flex-1 min-h-0 rounded-lg border overflow-hidden flex flex-col">
       <div class="flex-1 overflow-auto relative overscroll-none">
         <TableFlat role="table" aria-label="Security alerts table">
           <TableHeader class="sticky top-0 z-10">

@@ -1,6 +1,6 @@
 <template>
   <footer
-    class="flex w-full flex-col items-center justify-between gap-4 border-t border-border bg-muted/40 px-6 py-4 text-sm sm:flex-row sm:h-14 sm:py-0"
+    class="flex w-full flex-col items-center justify-between gap-4 border-t border-border bg-muted/40 px-4 py-3 text-sm sm:flex-row sm:h-12 sm:py-0"
     role="contentinfo" aria-label="Pagination and summary">
     <!-- Section 1 (Left): Contextual Information + Page Size -->
     <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
