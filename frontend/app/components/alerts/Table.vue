@@ -262,7 +262,7 @@ function handleBulkDelete() {
                   :key="`skeleton-${i}-${idx}`"
                   :class="['py-2 px-4', idx > 0 && 'border-r']"
                 >
-                  <div class="h-4 bg-muted animate-pulse rounded" />
+                  <Skeleton class="h-4" />
                 </TableCell>
               </TableRow>
             </template>
