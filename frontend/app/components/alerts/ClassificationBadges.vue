@@ -10,7 +10,8 @@ const props = withDefaults(defineProps<Props>(), {
   maxVisible: 5
 })
 
-const urlState = useNavigableUrlState()
+// Use injected context instead of creating new instance
+const { urlState } = useAlertTableContext()
 const expanded = ref(false)
 
 // Sort classifications by count (desc), then by name for stability
