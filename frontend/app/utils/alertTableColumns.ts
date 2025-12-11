@@ -1,9 +1,11 @@
 import type { ColumnDef } from "@tanstack/vue-table";
-import AlertActions from "@/components/AlertActions.vue";
-import ClassificationBadges from "@/components/ClassificationBadges.vue";
-import DataTableColumnHeader from "@/components/DataTableColumnHeader.vue";
-import TimeAgo from "@/components/TimeAgo.vue";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertsActions,
+  AlertsClassificationBadges,
+  AlertsDataTableColumnHeader,
+  Checkbox,
+  TimeAgo,
+} from "#components";
 import { formatTimestampCompact } from "@/utils/timestampFormatter";
 
 export const useAlertTableColumns = () => {
@@ -55,7 +57,7 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "total_count",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Alerts" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Alerts" }),
       cell: ({ row }) => {
         const totalCount = row.getValue("total_count") as number;
         const classificationCount = row.original.alerts?.length || 0;
@@ -78,7 +80,7 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "source_ipv4",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Source IP" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Source IP" }),
       cell: ({ row }) =>
         h(
           "span",
@@ -90,7 +92,7 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "target_ipv4",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Target IP" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Target IP" }),
       cell: ({ row }) =>
         h(
           "span",
@@ -102,10 +104,10 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "alerts",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Classifications" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Classifications" }),
       cell: ({ row }) => {
         const alerts = row.original.alerts || [];
-        return h(ClassificationBadges, {
+        return h(AlertsClassificationBadges, {
           classifications: alerts,
           sourceIp: row.original.source_ipv4 || "",
           targetIp: row.original.target_ipv4 || "",
@@ -118,7 +120,7 @@ export const useAlertTableColumns = () => {
       id: "detected_at",
       accessorFn: (row) => row.alerts?.[0]?.detected_at,
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Last Detected" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Last Detected" }),
       cell: ({ row }) => {
         const dateStr = row.original.alerts?.[0]?.detected_at;
 
@@ -138,7 +140,7 @@ export const useAlertTableColumns = () => {
       id: "actions",
       enableHiding: false,
       cell: ({ row }) =>
-        h(AlertActions, {
+        h(AlertsActions, {
           alert: row.original,
           isGrouped: true,
           onViewDetails: handleViewDetails,
@@ -179,7 +181,7 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "detected_at",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Time" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Time" }),
       cell: ({ row }) => {
         const time = row.getValue<TimeInfo | string>("detected_at");
         const timestamp =
@@ -201,7 +203,7 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "severity",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Severity" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Severity" }),
       cell: ({ row }) => {
         const severity = row.getValue("severity") as string;
         const severityLower = severity?.toLowerCase();
@@ -225,7 +227,7 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "classification_text",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Classification" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Classification" }),
       cell: ({ row }) => {
         const classification = row.getValue("classification_text") || "Unknown";
         const correlationDesc = row.original.correlation_description;
@@ -250,19 +252,19 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "source_ipv4",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Source IP" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Source IP" }),
       cell: ({ row }) => row.getValue("source_ipv4") || "Unknown",
     },
     {
       accessorKey: "target_ipv4",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Target IP" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Target IP" }),
       cell: ({ row }) => row.getValue("target_ipv4") || "Unknown",
     },
     {
       accessorKey: "analyzer",
       header: ({ column }) =>
-        h(DataTableColumnHeader, { column, title: "Analyzer" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Analyzer" }),
       cell: ({ row }) => {
         const analyzer = row.getValue<AnalyzerInfo | undefined>("analyzer");
         return analyzer?.name || "Unknown";
@@ -272,7 +274,7 @@ export const useAlertTableColumns = () => {
       id: "actions",
       enableHiding: false,
       cell: ({ row }) =>
-        h(AlertActions, {
+        h(AlertsActions, {
           alert: row.original,
           isGrouped: false,
           onViewDetails: handleViewDetails,

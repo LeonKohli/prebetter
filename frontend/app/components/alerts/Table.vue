@@ -14,8 +14,6 @@ import {
   getSortedRowModel,
   useVueTable,
 } from '@tanstack/vue-table'
-import AlertsDeleteDialog from '@/components/AlertsDeleteDialog.vue'
-
 // URL state synchronization
 const router = useRouter()
 const route = useRoute()
