@@ -113,12 +113,12 @@ const hexDump = computed(() => {
 
 <template>
   <div class="space-y-3">
-    <!-- Hex view with header toolbar -->
-    <div>
-      <div class="flex items-center justify-between mb-1">
-        <div class="text-xs text-muted-foreground">
+    <!-- Hex view -->
+    <section>
+      <header class="flex items-center justify-between mb-1">
+        <span class="text-xs text-muted-foreground">
           Payload <span v-if="byteLen !== null">({{ formatBytesCount(byteLen as number) }} bytes)</span>
-        </div>
+        </span>
         <div class="flex items-center gap-2">
           <Button variant="outline" size="sm" class="h-7 px-2" @click="copyHex">
             <Icon v-if="copied['copy-hex']" name="lucide:check" class="h-3.5 w-3.5 text-primary" />
@@ -135,22 +135,22 @@ const hexDump = computed(() => {
             <span class="ml-1">Download</span>
           </Button>
         </div>
-      </div>
+      </header>
       <pre ref="hexPre" class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ hexDump }}</code></pre>
-    </div>
+    </section>
 
-    <!-- ASCII / readable view with header toolbar -->
-    <div>
-      <div class="flex items-center justify-between mb-1">
-        <div class="text-xs text-muted-foreground">ASCII Payload</div>
+    <!-- ASCII view -->
+    <section>
+      <header class="flex items-center justify-between mb-1">
+        <span class="text-xs text-muted-foreground">ASCII Payload</span>
         <Button variant="outline" size="sm" class="h-7 px-2" @click="copyAscii">
           <Icon v-if="copied['copy-readable']" name="lucide:check" class="h-3.5 w-3.5 text-primary" />
           <Icon v-else name="lucide:copy" class="h-3.5 w-3.5" />
           <span class="ml-1">Copy ASCII</span>
         </Button>
-      </div>
+      </header>
       <pre ref="asciiPre" class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ readable || '' }}</code></pre>
-    </div>
+    </section>
   </div>
 </template>
 
