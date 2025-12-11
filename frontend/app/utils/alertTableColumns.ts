@@ -1,4 +1,4 @@
-import type { ColumnDef } from "@tanstack/vue-table";
+import type { ColumnDef, RowData } from "@tanstack/vue-table";
 import {
   AlertsActions,
   AlertsClassificationBadges,
@@ -6,52 +6,17 @@ import {
   Checkbox,
   TimeAgo,
 } from "#components";
-import { formatTimestampCompact } from "@/utils/timestampFormatter";
+
+// Extend TanStack Table's TableMeta interface for type-safe meta access
+declare module "@tanstack/vue-table" {
+  interface TableMeta<TData extends RowData> {
+    onViewDetails?: (alertId: string) => void;
+    onRequestDeleteSingle?: (alert: AlertListItem) => void;
+    onRequestDeleteGroup?: (group: CompactGroupedAlert | FlattenedGroupedAlert) => void;
+  }
+}
 
 export const useAlertTableColumns = () => {
-  // Helper to handle view details action
-  const handleViewDetails = (alertId: string) => {
-    // This will be handled by the parent component
-    const event = new CustomEvent("viewAlertDetails", { detail: { alertId } });
-    window.dispatchEvent(event);
-  };
-
-  const handleRequestDeleteSingle = (alert: AlertListItem) => {
-    const event = new CustomEvent("alertDeletionRequest", {
-      detail: {
-        mode: "single" as const,
-        alert,
-      },
-    });
-    window.dispatchEvent(event);
-  };
-
-  const handleRequestDeleteGroup = (
-    group: CompactGroupedAlert | FlattenedGroupedAlert,
-  ) => {
-    const sourceIp = "source_ipv4" in group ? group.source_ipv4 || "" : "";
-    const targetIp = "target_ipv4" in group ? group.target_ipv4 || "" : "";
-    let totalCount = 0;
-    if ("total_count" in group) {
-      const value = (group as CompactGroupedAlert).total_count ?? 0;
-      totalCount = typeof value === "number" ? value : Number(value) || 0;
-    } else if ("count" in group) {
-      const value = (group as FlattenedGroupedAlert).count ?? 0;
-      totalCount = typeof value === "number" ? value : Number(value) || 0;
-    }
-
-    const event = new CustomEvent("alertDeletionRequest", {
-      detail: {
-        mode: "grouped" as const,
-        group,
-        sourceIp,
-        targetIp,
-        totalCount,
-      },
-    });
-    window.dispatchEvent(event);
-  };
-
   // New compact grouped columns - one group per row
   const compactGroupedColumns: ColumnDef<CompactGroupedAlert>[] = [
     {
@@ -139,12 +104,12 @@ export const useAlertTableColumns = () => {
     {
       id: "actions",
       enableHiding: false,
-      cell: ({ row }) =>
+      cell: ({ row, table }) =>
         h(AlertsActions, {
           alert: row.original,
           isGrouped: true,
-          onViewDetails: handleViewDetails,
-          onRequestDeleteGroup: handleRequestDeleteGroup,
+          onViewDetails: table.options.meta?.onViewDetails,
+          onRequestDeleteGroup: table.options.meta?.onRequestDeleteGroup,
         }),
       size: 60,
     },
@@ -207,19 +172,14 @@ export const useAlertTableColumns = () => {
       cell: ({ row }) => {
         const severity = row.getValue("severity") as string;
         const severityLower = severity?.toLowerCase();
-
         const severityClasses: Record<string, string> = {
           high: "inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-primary text-primary-foreground",
-          medium:
-            "inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-accent text-accent-foreground",
+          medium: "inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-accent text-accent-foreground",
           low: "inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-muted text-muted-foreground",
         };
-
         return h(
           "span",
-          {
-            class: severityClasses[severityLower] || severityClasses.low,
-          },
+          { class: severityClasses[severityLower] || severityClasses.low },
           severity?.toUpperCase() || "UNKNOWN",
         );
       },
@@ -273,12 +233,12 @@ export const useAlertTableColumns = () => {
     {
       id: "actions",
       enableHiding: false,
-      cell: ({ row }) =>
+      cell: ({ row, table }) =>
         h(AlertsActions, {
           alert: row.original,
           isGrouped: false,
-          onViewDetails: handleViewDetails,
-          onRequestDeleteSingle: handleRequestDeleteSingle,
+          onViewDetails: table.options.meta?.onViewDetails,
+          onRequestDeleteSingle: table.options.meta?.onRequestDeleteSingle,
         }),
     },
   ];
