@@ -554,7 +554,7 @@ function formatHttpLikePayload(raw: string): string {
 
                       <div class="min-w-0">
                         <!-- Dual-format payload (readable + original base64) -->
-                        <HexAsciiPayload
+                        <AlertsHexAsciiPayload
                           v-if="value && typeof value === 'object' && ('readable' in value || 'original' in value)"
                           :readable="value.readable"
                           :original="value.original"
