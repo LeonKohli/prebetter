@@ -12,40 +12,32 @@
       </div>
     </div>
 
-    <!-- Loading skeleton -->
-    <div v-if="pending" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Card v-for="i in 6" :key="`skeleton-${i}`">
-        <CardHeader class="space-y-2">
-          <Skeleton class="h-4 w-24" />
-          <Skeleton class="h-8 w-16" />
-        </CardHeader>
-      </Card>
-    </div>
-
-    <!-- Loaded content -->
-    <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Card>
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <!-- Static cards: Total Nodes & Total Agents -->
+      <Card v-for="card in staticCards" :key="card.label">
         <CardHeader class="space-y-1">
-          <CardTitle class="text-sm font-medium text-muted-foreground">Total Nodes</CardTitle>
-          <div class="font-mono text-3xl font-semibold tabular-nums">{{ totalNodes }}</div>
+          <template v-if="pending">
+            <Skeleton class="h-4 w-24" />
+            <Skeleton class="h-8 w-16" />
+          </template>
+          <template v-else>
+            <CardTitle class="text-sm font-medium text-muted-foreground">{{ card.label }}</CardTitle>
+            <div class="font-mono text-3xl font-semibold tabular-nums">{{ card.value }}</div>
+          </template>
         </CardHeader>
       </Card>
 
-      <Card>
+      <!-- Dynamic status cards -->
+      <Card v-for="item in displaySummary" :key="item.status" class="border-dashed">
         <CardHeader class="space-y-1">
-          <CardTitle class="text-sm font-medium text-muted-foreground">Total Agents</CardTitle>
-          <div class="font-mono text-3xl font-semibold tabular-nums">{{ totalAgents }}</div>
-        </CardHeader>
-      </Card>
-
-      <Card
-        v-for="item in summary"
-        :key="item.status"
-        class="border-dashed"
-      >
-        <CardHeader class="space-y-1">
-          <HeartbeatStatusBadge :status="item.status" />
-          <div class="font-mono text-2xl font-semibold tabular-nums">{{ item.count }}</div>
+          <template v-if="pending">
+            <Skeleton class="h-4 w-20" />
+            <Skeleton class="h-7 w-12" />
+          </template>
+          <template v-else>
+            <HeartbeatStatusBadge :status="item.status" />
+            <div class="font-mono text-2xl font-semibold tabular-nums">{{ item.count }}</div>
+          </template>
         </CardHeader>
       </Card>
     </div>
@@ -55,10 +47,7 @@
 <script setup lang="ts">
 import { formatTimestamp } from '@/utils/timestampFormatter'
 
-type SummaryItem = {
-  status: string
-  count: number
-}
+type SummaryItem = { status: string; count: number }
 
 interface Props {
   totalNodes: number
@@ -68,9 +57,21 @@ interface Props {
   pending?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   summary: () => [],
   lastUpdated: null,
   pending: false,
 })
+
+const staticCards = computed(() => [
+  { label: 'Total Nodes', value: props.totalNodes },
+  { label: 'Total Agents', value: props.totalAgents },
+])
+
+// Show 4 placeholder cards when loading, actual summary when loaded
+const displaySummary = computed(() =>
+  props.pending
+    ? [{ status: 'active', count: 0 }, { status: 'inactive', count: 0 }, { status: 'offline', count: 0 }, { status: 'unknown', count: 0 }]
+    : props.summary
+)
 </script>
