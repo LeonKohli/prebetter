@@ -13,7 +13,7 @@
           <Icon name="lucide:arrow-left" class="mr-1 size-4" />
           Back to groups
         </Button>
-        <DateRangePicker
+        <AlertsDateRangePicker
           v-model="dateRange"
           :includeTime="true"
         />
