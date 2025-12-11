@@ -1,5 +1,5 @@
 <template>
-  <div class="h-[calc(100vh-3rem)] px-2 md:px-4 pt-2 md:pt-4 flex flex-col gap-2">
+  <div class="h-[calc(100vh-3rem)] px-2 md:px-4 pt-2 md:pt-4 pb-2 md:pb-4 flex flex-col gap-2">
     <!--
       ClientOnly with fallback keeps component tree consistent between SSR and client.
       Without fallback, .client.vue renders nothing on server, shifting component IDs
