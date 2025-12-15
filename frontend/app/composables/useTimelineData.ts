@@ -6,7 +6,6 @@ import { getPresetRange, isValidPresetId, isRelativePreset, type DatePresetId } 
  */
 export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState>) {
   const { token: sseRefreshToken } = useSseRefreshToken()
-  const relativeRefreshToken = ref(0)
 
   function getActivePresetId(): DatePresetId | undefined {
     const preset = urlState.filters.value.date_preset
@@ -19,6 +18,10 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     const presetId = getActivePresetId()
 
     if (presetId) {
+      // For relative presets, depend on sseRefreshToken to recalculate with fresh dates when SSE arrives
+      if (isRelativePreset(presetId)) {
+        void sseRefreshToken.value
+      }
       const range = getPresetRange(presetId)
       return { start: range.from, end: range.to }
     }
@@ -36,15 +39,10 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     return 'week'
   })
 
-  const fetchKey = computed(() => {
-    const presetId = getActivePresetId()
-    const relativeToken = presetId && isRelativePreset(presetId) ? relativeRefreshToken.value : 0
-    return `timeline-${btoa(JSON.stringify({
-      filters: urlState.filters.value,
-      relativeToken,
-      sseToken: sseRefreshToken.value,
-    }))}`
-  })
+  const fetchKey = computed(() => `timeline-${btoa(JSON.stringify({
+    filters: urlState.filters.value,
+    sseToken: sseRefreshToken.value,
+  }))}`)
 
   const fetchQuery = computed(() => {
     const query: Record<string, string> = {
@@ -79,16 +77,9 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     data.value?.data?.reduce((sum, p) => sum + p.total, 0) ?? 0
   )
 
-  function triggerRelativeRefresh() {
-    const presetId = getActivePresetId()
-    if (presetId && isRelativePreset(presetId)) {
-      relativeRefreshToken.value = Date.now()
-    }
-  }
-
   return {
     data, pending, error, status, refresh, execute,
     chartSeries, totalAlerts, timeFrame, dateRange,
-    fetchKey, relativeRefreshToken, getActivePresetId, triggerRelativeRefresh,
+    fetchKey, getActivePresetId,
   }
 }
