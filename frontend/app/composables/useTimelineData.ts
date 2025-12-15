@@ -56,13 +56,13 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     return query
   })
 
-  const { data, pending, error, refresh, status, execute } = useFetch<TimelineResponse>('/api/statistics/timeline', {
+  const { data, pending, error, refresh, status } = useFetch<TimelineResponse>('/api/statistics/timeline', {
     key: fetchKey,
     query: fetchQuery,
     server: true,
     lazy: false,
     dedupe: 'defer',
-    watch: false
+    watch: [sseRefreshToken],
   })
 
   const chartSeries = computed(() => {
@@ -78,7 +78,7 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
   )
 
   return {
-    data, pending, error, status, refresh, execute,
+    data, pending, error, status, refresh,
     chartSeries, totalAlerts, timeFrame, dateRange,
     fetchKey, getActivePresetId,
   }

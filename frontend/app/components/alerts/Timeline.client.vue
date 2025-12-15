@@ -34,12 +34,8 @@ const {
   totalAlerts,
   timeFrame,
   dateRange,
-  execute,
-  fetchKey,
   getActivePresetId,
 } = useTimelineData(urlState)
-
-watchDebounced(fetchKey, () => execute(), { debounce: 50 })
 
 const chartRef = useTemplateRef<ChartInstance>('chart')
 const isMobile = computed(() => width.value < 768)
