@@ -84,9 +84,7 @@ const copied = reactive<Record<string, boolean>>({})
 function copyWithFeedback(key: string, text: string) {
   navigator.clipboard.writeText(text)
   copied[key] = true
-  window.setTimeout(() => {
-    copied[key] = false
-  }, 1500)
+  setTimeout(() => (copied[key] = false), 1500)
 }
 
 // Timestamp formatting handled by centralized utility

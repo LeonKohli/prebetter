@@ -54,11 +54,8 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
   // "The connection was interrupted while the page was loading"
   // See: https://bugzilla.mozilla.org/show_bug.cgi?id=833462
   if (import.meta.client) {
-    window.addEventListener('beforeunload', close)
-    onScopeDispose(() => {
-      window.removeEventListener('beforeunload', close)
-      close()
-    })
+    useEventListener('beforeunload', close)
+    onScopeDispose(close)
   }
 
   // Store received alerts (newest first, limited buffer)
@@ -78,11 +75,7 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
   // When we receive a new alert, add it to the buffer and notify
   watch(latestAlert, (alert) => {
     if (!alert) return
-
-    // Prepend to alerts buffer (newest first)
     alerts.value = [alert, ...alerts.value].slice(0, maxBufferSize)
-
-    // Notify callback (debounced) - this triggers table refresh
     debouncedOnNewAlerts?.()
   })
 
