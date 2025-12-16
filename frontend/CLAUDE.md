@@ -403,12 +403,24 @@ Use `reactive()` for form data + vee-validate with Zod schemas - see `pages/logi
    - Admin features currently in `/profile.vue`
    - Consider populating or removing directory
 
-## Critical: Dynamic URL Switching with useFetch
+## useFetch Best Practices
 
-**When switching between different API endpoints dynamically (e.g., `/api/alerts` ↔ `/api/alerts/groups`):**
-1. Use a comprehensive key that includes ALL reactive state to prevent NS_BINDING_ABORTED errors
-2. Set `immediate: false` and `watch: false` in useFetch options, then manually control with `watchDebounced`
-3. This approach prevents request cancellation while maintaining reactivity and follows Nuxt 4 patterns
+**Prefer Nuxt's native reactivity over manual watchers:**
+- Use `watch: [ref1, ref2]` option in useFetch instead of `watch: false` + manual watchers
+- Nuxt automatically watches reactive URL and query params
+- Only use manual control when you need guards (e.g., skip if rows selected)
+
+**For computed values that include `new Date()` or time-based calculations:**
+- Vue can't track time passing as a reactive dependency
+- Add a refresh token dependency to invalidate the cache: `void refreshToken.value`
+
+**Example - letting Nuxt handle reactivity:**
+```typescript
+const { data } = useFetch('/api/data', {
+  query: fetchQuery,
+  watch: [refreshToken],  // Nuxt refetches when token changes
+})
+```
 
   ## Key Development Philosophy
 
