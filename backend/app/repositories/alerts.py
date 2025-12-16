@@ -10,7 +10,7 @@ Usage:
 """
 
 import ipaddress
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session, aliased
