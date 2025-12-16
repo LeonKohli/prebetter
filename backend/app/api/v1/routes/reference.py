@@ -1,8 +1,10 @@
 import logging
+from typing import Annotated, List
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, and_
-from typing import List
+
 from app.database.config import get_prelude_db
 from app.models.prelude import Classification, Impact, Analyzer, Node
 from app.api.v1.routes.auth import get_current_user
@@ -14,7 +16,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/classifications", response_model=List[str])
 async def get_unique_classifications(
-    db: Session = Depends(get_prelude_db),
+    db: Annotated[Session, Depends(get_prelude_db)],
 ) -> List[str]:
     """Get a list of unique classification texts."""
     try:
@@ -36,7 +38,7 @@ async def get_unique_classifications(
 
 @router.get("/severities", response_model=List[str])
 async def get_unique_severities(
-    db: Session = Depends(get_prelude_db),
+    db: Annotated[Session, Depends(get_prelude_db)],
 ) -> List[str]:
     """Get a list of unique impact severities."""
     try:
@@ -58,7 +60,7 @@ async def get_unique_severities(
 
 @router.get("/servers", response_model=List[str])
 async def get_unique_servers(
-    db: Session = Depends(get_prelude_db),
+    db: Annotated[Session, Depends(get_prelude_db)],
 ) -> List[str]:
     """Get a list of unique short node names (servers like server-001)."""
     try:
