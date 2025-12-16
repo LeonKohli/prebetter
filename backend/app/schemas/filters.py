@@ -108,14 +108,14 @@ class AlertFilterParams(BaseModel):
 
 class PaginationParams(BaseModel):
     """
-    Pagination parameters for list endpoints.
+    Pagination parameters for list endpoints (max 100 items).
 
     Usage:
         pagination: Annotated[PaginationParams, Depends()]
     """
 
     page: int = Field(1, ge=1, description="Page number (1-indexed)")
-    size: int = Field(100, ge=1, le=100, description="Items per page")
+    size: int = Field(100, ge=1, le=100, description="Items per page (max 100)")
 
     @property
     def offset(self) -> int:
