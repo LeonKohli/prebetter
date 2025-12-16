@@ -4,10 +4,19 @@ Filter schemas for FastAPI endpoints.
 These Pydantic models serve as SINGLE SOURCE OF TRUTH for all filter parameters,
 eliminating scattered Optional[str] params across routes.
 
-Usage as dependency:
+Usage with MULTIPLE Pydantic models as query params:
+    from typing import Annotated
+    from fastapi import Depends
+
     @router.get("/alerts")
-    async def list_alerts(filters: AlertFilterParams = Depends()):
+    async def list_alerts(
+        filters: Annotated[AlertFilterParams, Depends()],
+        pagination: Annotated[PaginationParams, Depends()],
+    ):
         ...
+
+Note: Use Depends() (not Query()) when you have MULTIPLE Pydantic models.
+Query() is for a SINGLE model capturing ALL query params.
 """
 
 from datetime import datetime
@@ -21,7 +30,7 @@ class AlertFilterParams(BaseModel):
     Common filter parameters for alert queries.
 
     Use as FastAPI dependency for consistent filtering across endpoints:
-        filters: AlertFilterParams = Depends()
+        filters: Annotated[AlertFilterParams, Depends()]
 
     Supports comma-separated values for: severity, classification, server
     """
@@ -97,7 +106,7 @@ class PaginationParams(BaseModel):
     Pagination parameters for list endpoints.
 
     Usage:
-        pagination: PaginationParams = Depends()
+        pagination: Annotated[PaginationParams, Depends()]
     """
 
     page: int = Field(1, ge=1, description="Page number (1-indexed)")

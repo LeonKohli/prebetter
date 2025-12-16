@@ -10,6 +10,7 @@ Usage:
 """
 
 import ipaddress
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import select, func, and_, literal_column, literal, or_, text, Table, MetaData
 from sqlalchemy.exc import NoSuchTableError
@@ -27,7 +28,11 @@ from app.models.prelude import (
     CreateTime,
     CorrelationAlert,
 )
-from app.database.config import get_analyzer_join_conditions, get_node_join_conditions
+from app.database.config import (
+    get_analyzer_join_conditions,
+    get_node_join_conditions,
+    get_prelude_db,
+)
 from app.core.datetime_utils import get_current_time, ensure_timezone
 
 # Cache for Prebetter_Pair table reflection
@@ -141,13 +146,31 @@ class AlertRepository(BaseRepository[Alert]):
             .outerjoin(Node, get_node_join_conditions(Alert._ident))
         )
 
-    def _apply_filters(self, query, filters: AlertFilterParams):
+    def _apply_filters(
+        self,
+        query,
+        filters: AlertFilterParams,
+        source_addr=None,
+        target_addr=None,
+        include_server_filter: bool = True,
+    ):
         """
         Apply all filters to query.
 
         SINGLE SOURCE OF TRUTH for filter logic.
         No magic kwargs, explicit parameters only.
+
+        Args:
+            query: SQLAlchemy query to filter
+            filters: Filter parameters
+            source_addr: Address alias for source (defaults to self._source_addr)
+            target_addr: Address alias for target (defaults to self._target_addr)
+            include_server_filter: Whether to apply server filter (requires Node join)
         """
+        # Use provided aliases or fall back to instance aliases
+        source_addr = source_addr or self._source_addr
+        target_addr = target_addr or self._target_addr
+
         # Date range filters
         if filters.start_date:
             # Future date check - return empty results
@@ -160,10 +183,10 @@ class AlertRepository(BaseRepository[Alert]):
 
         # IP filters (exact match)
         if filters.source_ip:
-            query = query.where(self._source_addr.address == filters.source_ip)
+            query = query.where(source_addr.address == filters.source_ip)
 
         if filters.target_ip:
-            query = query.where(self._target_addr.address == filters.target_ip)
+            query = query.where(target_addr.address == filters.target_ip)
 
         # Severity filter (supports comma-separated)
         severity_list = filters.severity_list()
@@ -179,13 +202,14 @@ class AlertRepository(BaseRepository[Alert]):
         elif len(classification_list) > 1:
             query = query.where(Classification.text.in_(classification_list))
 
-        # Server filter (Node.name prefix match)
-        server_list = filters.server_list()
-        if len(server_list) == 1:
-            query = query.where(Node.name.startswith(server_list[0] + "."))
-        elif len(server_list) > 1:
-            conditions = [Node.name.startswith(s + ".") for s in server_list]
-            query = query.where(or_(*conditions))
+        # Server filter (Node.name prefix match) - optional, requires Node join
+        if include_server_filter:
+            server_list = filters.server_list()
+            if len(server_list) == 1:
+                query = query.where(Node.name.startswith(server_list[0] + "."))
+            elif len(server_list) > 1:
+                conditions = [Node.name.startswith(s + ".") for s in server_list]
+                query = query.where(or_(*conditions))
 
         # Analyzer name filter
         if filters.analyzer_name:
@@ -300,21 +324,14 @@ class AlertRepository(BaseRepository[Alert]):
             )
         )
 
-        # Apply filters directly (not using _apply_filters because different aliases)
-        if filters.start_date:
-            query = query.where(DetectTime.time >= filters.start_date)
-        if filters.end_date:
-            query = query.where(DetectTime.time <= filters.end_date)
-        if filters.severity:
-            query = query.where(Impact.severity == filters.severity)
-        if filters.classification:
-            query = query.where(Classification.text == filters.classification)
-        if filters.analyzer_name:
-            query = query.where(Analyzer.name == filters.analyzer_name)
-        if filters.source_ip:
-            query = query.where(source_addr.address == filters.source_ip)
-        if filters.target_ip:
-            query = query.where(target_addr.address == filters.target_ip)
+        # Apply shared filter logic - pass local aliases, skip server filter (no Node join)
+        query = self._apply_filters(
+            query,
+            filters,
+            source_addr=source_addr,
+            target_addr=target_addr,
+            include_server_filter=False,  # Timeline query doesn't join Node
+        )
 
         # Group and order
         query = query.group_by(
@@ -360,21 +377,46 @@ class AlertRepository(BaseRepository[Alert]):
 
 
 # =========================================================================
-# Dependency Injection
+# Dependency Injection - FastAPI pattern with proper Depends() chain
 # =========================================================================
 
 
-def get_alert_repository(db: Session) -> AlertRepository:
+def get_alert_repository(
+    db: Session = Depends(get_prelude_db),
+) -> AlertRepository:
     """
     FastAPI dependency for AlertRepository.
 
     Usage in routes:
+        from typing import Annotated
+
         @router.get("/alerts")
         async def list_alerts(
-            repo: AlertRepository = Depends(get_alert_repository),
+            repo: Annotated[AlertRepository, Depends(get_alert_repository)],
         ):
+            return repo.get_list(...)
     """
     return AlertRepository(db)
+
+
+def get_statistics_repository(
+    db: Session = Depends(get_prelude_db),
+) -> "StatisticsRepository":
+    """FastAPI dependency for StatisticsRepository."""
+    return StatisticsRepository(db)
+
+
+def get_grouped_alert_repository(
+    db: Session = Depends(get_prelude_db),
+) -> "GroupedAlertRepository":
+    """FastAPI dependency for GroupedAlertRepository."""
+    try:
+        return GroupedAlertRepository(db)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="Grouped alerts unavailable - accelerator table missing",
+        )
 
 
 class StatisticsRepository(BaseRepository):
@@ -510,7 +552,10 @@ class GroupedAlertRepository(BaseRepository):
         super().__init__(db)
         self._pair_table = _get_prebetter_pair_table(db)
         if self._pair_table is None:
-            raise RuntimeError("Prebetter_Pair accelerator table missing.")
+            raise HTTPException(
+                status_code=503,
+                detail="Grouped alerts unavailable - Prebetter_Pair accelerator table not configured",
+            )
 
     # =========================================================================
     # PRIVATE: Filter Helpers
