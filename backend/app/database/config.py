@@ -1,9 +1,7 @@
-from sqlalchemy import create_engine, MetaData, and_, literal, func, event
+from sqlalchemy import create_engine, MetaData, and_, event
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
-from typing import Generator, Optional
-from datetime import datetime
+from typing import Generator
 from ..core.config import get_settings
-from ..core.datetime_utils import get_current_time, ensure_timezone
 
 settings = get_settings()
 
@@ -95,111 +93,7 @@ def get_prebetter_db() -> Generator[Session, None, None]:
         db.close()
 
 
-# Common query helpers to reduce duplicated code
-
-
-def apply_standard_alert_filters(
-    query,
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    source_ip: Optional[str] = None,
-    target_ip: Optional[str] = None,
-    server: Optional[str] = None,
-    **models,
-):
-    """
-    Apply standard alert filters to a query in a more optimized way.
-
-    Args:
-        query: The SQLAlchemy query to filter
-        severity: Optional severity filter
-        classification: Optional classification filter (partial match)
-        start_date: Optional start date filter
-        end_date: Optional end date filter
-        source_ip: Optional source IP filter (exact match)
-        target_ip: Optional target IP filter (exact match)
-        server: Optional server name filter (short node name like server-001)
-        models: Dict containing model classes. Expected keys: Impact, Classification,
-                DetectTime, source_addr, target_addr, Node
-
-    Returns:
-        Filtered SQLAlchemy query
-    """
-    Impact = models.get("Impact")
-    Classification = models.get("Classification")
-    DetectTime = models.get("DetectTime")
-    source_addr = models.get("source_addr")
-    target_addr = models.get("target_addr")
-    # Optional integer IP columns when using Prebetter_Pair
-    source_ip_int_col = models.get("source_ip_int_col")
-    target_ip_int_col = models.get("target_ip_int_col")
-
-    # Apply filters progressively from most to least selective for better query planning
-
-    # Apply date range filters with proper timezone handling
-    if start_date and DetectTime:
-        # Ensure timezone consistency using utility
-        start_date = ensure_timezone(start_date)
-        query = query.where(DetectTime.time >= start_date)
-
-    if end_date and DetectTime:
-        # Ensure timezone consistency using utility
-        end_date = ensure_timezone(end_date)
-        query = query.where(DetectTime.time <= end_date)
-
-    # Check for future date range (edge case handling)
-    current_time = get_current_time()  # Using utility function
-    if start_date and start_date > current_time:
-        # If the start date is in the future, ensure empty results
-        # This is needed for test_list_alerts_edge_cases
-        query = query.where(literal(False))
-
-    # Apply exact match filters first (likely most selective)
-    if source_ip:
-        if source_ip_int_col is not None:
-            query = query.where(source_ip_int_col == func.inet_aton(source_ip))
-        elif source_addr:
-            # Using exact equality without func.binary() for better index utilization
-            query = query.where(source_addr.address == source_ip)
-
-    if target_ip:
-        if target_ip_int_col is not None:
-            query = query.where(target_ip_int_col == func.inet_aton(target_ip))
-        elif target_addr:
-            # Using exact equality without func.binary() for better index utilization
-            query = query.where(target_addr.address == target_ip)
-
-    if severity and Impact:
-        severity_list = [s.strip() for s in severity.split(",") if s.strip()]
-        if len(severity_list) == 1:
-            query = query.where(Impact.severity == severity_list[0])
-        elif len(severity_list) > 1:
-            query = query.where(Impact.severity.in_(severity_list))
-
-    # Filter by server (Node.name) - matches short node name like server-001
-    Node = models.get("Node")
-    if server and Node:
-        server_list = [s.strip() for s in server.split(",") if s.strip()]
-        # Filter by short node name - match beginning of FQDN
-        if len(server_list) == 1:
-            query = query.where(Node.name.startswith(server_list[0] + "."))
-        elif len(server_list) > 1:
-            # For multiple values, use OR conditions
-            from sqlalchemy import or_
-
-            conditions = [Node.name.startswith(s + ".") for s in server_list]
-            query = query.where(or_(*conditions))
-
-    if classification and Classification:
-        classification_list = [c.strip() for c in classification.split(",") if c.strip()]
-        if len(classification_list) == 1:
-            query = query.where(Classification.text == classification_list[0])
-        elif len(classification_list) > 1:
-            query = query.where(Classification.text.in_(classification_list))
-
-    return query
+# Common query helpers - join conditions
 
 
 def get_analyzer_join_conditions(message_ident_field, parent_type="A", index=-1):
