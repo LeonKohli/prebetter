@@ -5,21 +5,17 @@ These functions build reusable SQLAlchemy queries that can be used throughout
 the application to reduce code duplication and maintain consistent query patterns.
 """
 
-from typing import Optional
 
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import (
     select,
-    func,
     and_,
     literal_column,
     text,
-    literal,
 )
 from sqlalchemy import Table, MetaData
 from sqlalchemy.exc import NoSuchTableError
 from datetime import datetime
-import ipaddress
 
 from ..models.prelude import (
     Alert,
@@ -54,17 +50,7 @@ _PAIR_TABLE = None
 _PAIR_TABLE_MISSING = False
 
 
-def _build_classification_subquery(classification: str):
-    """Build a subquery for classification filter supporting comma-separated values."""
-    classification_list = [c.strip() for c in classification.split(",") if c.strip()]
-    if len(classification_list) == 1:
-        return select(Classification._message_ident).where(
-            Classification.text == classification_list[0]
-        )
-    else:
-        return select(Classification._message_ident).where(
-            Classification.text.in_(classification_list)
-        )
+# NOTE: _build_classification_subquery removed - moved to GroupedAlertRepository
 
 
 # NOTE: These globals are accessed without locks. This is acceptable because:
@@ -175,309 +161,11 @@ def build_alert_base_query(db: Session):
     return query, {"source_addr": source_addr, "target_addr": target_addr, "Node": Node}
 
 
-def _apply_grouped_filters(
-    query,
-    pair_table,
-    *,
-    start_date,
-    end_date,
-    source_ip,
-    target_ip,
-    severity,
-    classification,
-    server,
-):
-    """Apply common filters for grouped alert queries.
-
-    Uses subquery pattern for server filter which is ~26% faster than JOIN
-    because it allows MySQL to use semi-join optimization.
-    """
-    # Date filters
-    if start_date:
-        query = query.where(DetectTime.time >= start_date)
-    if end_date:
-        query = query.where(DetectTime.time <= end_date)
-
-    # IP filters
-    if source_ip:
-        query = query.where(pair_table.c.source_ip == func.inet_aton(source_ip))
-    if target_ip:
-        query = query.where(pair_table.c.target_ip == func.inet_aton(target_ip))
-
-    # Severity filter - use subquery to avoid Cartesian product
-    if severity:
-        severity_subq = select(Impact._message_ident).where(Impact.severity == severity)
-        query = query.where(pair_table.c._message_ident.in_(severity_subq))
-
-    # Classification filter - use subquery for semi-join optimization
-    if classification:
-        classification_subq = _build_classification_subquery(classification)
-        query = query.where(pair_table.c._message_ident.in_(classification_subq))
-
-    # Server filter - filters by Node.name (short server name like server-001)
-    # Uses subquery for better performance (semi-join optimization)
-    if server:
-        server_list = [s.strip() for s in server.split(",") if s.strip()]
-        # Build subquery that joins Analyzer -> Node and filters by short node name
-        server_subq = (
-            select(Analyzer._message_ident)
-            .select_from(Analyzer)
-            .outerjoin(
-                Node,
-                and_(
-                    Node._message_ident == Analyzer._message_ident,
-                    Node._parent_type == "A",
-                    Node._parent0_index == Analyzer._index,
-                ),
-            )
-            .where(Analyzer._parent_type == "A")
-        )
-        # Filter by short node name - match beginning of FQDN
-        if len(server_list) == 1:
-            server_subq = server_subq.where(
-                Node.name.startswith(server_list[0] + ".")
-            )
-        else:
-            # For multiple values, use OR conditions
-            from sqlalchemy import or_
-
-            conditions = [Node.name.startswith(s + ".") for s in server_list]
-            server_subq = server_subq.where(or_(*conditions))
-        query = query.where(pair_table.c._message_ident.in_(server_subq))
-
-    return query
-
-
-def build_grouped_alerts_query(
-    db: Session,
-    *,
-    server: Optional[str] = None,
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    source_ip: Optional[str] = None,
-    target_ip: Optional[str] = None,
-    sort_by_severity: bool = False,
-    sort_by_classification: bool = False,
-    sort_by_analyzer: bool = False,
-):
-    """Build query for alerts grouped by source/target IP pair.
-
-    Returns (query, sort_cols) where sort_cols maps sort field names to columns.
-
-    Args:
-        sort_by_severity: Include max_severity column for sorting
-        sort_by_classification: Include max_classification column for sorting
-        sort_by_analyzer: Include max_analyzer column for sorting
-    """
-    pair_table = _get_prebetter_pair_table(db)
-    if pair_table is None:
-        raise RuntimeError("Prebetter_Pair accelerator missing.")
-
-    # Build SELECT columns
-    select_cols = [
-        func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
-        func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
-        func.max(DetectTime.time).label("latest_time"),
-    ]
-
-    query = (
-        select(*select_cols)
-        .select_from(DetectTime)
-        .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
-    )
-
-    # Apply common filters (including classification now!)
-    query = _apply_grouped_filters(
-        query,
-        pair_table,
-        start_date=start_date,
-        end_date=end_date,
-        source_ip=source_ip,
-        target_ip=target_ip,
-        severity=severity,
-        classification=classification,
-        server=server,
-    )
-
-    # Track which columns we've added for sort_cols dict
-    sort_cols = {
-        "latest_time": literal_column("latest_time"),
-        "source_ip": literal_column("source_ipv4"),
-        "target_ip": literal_column("target_ipv4"),
-        "max_severity": None,
-        "max_classification": None,
-        "max_analyzer": None,
-    }
-
-    classification_list = (
-        [c.strip() for c in classification.split(",") if c.strip()]
-        if classification
-        else None
-    )
-
-    # Add severity column for sorting (uses OUTER JOIN - no Cartesian with subquery filter)
-    if sort_by_severity:
-        query = query.add_columns(func.max(Impact.severity).label("max_severity"))
-        query = query.outerjoin(
-            Impact, Impact._message_ident == DetectTime._message_ident
-        )
-        sort_cols["max_severity"] = literal_column("max_severity")
-
-    # Add classification column for sorting
-    if sort_by_classification:
-        query = query.add_columns(
-            func.max(Classification.text).label("max_classification")
-        )
-        join_condition = Classification._message_ident == DetectTime._message_ident
-        if classification_list:
-            if len(classification_list) == 1:
-                join_condition = and_(
-                    join_condition, Classification.text == classification_list[0]
-                )
-            else:
-                join_condition = and_(
-                    join_condition, Classification.text.in_(classification_list)
-                )
-        query = query.outerjoin(Classification, join_condition)
-        sort_cols["max_classification"] = literal_column("max_classification")
-
-    # Add analyzer column for sorting (using Node.name for server-based display)
-    if sort_by_analyzer:
-        query = query.add_columns(func.max(Node.name).label("max_analyzer"))
-        analyzer_join_condition = and_(
-            Analyzer._message_ident == DetectTime._message_ident,
-            Analyzer._parent_type == "A",
-        )
-        node_join_condition = and_(
-            Node._message_ident == Analyzer._message_ident,
-            Node._parent_type == "A",
-            Node._parent0_index == Analyzer._index,
-        )
-        if server:
-            server_list = [s.strip() for s in server.split(",") if s.strip()]
-            if len(server_list) == 1:
-                node_join_condition = and_(
-                    node_join_condition, Node.name.startswith(server_list[0] + ".")
-                )
-            else:
-                from sqlalchemy import or_
-
-                conditions = [Node.name.startswith(s + ".") for s in server_list]
-                node_join_condition = and_(node_join_condition, or_(*conditions))
-        query = query.outerjoin(Analyzer, analyzer_join_condition)
-        query = query.outerjoin(Node, node_join_condition)
-        sort_cols["max_analyzer"] = literal_column("max_analyzer")
-
-    needs_distinct_count = sort_by_classification or sort_by_analyzer
-    count_column = (
-        func.count(func.distinct(pair_table.c._message_ident))
-        if needs_distinct_count
-        else func.count()
-    )
-
-    query = query.add_columns(count_column.label("total_count"))
-    sort_cols["total_count"] = literal_column("total_count")
-
-    query = query.group_by(pair_table.c.pair_key)
-
-    return query, sort_cols
-
-
-def build_grouped_alerts_count_query(
-    db: Session,
-    *,
-    server: Optional[str] = None,
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    source_ip: Optional[str] = None,
-    target_ip: Optional[str] = None,
-):
-    """Build count query for grouped alerts pagination."""
-    pair_table = _get_prebetter_pair_table(db)
-    if pair_table is None:
-        raise RuntimeError("Prebetter_Pair accelerator missing.")
-
-    query = (
-        select(func.count(func.distinct(pair_table.c.pair_key)))
-        .select_from(DetectTime)
-        .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
-    )
-
-    # Apply same filters as main query - ensures consistent counts
-    query = _apply_grouped_filters(
-        query,
-        pair_table,
-        start_date=start_date,
-        end_date=end_date,
-        source_ip=source_ip,
-        target_ip=target_ip,
-        severity=severity,
-        classification=classification,
-        server=server,
-    )
-
-    return query
-
-
-def build_grouped_alerts_detail_query(db: Session, pairs):
-    """Build a query for detailed information about grouped alerts.
-
-    Uses Prebetter_Pair when available to avoid Address joins and tuple IN.
-    Falls back to DetectTime + Address joins otherwise.
-    """
-    pair_table = _get_prebetter_pair_table(db)
-    if pair_table is not None:
-        # Compute pair_key list from provided pairs
-        def ip_to_int(ip: str) -> int:
-            return int(ipaddress.IPv4Address(ip))
-
-        pair_keys = [
-            (ip_to_int(p.source_ipv4) << 32) + ip_to_int(p.target_ipv4) for p in pairs
-        ]
-
-        alerts_query = (
-            select(
-                func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
-                func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
-                Classification.text.label("classification"),
-                func.count(func.distinct(pair_table.c._message_ident)).label("count"),
-                func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
-                literal(None).label("analyzer_hosts"),
-                func.max(DetectTime.time).label("latest_time"),
-            )
-            .select_from(DetectTime)
-            .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
-            .outerjoin(
-                Classification,
-                Classification._message_ident == DetectTime._message_ident,
-            )
-            .outerjoin(
-                Analyzer,
-                and_(
-                    Analyzer._message_ident == DetectTime._message_ident,
-                    Analyzer._parent_type == "A",
-                ),
-            )
-            .where(
-                pair_table.c.pair_key.in_(pair_keys) if pair_keys else literal(False)
-            )
-            .group_by(pair_table.c.pair_key, Classification.text)
-        )
-
-        return alerts_query, {
-            "pair": pair_table,
-            "source_ip_int_col": pair_table.c.source_ip,
-            "target_ip_int_col": pair_table.c.target_ip,
-        }
-
-    else:
-        raise RuntimeError(
-            "Prebetter_Pair accelerator missing. Install it before starting the API."
-        )
+# NOTE: Grouped alert query builders removed - replaced by GroupedAlertRepository:
+# - _apply_grouped_filters
+# - build_grouped_alerts_query
+# - build_grouped_alerts_count_query
+# - build_grouped_alerts_detail_query
 
 
 def build_alert_detail_query(db: Session, alert_id: int):
@@ -680,102 +368,7 @@ def build_alert_detail_query(db: Session, alert_id: int):
 
 
 # NOTE: build_alerts_timeline_query removed - replaced by AlertRepository.get_timeline()
-
-
-def build_alerts_statistics_query(
-    db: Session, start_time: datetime, end_time: datetime
-):
-    """Build queries for alert statistics."""
-    source_addr = aliased(Address)
-    target_addr = aliased(Address)
-
-    base_query = (
-        select(Alert)
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .where(DetectTime.time >= start_time)
-        .where(DetectTime.time <= end_time)
-    )
-
-    severity_query = (
-        select(Impact.severity, func.count(Alert._ident.distinct()))
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .where(DetectTime.time >= start_time)
-        .where(DetectTime.time <= end_time)
-        .outerjoin(Impact, Impact._message_ident == Alert._ident)
-        .group_by(Impact.severity)
-    )
-
-    classification_query = (
-        select(Classification.text, func.count(Alert._ident.distinct()))
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .where(DetectTime.time >= start_time)
-        .where(DetectTime.time <= end_time)
-        .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        .group_by(Classification.text)
-    )
-
-    analyzer_query = (
-        select(Analyzer.name, func.count(Alert._ident.distinct()))
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .where(DetectTime.time >= start_time)
-        .where(DetectTime.time <= end_time)
-        .outerjoin(
-            Analyzer,
-            get_analyzer_join_conditions(Alert._ident),
-        )
-        .group_by(Analyzer.name)
-    )
-
-    source_ip_query = (
-        select(source_addr.address, func.count(Alert._ident.distinct()))
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .where(DetectTime.time >= start_time)
-        .where(DetectTime.time <= end_time)
-        .outerjoin(
-            source_addr,
-            and_(
-                source_addr._message_ident == Alert._ident,
-                source_addr._parent_type == "S",
-                source_addr.category == "ipv4-addr",
-            ),
-        )
-        .group_by(source_addr.address)
-        .order_by(func.count(Alert._ident.distinct()).desc())
-        .limit(10)
-    )
-
-    target_ip_query = (
-        select(target_addr.address, func.count(Alert._ident.distinct()))
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .where(DetectTime.time >= start_time)
-        .where(DetectTime.time <= end_time)
-        .outerjoin(
-            target_addr,
-            and_(
-                target_addr._message_ident == Alert._ident,
-                target_addr._parent_type == "T",
-                target_addr.category == "ipv4-addr",
-            ),
-        )
-        .group_by(target_addr.address)
-        .order_by(func.count(Alert._ident.distinct()).desc())
-        .limit(10)
-    )
-
-    return {
-        "base": base_query,
-        "severity": severity_query,
-        "classification": classification_query,
-        "analyzer": analyzer_query,
-        "source_ip": source_ip_query,
-        "target_ip": target_ip_query,
-    }
+# NOTE: build_alerts_statistics_query removed - replaced by StatisticsRepository.get_summary()
 
 
 def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):

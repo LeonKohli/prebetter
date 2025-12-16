@@ -22,11 +22,10 @@ from app.database.config import (
 )
 from app.database.query_builders import (
     build_alert_base_query,
-    build_grouped_alerts_query,
-    build_grouped_alerts_count_query,
-    build_grouped_alerts_detail_query,
     build_alert_detail_query,
 )
+from app.repositories.alerts import GroupedAlertRepository
+from app.schemas.filters import AlertFilterParams, PaginationParams
 from app.database.models import (
     alert_result_to_list_item,
     grouped_alert_to_response,
@@ -38,8 +37,6 @@ from app.database.models import (
 )
 from app.models.prelude import (
     Alert,
-    Classification,
-    DetectTime,
 )
 from app.schemas.prelude import (
     AlertListResponse,
@@ -55,9 +52,8 @@ from app.schemas.prelude import (
     GroupedAlertResponse,
     PaginatedResponse,
 )
-from app.schemas.filters import AlertFilterParams, PaginationParams
 from app.repositories.alerts import AlertRepository
-from app.core.datetime_utils import get_current_time, ensure_timezone
+from app.core.datetime_utils import get_current_time
 from app.api.v1.routes.auth import (
     get_current_user,
     validate_access_token,
@@ -258,85 +254,41 @@ async def get_grouped_alerts(
 ) -> GroupedAlertResponse:
     """Retrieve alerts grouped by source and target IP addresses."""
     try:
-        # Build queries with all filters
-        pairs_query, sort_cols = build_grouped_alerts_query(
-            db,
-            server=server,
+        # Build filter params - single source of truth
+        filters = AlertFilterParams(
             severity=severity,
             classification=classification,
             start_date=start_date,
             end_date=end_date,
             source_ip=source_ip,
             target_ip=target_ip,
-            sort_by_severity=sort_by == SortField.SEVERITY,
-            sort_by_classification=sort_by == SortField.CLASSIFICATION,
-            sort_by_analyzer=sort_by == SortField.ANALYZER,
-        )
-
-        count_query = build_grouped_alerts_count_query(
-            db,
             server=server,
-            severity=severity,
-            classification=classification,
-            start_date=start_date,
-            end_date=end_date,
-            source_ip=source_ip,
-            target_ip=target_ip,
+        )
+        pagination = PaginationParams(page=page, size=size)
+
+        # Use repository for all query logic
+        repo = GroupedAlertRepository(db)
+        result = repo.get_groups(
+            filters=filters,
+            pagination=pagination,
+            sort_by=sort_by.value,
+            sort_order=sort_order.value,
         )
 
-        # Sorting - map sort field to column from query builder
-        sort_map = {
-            "detect_time": sort_cols["latest_time"],
-            "severity": sort_cols.get("max_severity"),
-            "classification": sort_cols.get("max_classification"),
-            "analyzer": sort_cols.get("max_analyzer"),
-            "source_ip": sort_cols["source_ip"],
-            "target_ip": sort_cols["target_ip"],
-            "total_count": sort_cols["total_count"],
-            "alert_id": sort_cols["total_count"],
-        }
-        order_col = sort_map.get(sort_by.value)
-        if order_col is not None:
-            pairs_query = pairs_query.order_by(
-                order_col.desc() if sort_order == SortOrder.DESC else order_col
-            )
+        # Process results into response format
+        alerts_map = process_grouped_alerts_details(result["details"])
+        groups = [grouped_alert_to_response(pair, alerts_map) for pair in result["pairs"]]
 
-        # Execute
-        total_pairs = db.scalar(count_query) or 0
-        pairs = db.execute(pairs_query.offset((page - 1) * size).limit(size)).all()
-
-        alerts_query, _ = build_grouped_alerts_detail_query(db, pairs)
-
-        # Apply ONLY safe filters - inlined for clarity
-        # These tables are already joined in the detail query
-        if classification:
-            classification_list = [c.strip() for c in classification.split(",") if c.strip()]
-            if len(classification_list) == 1:
-                alerts_query = alerts_query.where(Classification.text == classification_list[0])
-            elif len(classification_list) > 1:
-                alerts_query = alerts_query.where(Classification.text.in_(classification_list))
-
-        if start_date:
-            alerts_query = alerts_query.where(DetectTime.time >= ensure_timezone(start_date))
-
-        if end_date:
-            alerts_query = alerts_query.where(DetectTime.time <= ensure_timezone(end_date))
-
-        alerts = db.execute(alerts_query).all()
-
-        alerts_map = process_grouped_alerts_details(alerts)
-
-        groups = [grouped_alert_to_response(pair, alerts_map) for pair in pairs]
-
-        # Calculate total number of alerts represented by the current page
+        # Calculate total alerts on page
         total_alerts_on_page = sum(group.total_count or 0 for group in groups)
-
-        total_pages = (total_pairs + size - 1) // size
 
         return GroupedAlertResponse(
             groups=groups,
             pagination=PaginatedResponse(
-                total=total_pairs, page=page, size=size, pages=total_pages
+                total=result["total_pairs"],
+                page=page,
+                size=size,
+                pages=result["total_pages"],
             ),
             total_alerts=total_alerts_on_page,
         )
