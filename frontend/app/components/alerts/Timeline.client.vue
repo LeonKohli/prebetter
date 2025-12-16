@@ -37,13 +37,6 @@ const {
   getActivePresetId,
 } = useTimelineData(urlState)
 
-// Key forces ApexCharts re-render when data changes (vue3-apexcharts reactivity workaround)
-const chartKey = computed(() => {
-  const total = chartSeries.value[0]?.data?.reduce((sum, p) => sum + p.y, 0) ?? 0
-  const points = chartSeries.value[0]?.data?.length ?? 0
-  return `chart-${points}-${total}`
-})
-
 /**
  * Calculate optimal x-axis range based on actual data points.
  * When filtered data is sparse, tighten the range to avoid massive bars.
@@ -147,6 +140,14 @@ const chartOptions = computed<ApexOptions>(() => ({
   chart: {
     id: 'alerts-timeline',
     background: 'transparent',
+    animations: {
+      enabled: true,
+      easing: 'easeout',
+      dynamicAnimation: {
+        enabled: true,
+        speed: 300, // Fast smooth transition on data updates
+      },
+    },
     zoom: {
       enabled: !isMobile.value,
       type: 'x',
@@ -287,7 +288,6 @@ const formattedTotal = computed(() => {
 
       <apexchart
         v-if="chartSeries[0]?.data.length"
-        :key="chartKey"
         ref="chart"
         type="bar"
         :height="chartHeight"
