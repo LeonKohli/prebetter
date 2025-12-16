@@ -5,8 +5,8 @@ const REFRESH_BUFFER_MS = 2 * 60 * 1000
 /**
  * SSE Proxy for real-time alert streaming.
  *
- * Uses manual fetch + streaming instead of proxyRequest which has
- * known issues with SSE connections in Nuxt/h3.
+ * CRITICAL: Uses AbortController to cancel backend fetch when client disconnects.
+ * Without this, backend SSE connections accumulate and never close.
  */
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -37,13 +37,17 @@ export default defineEventHandler(async (event) => {
 
   const target = joinURL(config.apiBase as string, 'api/v1/alerts/stream')
 
-  // Fetch SSE from backend
+  // AbortController to cancel backend fetch when client disconnects
+  const abortController = new AbortController()
+
+  // Fetch SSE from backend with abort signal
   const response = await fetch(target, {
     headers: {
       'Authorization': `Bearer ${session.secure!.apiToken}`,
       'Accept': 'text/event-stream',
       'Cache-Control': 'no-cache',
     },
+    signal: abortController.signal,
   })
 
   if (!response.ok || !response.body) {
@@ -53,11 +57,16 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Set SSE headers - critical for proper streaming
+  // Set SSE headers
   setResponseHeader(event, 'Content-Type', 'text/event-stream')
   setResponseHeader(event, 'Cache-Control', 'no-cache, no-transform')
   setResponseHeader(event, 'Connection', 'keep-alive')
   setResponseHeader(event, 'X-Accel-Buffering', 'no')
+
+  // Listen for client disconnect and abort backend fetch
+  event.node.req.on('close', () => {
+    abortController.abort()
+  })
 
   // Stream the response body directly
   return sendStream(event, response.body)
