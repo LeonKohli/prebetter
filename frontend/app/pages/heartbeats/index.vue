@@ -115,7 +115,7 @@ const {
   totalNodes,
   totalAgents,
   statusSummaryList,
-  pending: statusPending,
+  isInitialLoading: statusPending, // Only true on first load, not refresh
   refresh: refreshStatus,
   days,
   setDays,
@@ -124,7 +124,7 @@ const {
 
 const {
   items: timelineItems,
-  pending: timelinePending,
+  isInitialLoading: timelinePending, // Only true on first load, not refresh
   error: timelineError,
   pagination: timelinePagination,
   setPage: setTimelinePage,

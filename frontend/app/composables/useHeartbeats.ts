@@ -26,6 +26,10 @@ export function useHeartbeatStatus(options: {
 
   const { data, pending, error, refresh, status } = fetchResult
 
+  // Only true on INITIAL load - not during background refresh
+  // This prevents skeleton flash when we already have data
+  const isInitialLoading = computed(() => pending.value && !data.value)
+
   const nodes = computed<HeartbeatNode[]>(() => data.value?.nodes ?? [])
   const totalNodes = computed(() => data.value?.total_nodes ?? 0)
   const totalAgents = computed(() => data.value?.total_agents ?? 0)
@@ -105,6 +109,7 @@ export function useHeartbeatStatus(options: {
     statusSummary,
     statusSummaryList,
     pending,
+    isInitialLoading, // Use this for skeletons instead of pending
     error,
     refresh,
     status,
@@ -144,6 +149,9 @@ export function useHeartbeatTimeline(options: { hours?: number; pageSize?: numbe
 
   const { data, pending, error, refresh, status } = fetchResult
 
+  // Only true on INITIAL load - not during background refresh
+  const isInitialLoading = computed(() => pending.value && !data.value)
+
   const items = computed<HeartbeatTimelineItem[]>(() => data.value?.items ?? [])
   const pagination = computed(() => data.value?.pagination ?? {
     total: 0,
@@ -165,6 +173,7 @@ export function useHeartbeatTimeline(options: { hours?: number; pageSize?: numbe
     data,
     items,
     pending,
+    isInitialLoading, // Use this for skeletons instead of pending
     error,
     refresh,
     status,
