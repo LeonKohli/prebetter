@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, and_
@@ -5,6 +6,8 @@ from typing import List
 from app.database.config import get_prelude_db
 from app.models.prelude import Classification, Impact, Analyzer, Node
 from app.api.v1.routes.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -26,7 +29,8 @@ async def get_unique_classifications(
             .all()
         )
         return list(results)
-    except Exception:
+    except Exception as e:
+        logger.exception("Error fetching classifications: %s", e)
         raise HTTPException(status_code=500, detail="Error fetching classifications")
 
 
@@ -47,7 +51,8 @@ async def get_unique_severities(
             .all()
         )
         return list(results)
-    except Exception:
+    except Exception as e:
+        logger.exception("Error fetching severities: %s", e)
         raise HTTPException(status_code=500, detail="Error fetching severities")
 
 
@@ -80,5 +85,6 @@ async def get_unique_servers(
         # Extract short node name (before first dot)
         short_nodes = {name.split(".")[0] for name in results if name}
         return sorted(short_nodes)
-    except Exception:
+    except Exception as e:
+        logger.exception("Error fetching servers: %s", e)
         raise HTTPException(status_code=500, detail="Error fetching servers")
