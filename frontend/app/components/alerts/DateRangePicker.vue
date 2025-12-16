@@ -155,19 +155,16 @@ const displayLabel = computed(() => {
   return null
 })
 
-// Format dates for display
+// Format dates for display - relative presets slide with now, others use model value
 const displayText = computed(() => {
-  const from = props.modelValue?.from
-  const to = props.modelValue?.to
-  if (!from) return null
+  const preset = DATE_PRESETS.find(p => p.id === currentPresetId.value)
+  const { from, to } = preset?.relative
+    ? preset.computeRange(now.value)
+    : (props.modelValue ?? {})
 
+  if (!from || !to) return null
   const fmt = props.includeTime ? dateTimeFormatter : dateFormatter
-  const fromStr = fmt.format(from)
-  if (!to) return fromStr
-
-  // Use reactive now for relative presets so it updates every 60s
-  const endDate = isRelativePreset(currentPresetId.value) ? now.value : to
-  return `${fromStr} - ${fmt.format(endDate)}`
+  return `${fmt.format(from)} - ${fmt.format(to)}`
 })
 
 // Sync from modelValue only when timestamps actually change
