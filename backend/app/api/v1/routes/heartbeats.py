@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from collections import Counter, defaultdict
@@ -119,74 +119,71 @@ async def stream_heartbeats(
             except ValueError:
                 pass  # Invalid format, start fresh
 
-        # If no timestamp provided, get current max to avoid sending all historical data
-        if current_last_ts is None:
-            with PreludeSessionLocal() as db:
-                max_ts = db.scalar(
-                    select(func.max(AnalyzerTime.time)).where(AnalyzerTime._parent_type == "H")
-                )
-                if max_ts:
-                    current_last_ts = ensure_timezone(max_ts)
+        try:
+            # If no timestamp provided, get current max to avoid sending all historical data
+            if current_last_ts is None:
+                with PreludeSessionLocal() as db:
+                    max_ts = db.scalar(
+                        select(func.max(AnalyzerTime.time)).where(AnalyzerTime._parent_type == "H")
+                    )
+                    if max_ts:
+                        current_last_ts = ensure_timezone(max_ts)
 
-        # Send immediate heartbeat to establish connection
-        # This transitions EventSource from CONNECTING to OPEN instantly
-        yield ": connected\n\n"
+            # Send immediate heartbeat to establish connection
+            # This transitions EventSource from CONNECTING to OPEN instantly
+            yield ": connected\n\n"
 
-        heartbeat_counter = 0
+            heartbeat_counter = 0
 
-        while True:
-            # Check if client disconnected
-            if await request.is_disconnected():
-                break
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    break
 
-            # Acquire fresh session for EACH poll - releases immediately after
-            # This is critical: SSE connections can live for hours/days
-            with PreludeSessionLocal() as db:
-                # Check for new heartbeats since last timestamp
-                query = select(
-                    func.max(AnalyzerTime.time).label("latest_ts"),
-                    func.count(AnalyzerTime.time).label("new_count"),
-                ).where(AnalyzerTime._parent_type == "H")
+                # Acquire fresh session for EACH poll - releases immediately after
+                # This is critical: SSE connections can live for hours/days
+                with PreludeSessionLocal() as db:
+                    # Check for new heartbeats since last timestamp
+                    query = select(
+                        func.max(AnalyzerTime.time).label("latest_ts"),
+                        func.count(AnalyzerTime.time).label("new_count"),
+                    ).where(AnalyzerTime._parent_type == "H")
 
-                if current_last_ts:
-                    query = query.where(AnalyzerTime.time > current_last_ts)
+                    if current_last_ts:
+                        query = query.where(AnalyzerTime.time > current_last_ts)
 
-                result = db.execute(query).first()
+                    result = db.execute(query).first()
 
-                if result and result.latest_ts and result.new_count > 0:
-                    # New heartbeats found
-                    latest_ts = ensure_timezone(result.latest_ts)
-                    new_count = result.new_count
+                    if result and result.latest_ts and result.new_count > 0:
+                        # New heartbeats found
+                        latest_ts = ensure_timezone(result.latest_ts)
+                        new_count = result.new_count
 
-                    # Send update event with the new data
-                    event_data = json.dumps({
-                        "latest_timestamp": latest_ts.isoformat(),
-                        "new_count": new_count,
-                    })
-                    yield f"event: heartbeat_update\ndata: {event_data}\n\n"
+                        # Send update event with the new data
+                        event_data = json.dumps({
+                            "latest_timestamp": latest_ts.isoformat(),
+                            "new_count": new_count,
+                        })
+                        yield f"event: heartbeat_update\ndata: {event_data}\n\n"
 
-                    # Update tracking timestamp
-                    current_last_ts = latest_ts
-                    heartbeat_counter = 0
-                else:
-                    heartbeat_counter += 1
-                    # Send keepalive comment every 6th iteration (30 seconds at 5s intervals)
-                    if heartbeat_counter >= 6:
-                        yield ": heartbeat\n\n"
+                        # Update tracking timestamp
+                        current_last_ts = latest_ts
                         heartbeat_counter = 0
+                    else:
+                        heartbeat_counter += 1
+                        # Send keepalive comment every 6th iteration (30 seconds at 5s intervals)
+                        if heartbeat_counter >= 6:
+                            yield ": heartbeat\n\n"
+                            heartbeat_counter = 0
 
-            # Session is now CLOSED - connection returned to pool
-            await asyncio.sleep(5)
+                # Session is now CLOSED - connection returned to pool
+                await asyncio.sleep(5)
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+        except asyncio.CancelledError:
+            # Server shutdown/reload - exit cleanly so uvicorn doesn't hang
+            return
+
+    return EventSourceResponse(event_generator())
 
 
 @router.get("/status", response_model=HeartbeatTreeResponse)
