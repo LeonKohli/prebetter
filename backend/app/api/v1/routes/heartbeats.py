@@ -272,6 +272,7 @@ async def timeline_heartbeats(
     page: int = Query(1, ge=1),
     size: int = Query(100, ge=1, le=1000),
 ):
+    """Heartbeat timeline with larger page size (up to 1000) for history views."""
     start_time, _ = get_time_range(hours)
 
     timeline_query = build_heartbeats_timeline_query(db, start_time)
