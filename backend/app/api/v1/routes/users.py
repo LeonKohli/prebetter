@@ -1,19 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
 from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.v1.routes.auth import get_current_user
 from app.database.config import get_prebetter_db
 from app.models.users import User
+from app.schemas.filters import calculate_total_pages
+from app.schemas.prelude import PaginatedResponse
 from app.schemas.users import (
-    UserCreate,
-    UserUpdate,
-    User as UserSchema,
     PasswordChangeRequest,
     PasswordResetRequest,
     PaginatedUserResponse,
+    User as UserSchema,
+    UserCreate,
+    UserUpdate,
 )
-from app.api.v1.routes.auth import get_current_user
 from app.services.users import UserService
-from app.schemas.prelude import PaginatedResponse
 
 router = APIRouter()
 
@@ -64,7 +67,7 @@ async def list_users(
     total_users = user_service.count_users()
     users = user_service.list_users(skip=skip, limit=size)
 
-    total_pages = (total_users + size - 1) // size
+    total_pages = calculate_total_pages(total_users, size)
 
     return PaginatedUserResponse(
         items=[UserSchema.model_validate(user) for user in users],

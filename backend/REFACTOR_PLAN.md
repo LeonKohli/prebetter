@@ -127,3 +127,7 @@ async def list_alerts(
 - Pydantic filter schemas as DI: `Annotated[AlertFilterParams, Depends()]`
   - Decomposes into individual query params for OpenAPI docs
   - Use `Depends()` for multiple models (NOT `Query()` which expects single model)
+- Global state eliminated: `Prebetter_Pair` table reflected ONCE in lifespan
+  - Stored in `app.state.pair_table`
+  - Accessed via `get_pair_table` dependency → injected into `GroupedAlertRepository`
+  - No more module-level `_PAIR_TABLE` global

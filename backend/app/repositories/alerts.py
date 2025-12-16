@@ -10,10 +10,12 @@ Usage:
 """
 
 import ipaddress
-from fastapi import Depends, HTTPException
+from typing import TYPE_CHECKING
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import select, func, and_, literal_column, literal, or_, text, Table, MetaData
 from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.engine import Engine
 
 from .base import BaseRepository
 from app.schemas.filters import AlertFilterParams, PaginationParams
@@ -35,29 +37,18 @@ from app.database.config import (
 )
 from app.core.datetime_utils import get_current_time, ensure_timezone
 
-# Cache for Prebetter_Pair table reflection
-_PAIR_TABLE = None
-_PAIR_TABLE_MISSING = False
 
+def reflect_pair_table(engine: Engine) -> Table | None:
+    """
+    Reflect Prebetter_Pair table from database.
 
-def _get_prebetter_pair_table(db: Session):
-    """Reflect Prebetter_Pair if present; cache result for this process."""
-    global _PAIR_TABLE, _PAIR_TABLE_MISSING
-
-    if _PAIR_TABLE is not None:
-        return _PAIR_TABLE
-    if _PAIR_TABLE_MISSING:
-        return None
-
+    Called ONCE at startup in lifespan, result stored in app.state.
+    Returns None if table doesn't exist (not an error - optional accelerator).
+    """
     metadata = MetaData()
-    bind = db.get_bind()
-    engine = bind.engine if hasattr(bind, "engine") else bind
-
     try:
-        _PAIR_TABLE = Table("Prebetter_Pair", metadata, autoload_with=engine)
-        return _PAIR_TABLE
+        return Table("Prebetter_Pair", metadata, autoload_with=engine)
     except NoSuchTableError:
-        _PAIR_TABLE_MISSING = True
         return None
 
 
@@ -406,17 +397,27 @@ def get_statistics_repository(
     return StatisticsRepository(db)
 
 
-def get_grouped_alert_repository(
-    db: Session = Depends(get_prelude_db),
-) -> "GroupedAlertRepository":
-    """FastAPI dependency for GroupedAlertRepository."""
-    try:
-        return GroupedAlertRepository(db)
-    except RuntimeError:
+def get_pair_table(request: Request) -> Table:
+    """
+    FastAPI dependency to get pair_table from app.state.
+
+    Raises HTTPException 503 if table not available (reflected at startup).
+    """
+    pair_table = getattr(request.app.state, "pair_table", None)
+    if pair_table is None:
         raise HTTPException(
             status_code=503,
-            detail="Grouped alerts unavailable - accelerator table missing",
+            detail="Grouped alerts unavailable - Prebetter_Pair accelerator table not configured",
         )
+    return pair_table
+
+
+def get_grouped_alert_repository(
+    db: Session = Depends(get_prelude_db),
+    pair_table: Table = Depends(get_pair_table),
+) -> "GroupedAlertRepository":
+    """FastAPI dependency for GroupedAlertRepository."""
+    return GroupedAlertRepository(db, pair_table)
 
 
 class StatisticsRepository(BaseRepository):
@@ -546,16 +547,13 @@ class GroupedAlertRepository(BaseRepository):
     Repository for grouped alerts (by source/target IP pair).
 
     Encapsulates all grouped query logic - no more 3 separate query builders.
+
+    The pair_table is injected via DI from app.state (reflected once at startup).
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, pair_table: Table):
         super().__init__(db)
-        self._pair_table = _get_prebetter_pair_table(db)
-        if self._pair_table is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Grouped alerts unavailable - Prebetter_Pair accelerator table not configured",
-            )
+        self._pair_table = pair_table
 
     # =========================================================================
     # PRIVATE: Filter Helpers
@@ -846,5 +844,5 @@ class GroupedAlertRepository(BaseRepository):
             "pairs": pairs,
             "details": details,
             "total_pairs": total_pairs,
-            "total_pages": (total_pairs + pagination.size - 1) // pagination.size,
+            "total_pages": pagination.total_pages(total_pairs),
         }

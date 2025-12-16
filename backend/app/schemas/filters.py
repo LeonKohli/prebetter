@@ -25,6 +25,11 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.datetime_utils import ensure_timezone
 
 
+def calculate_total_pages(total: int, page_size: int) -> int:
+    """Calculate total pages - use this instead of inline math."""
+    return (total + page_size - 1) // page_size
+
+
 class AlertFilterParams(BaseModel):
     """
     Common filter parameters for alert queries.
@@ -116,6 +121,10 @@ class PaginationParams(BaseModel):
     def offset(self) -> int:
         """Calculate offset for SQL queries."""
         return (self.page - 1) * self.size
+
+    def total_pages(self, total: int) -> int:
+        """Calculate total pages for a given total count."""
+        return (total + self.size - 1) // self.size
 
 
 class TimelineFilterParams(AlertFilterParams):
