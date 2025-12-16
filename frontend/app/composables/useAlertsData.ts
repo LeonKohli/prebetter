@@ -33,6 +33,11 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
     const sortBy = urlState.sortBy.value
     const mappedSort = sortBy in sortFieldMap ? sortFieldMap[sortBy as keyof typeof sortFieldMap] : sortBy
 
+    // For relative presets, depend on relativeRefreshToken to recalculate with fresh dates
+    if (activePreset && isRelativePreset(activePreset)) {
+      void relativeRefreshToken.value
+    }
+
     // Build filters without date_preset
     const filters: Record<string, string | number> = {}
     for (const [k, v] of Object.entries(urlState.filters.value)) {

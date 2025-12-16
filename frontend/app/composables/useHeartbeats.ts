@@ -18,7 +18,7 @@ export function useHeartbeatStatus(options: {
   const fetchResult = useFetch<HeartbeatTreeResponse>('/api/heartbeats/status', {
     key: fetchKey,
     query: fetchQuery,
-    watch: false,
+    watch: [days],
     immediate: options.immediate ?? true,
     lazy: !(options.immediate ?? true),
     server: true,
@@ -68,14 +68,6 @@ export function useHeartbeatStatus(options: {
       }
     },
     { immediate: true }
-  )
-
-  watch(
-    days,
-    () => {
-      refresh()
-    },
-    { flush: 'post', immediate: false }
   )
 
   // Only set up interval-based refresh if autoRefreshMs > 0
@@ -144,7 +136,7 @@ export function useHeartbeatTimeline(options: { hours?: number; pageSize?: numbe
   const fetchResult = useFetch<PaginatedHeartbeatTimelineResponse>('/api/heartbeats/timeline', {
     key: fetchKey,
     query: fetchQuery,
-    watch: false,
+    watch: [hours, page, pageSize],
     immediate: true,
     lazy: false,
     server: true,
@@ -159,14 +151,6 @@ export function useHeartbeatTimeline(options: { hours?: number; pageSize?: numbe
     size: pageSize.value,
     pages: 0,
   })
-
-  watch(
-    [hours, page, pageSize],
-    () => {
-      refresh()
-    },
-    { flush: 'post', immediate: false }
-  )
 
   const setPage = (value: number) => {
     page.value = Math.max(1, value)
