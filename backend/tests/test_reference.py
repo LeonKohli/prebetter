@@ -105,49 +105,49 @@ def test_get_unique_severities_edge_cases(auth_client):
         assert any(s in found_severities for s in common_severities)
 
 
-def test_get_unique_analyzers(auth_client):
-    """Test getting unique analyzers from the database"""
-    response = auth_client.get("/api/v1/reference/analyzers")
+def test_get_unique_servers(auth_client):
+    """Test getting unique servers from the database"""
+    response = auth_client.get("/api/v1/reference/servers")
 
     # Verify response structure
     assert response.status_code == 200
-    analyzers = response.json()
+    servers = response.json()
 
     # Verify we got a list of strings
-    assert isinstance(analyzers, list)
-    assert all(isinstance(item, str) for item in analyzers)
+    assert isinstance(servers, list)
+    assert all(isinstance(item, str) for item in servers)
 
     # Verify no duplicates
-    assert len(analyzers) == len(set(analyzers))
+    assert len(servers) == len(set(servers))
 
     # Verify the list is sorted
-    assert analyzers == sorted(analyzers)
+    assert servers == sorted(servers)
 
     # Print some debug info
-    print(f"\nFound {len(analyzers)} unique analyzers")
-    if analyzers:
-        print(f"Sample analyzers: {analyzers[:3]}")
+    print(f"\nFound {len(servers)} unique servers")
+    if servers:
+        print(f"Sample servers: {servers[:3]}")
 
 
-def test_get_unique_analyzers_edge_cases(auth_client):
-    """Test edge cases for the analyzers endpoint"""
+def test_get_unique_servers_edge_cases(auth_client):
+    """Test edge cases for the servers endpoint"""
     # Test error handling by simulating database errors
     # Note: This assumes the endpoint handles database errors gracefully
 
     # Test response format consistency
-    response = auth_client.get("/api/v1/reference/analyzers")
+    response = auth_client.get("/api/v1/reference/servers")
     assert response.status_code == 200
     data = response.json()
 
-    # Verify each analyzer is a non-empty string
-    assert all(isinstance(a, str) and len(a) > 0 for a in data)
+    # Verify each server is a non-empty string
+    assert all(isinstance(s, str) and len(s) > 0 for s in data)
 
     # Verify no null values
-    assert all(a is not None for a in data)
+    assert all(s is not None for s in data)
 
     # Verify no duplicate values (case-sensitive)
     assert len(data) == len(set(data))
 
     # Verify no duplicate values (case-insensitive)
-    lower_case = [a.lower() for a in data]
+    lower_case = [s.lower() for s in data]
     assert len(lower_case) == len(set(lower_case))
