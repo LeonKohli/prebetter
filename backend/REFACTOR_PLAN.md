@@ -103,11 +103,15 @@ async def list_alerts(
 ```python
 @router.get("/alerts")
 async def list_alerts(
-    filters: AlertFilterParams = Depends(),
-    pagination: PaginationParams = Depends(),
-    repo: AlertRepository = Depends(get_alert_repository),
+    repo: Annotated[AlertRepository, Depends(get_alert_repository)],
+    _: Annotated[User, Depends(get_current_user)],
+    filters: Annotated[AlertFilterParams, Depends()],  # Decomposes into query params
+    pagination: Annotated[PaginationParams, Depends()],
+    sort_by: SortField = Query(SortField.DETECT_TIME),
+    sort_order: SortOrder = Query(SortOrder.DESC),
 ):
-    return repo.get_list(filters, pagination)
+    results, total = repo.get_list(filters, pagination, sort_by, sort_order)
+    ...
 ```
 
 ## Remaining Work (Optional)
@@ -120,3 +124,6 @@ async def list_alerts(
 - All 117 tests pass
 - API contracts unchanged - frontend compatibility verified
 - ~400 lines of dead code removed from query_builders.py
+- Pydantic filter schemas as DI: `Annotated[AlertFilterParams, Depends()]`
+  - Decomposes into individual query params for OpenAPI docs
+  - Use `Depends()` for multiple models (NOT `Query()` which expects single model)

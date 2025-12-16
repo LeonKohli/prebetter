@@ -6,14 +6,16 @@ Alert routes using FastAPI best practices.
 - Clean separation of concerns
 """
 
+import asyncio
+import logging
+from datetime import datetime
+from enum import Enum
+from typing import Optional, AsyncGenerator, Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
-from typing import Optional, AsyncGenerator, Annotated
-from datetime import datetime
-from enum import Enum
-import asyncio
 
 from app.database.config import (
     get_prelude_db,
@@ -24,7 +26,12 @@ from app.database.query_builders import (
     build_alert_base_query,
     build_alert_detail_query,
 )
-from app.repositories.alerts import GroupedAlertRepository
+from app.repositories.alerts import (
+    AlertRepository,
+    GroupedAlertRepository,
+    get_alert_repository,
+    get_grouped_alert_repository,
+)
 from app.schemas.filters import AlertFilterParams, PaginationParams
 from app.database.models import (
     alert_result_to_list_item,
@@ -52,7 +59,6 @@ from app.schemas.prelude import (
     GroupedAlertResponse,
     PaginatedResponse,
 )
-from app.repositories.alerts import AlertRepository
 from app.core.datetime_utils import get_current_time
 from app.api.v1.routes.auth import (
     get_current_user,
@@ -62,6 +68,7 @@ from app.api.v1.routes.auth import (
 from app.models.users import User
 from app.services.users import UserService
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -85,38 +92,20 @@ class SortOrder(str, Enum):
 @router.get("", response_model=AlertListResponse)
 @router.get("/", response_model=AlertListResponse)
 async def list_alerts(
-    page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(100, ge=1, le=100, description="Number of items per page"),
+    # Dependencies first (no defaults in Annotated)
+    repo: Annotated[AlertRepository, Depends(get_alert_repository)],
+    _: Annotated[User, Depends(get_current_user)],
+    # Multiple Pydantic models as query params: use Depends() (NOT Query())
+    # Query() is for ONE model capturing ALL params; Depends() allows MULTIPLE models
+    filters: Annotated[AlertFilterParams, Depends()],
+    pagination: Annotated[PaginationParams, Depends()],
+    # Sorting params with defaults must come last
     sort_by: SortField = Query(SortField.DETECT_TIME, description="Field to sort by"),
     sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
-    # Filter params - explicit Query for OpenAPI docs
-    severity: str | None = Query(None, description="Filter by severity (comma-separated)"),
-    classification: str | None = Query(None, description="Filter by classification"),
-    start_date: datetime | None = Query(None, description="Start date (UTC)"),
-    end_date: datetime | None = Query(None, description="End date (UTC)"),
-    source_ip: str | None = Query(None, description="Filter by source IP"),
-    target_ip: str | None = Query(None, description="Filter by target IP"),
-    server: str | None = Query(None, description="Filter by server name"),
-    db: Session = Depends(get_prelude_db),
-    _: Annotated[User, Depends(get_current_user)] = None,
 ) -> AlertListResponse:
     """Retrieve a paginated list of alerts with filtering and sorting."""
-    # Build filter params object - single source of truth
-    filters = AlertFilterParams(
-        severity=severity,
-        classification=classification,
-        start_date=start_date,
-        end_date=end_date,
-        source_ip=source_ip,
-        target_ip=target_ip,
-        server=server,
-    )
 
-    # Build pagination params
-    pagination = PaginationParams(page=page, size=size)
-
-    # Use repository for data access - all query logic encapsulated
-    repo = AlertRepository(db)
+    # Repository injected via DI chain - no manual instantiation
     results, total = repo.get_list(
         filters=filters,
         pagination=pagination,
@@ -126,12 +115,12 @@ async def list_alerts(
 
     # Convert results to response schema
     alert_items = [alert_result_to_list_item(alert) for alert in results]
-    total_pages = (total + size - 1) // size
+    total_pages = (total + pagination.size - 1) // pagination.size
 
     return AlertListResponse(
         items=alert_items,
         pagination=PaginatedResponse(
-            total=total, page=page, size=size, pages=total_pages
+            total=total, page=pagination.page, size=pagination.size, pages=total_pages
         ),
     )
 
@@ -249,7 +238,8 @@ async def get_grouped_alerts(
     source_ip: Optional[str] = None,
     target_ip: Optional[str] = None,
     server: Optional[str] = None,
-    db: Session = Depends(get_prelude_db),
+    # Dependencies - proper DI chain
+    repo: Annotated[GroupedAlertRepository, Depends(get_grouped_alert_repository)] = None,
     _: Annotated[User, Depends(get_current_user)] = None,
 ) -> GroupedAlertResponse:
     """Retrieve alerts grouped by source and target IP addresses."""
@@ -266,8 +256,7 @@ async def get_grouped_alerts(
         )
         pagination = PaginationParams(page=page, size=size)
 
-        # Use repository for all query logic
-        repo = GroupedAlertRepository(db)
+        # Repository injected via DI chain - no manual instantiation
         result = repo.get_groups(
             filters=filters,
             pagination=pagination,
@@ -293,7 +282,10 @@ async def get_grouped_alerts(
             total_alerts=total_alerts_on_page,
         )
 
-    except Exception:
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions (like 503 for missing table)
+    except Exception as e:
+        logger.exception("Error fetching grouped alerts: %s", e)
         raise HTTPException(
             status_code=500,
             detail="Error fetching grouped alerts",
@@ -531,7 +523,8 @@ async def get_alert_detail(
         )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.exception("Error processing alert %s: %s", alert_id, e)
         raise HTTPException(status_code=500, detail="Error processing alert")
 
 
