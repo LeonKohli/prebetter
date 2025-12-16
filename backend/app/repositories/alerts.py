@@ -298,6 +298,41 @@ class AlertRepository(BaseRepository[Alert]):
 
         return self.execute_all(query)
 
+    def get_export_stream(
+        self,
+        filters: AlertFilterParams,
+        alert_ids: list[int] | None = None,
+        limit: int = 50000,
+    ):
+        """
+        Get streaming query for CSV export.
+
+        Args:
+            filters: Filter parameters (ignored if alert_ids provided)
+            alert_ids: Specific alert IDs to export (overrides filters)
+            limit: Maximum number of results
+
+        Returns:
+            SQLAlchemy Result object configured for streaming (yield_per)
+        """
+        query = self._build_base_select()
+        query = self._build_base_joins(query)
+
+        # If specific alert IDs provided, filter by those only
+        if alert_ids:
+            query = query.where(Alert._ident.in_(alert_ids))
+        else:
+            # Apply standard filters
+            query = self._apply_filters(query, filters)
+
+        # Order by ID descending and limit
+        query = query.order_by(Alert._ident.desc()).limit(limit)
+
+        # Configure for streaming with server-side cursor
+        query = query.execution_options(yield_per=1000)
+
+        return self.db.execute(query)
+
 
 # =========================================================================
 # Dependency Injection

@@ -1,25 +1,24 @@
+"""
+Export routes using FastAPI best practices.
+
+- Uses Repository pattern for data access
+- Uses Pydantic filter schemas for consistent filtering
+- Streaming CSV export with server-side cursors
+"""
+
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import Optional, Iterator
+from typing import Iterator
 from datetime import datetime, timedelta
 import csv
 from io import StringIO
 from enum import Enum
 
-from app.database.config import (
-    get_prelude_db,
-    apply_standard_alert_filters,
-)
-from app.database.query_builders import build_alert_base_query
+from app.database.config import get_prelude_db
+from app.repositories.alerts import AlertRepository
+from app.schemas.filters import AlertFilterParams
 from app.core.datetime_utils import ensure_timezone, get_current_time
-from app.models.prelude import (
-    Alert,
-    Impact,
-    Classification,
-    DetectTime,
-    Analyzer,
-)
 from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -97,21 +96,21 @@ async def export_alerts(
     format: ExportFormat = Path(
         ..., description="Export format (currently only supports 'csv')"
     ),
-    alert_ids: Optional[list[int]] = Query(
+    alert_ids: list[int] | None = Query(
         None, description="List of specific alert IDs to export"
     ),
-    start_date: Optional[datetime] = Query(
+    start_date: datetime | None = Query(
         None, description="Start date for filtering alerts"
     ),
-    end_date: Optional[datetime] = Query(
+    end_date: datetime | None = Query(
         None, description="End date for filtering alerts"
     ),
-    severity: Optional[str] = Query(None, description="Filter by severity level"),
-    classification: Optional[str] = Query(None, description="Filter by classification"),
-    source_ip: Optional[str] = Query(None, description="Filter by source IP address"),
-    target_ip: Optional[str] = Query(None, description="Filter by target IP address"),
-    server: Optional[str] = Query(None, description="Filter by server name"),
-    hours_back: Optional[int] = Query(
+    severity: str | None = Query(None, description="Filter by severity level"),
+    classification: str | None = Query(None, description="Filter by classification"),
+    source_ip: str | None = Query(None, description="Filter by source IP address"),
+    target_ip: str | None = Query(None, description="Filter by target IP address"),
+    server: str | None = Query(None, description="Filter by server name"),
+    hours_back: int | None = Query(
         None,
         description="Export alerts from the past N hours (alternative to start/end dates)",
     ),
@@ -128,64 +127,38 @@ async def export_alerts(
         end_date = get_current_time()
         start_date = end_date - timedelta(hours=hours_back)
 
-    # Ensure dates have timezone information
-    start_date = ensure_timezone(start_date)
-    end_date = ensure_timezone(end_date)
-
     if format != ExportFormat.CSV:
         raise HTTPException(
             status_code=501, detail=f"Export format '{format}' is not yet supported"
         )
 
-    # Get base query from query builder - this already has all the fields we need!
-    query, models = build_alert_base_query(db)
+    # Build filter params - only used if alert_ids not provided
+    filters = AlertFilterParams(
+        severity=severity,
+        classification=classification,
+        start_date=ensure_timezone(start_date),
+        end_date=ensure_timezone(end_date),
+        source_ip=source_ip,
+        target_ip=target_ip,
+        server=server,
+    )
 
-    # Apply additional filter for alert IDs FIRST (before other filters)
+    # Parse alert_ids if provided
+    parsed_alert_ids = None
     if alert_ids:
-        # Convert to list if it's not already
-        if not isinstance(alert_ids, list):
-            alert_ids = [alert_ids]
-        # Convert string IDs to integers if needed
-        alert_id_ints = []
+        parsed_alert_ids = []
         for aid in alert_ids:
             try:
-                alert_id_ints.append(int(aid))
+                parsed_alert_ids.append(int(aid))
             except (ValueError, TypeError):
-                # Skip invalid IDs
                 continue
-        if alert_id_ints:
-            query = query.where(Alert._ident.in_(alert_id_ints))
 
-    # Only apply other filters if we're not filtering by specific alert IDs
-    # This ensures we get all requested alerts even if they lack some joined data
-    if not alert_ids:
-        # Apply standard filters - explicitly pass model classes for filtering
-        query = apply_standard_alert_filters(
-            query=query,
-            severity=severity,
-            classification=classification,
-            start_date=start_date,
-            end_date=end_date,
-            source_ip=source_ip,
-            target_ip=target_ip,
-            server=server,
-            **models,
-            Impact=Impact,
-            Classification=Classification,
-            DetectTime=DetectTime,
-            Analyzer=Analyzer,
-        )
-
-    # Order by alert ID descending and add limit for safety
-    # We can't reliably order by DetectTime.time since it might be NULL for some alerts
-    query = query.order_by(Alert._ident.desc()).limit(50000)
-
-    # Use SQLAlchemy 2.0 execution options for streaming
-    # yield_per enables server-side cursors and limits buffer size
-    query = query.execution_options(yield_per=1000)
-
-    # Execute the query - returns a Result object that can be iterated
-    results = db.execute(query)
+    # Use repository for data access
+    repo = AlertRepository(db)
+    results = repo.get_export_stream(
+        filters=filters,
+        alert_ids=parsed_alert_ids if parsed_alert_ids else None,
+    )
 
     # Define CSV header row - match the exact order expected by tests
     header = [
@@ -203,7 +176,6 @@ async def export_alerts(
     ]
 
     # Create the streaming response using the CSV generator
-    # Use alerts.csv as filename to match the tests
     headers = {"Content-Disposition": "attachment; filename=alerts.csv"}
     return StreamingResponse(
         generate_csv(results, header), media_type="text/csv", headers=headers

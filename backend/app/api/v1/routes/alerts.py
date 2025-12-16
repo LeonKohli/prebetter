@@ -19,8 +19,6 @@ from app.database.config import (
     get_prelude_db,
     PreludeSessionLocal,
     PrebetterSessionLocal,
-    apply_standard_alert_filters,
-    apply_sorting,
 )
 from app.database.query_builders import (
     build_alert_base_query,
@@ -313,26 +311,22 @@ async def get_grouped_alerts(
         total_pairs = db.scalar(count_query) or 0
         pairs = db.execute(pairs_query.offset((page - 1) * size).limit(size)).all()
 
-        alerts_query, alert_models = build_grouped_alerts_detail_query(db, pairs)
+        alerts_query, _ = build_grouped_alerts_detail_query(db, pairs)
 
-        # Apply ONLY safe filters that don't require additional table joins
-        # Classification and date filters are safe (already in the query)
-        # Severity/analyzer filters cause Cartesian products (Impact/Analyzer)
-        alerts_query = apply_standard_alert_filters(
-            query=alerts_query,
-            severity=None,  # Skip - causes Cartesian product
-            classification=classification,  # Safe - Classification already joined
-            start_date=start_date,  # Safe - DetectTime already joined
-            end_date=end_date,  # Safe - DetectTime already joined
-            source_ip=None,  # Skip - already filtered by pair_key
-            target_ip=None,  # Skip - already filtered by pair_key
-            server=None,  # Skip - causes Cartesian product
-            **alert_models,
-            Impact=Impact,
-            Classification=Classification,
-            DetectTime=DetectTime,
-            Analyzer=Analyzer,
-        )
+        # Apply ONLY safe filters - inlined for clarity
+        # These tables are already joined in the detail query
+        if classification:
+            classification_list = [c.strip() for c in classification.split(",") if c.strip()]
+            if len(classification_list) == 1:
+                alerts_query = alerts_query.where(Classification.text == classification_list[0])
+            elif len(classification_list) > 1:
+                alerts_query = alerts_query.where(Classification.text.in_(classification_list))
+
+        if start_date:
+            alerts_query = alerts_query.where(DetectTime.time >= ensure_timezone(start_date))
+
+        if end_date:
+            alerts_query = alerts_query.where(DetectTime.time <= ensure_timezone(end_date))
 
         alerts = db.execute(alerts_query).all()
 
