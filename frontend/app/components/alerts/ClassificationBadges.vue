@@ -58,11 +58,12 @@ function getCountPillClass(count: number): string {
   return base + 'bg-muted text-muted-foreground text-[11px] font-medium'
 }
 
-function handleClassificationClick(classification: string) {
+function handleClassificationClick(classification: string, count: number) {
   urlState.navigateToDetails({
     sourceIp: props.sourceIp,
     targetIp: props.targetIp,
-    classification
+    classification,
+    expectedCount: count
   })
 }
 
@@ -76,7 +77,7 @@ function toggleExpanded() {
     <button
       v-for="(alert, index) in visibleClassifications"
       :key="`${alert.classification}-${index}`"
-      @click="handleClassificationClick(alert.classification)"
+      @click="handleClassificationClick(alert.classification, alert.count)"
       class="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/20 cursor-pointer"
       :title="`${alert.classification} - Click to view details`"
       :aria-label="`${alert.classification}: ${alert.count} occurrences. Click to view details`"

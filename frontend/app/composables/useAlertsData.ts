@@ -96,15 +96,15 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
   const isGroupedResponse = (d: unknown): d is GroupedAlertResponse =>
     d !== null && typeof d === 'object' && 'groups' in d
 
-  // Derived state - use type guard inline, no transform/remapping
-  // Guard: return empty array if data type doesn't match current view (prevents render crash during view switch)
+  // Derived state - returns empty during view transition to prevent column/data mismatch
   const displayData = computed(() => {
     if (!data.value) return []
-    const isGroupedData = isGroupedResponse(data.value)
-    if (isGrouped.value !== isGroupedData) return [] // Data/view mismatch during transition
-    return isGroupedData
-      ? data.value.groups.map((g, i) => ({ ...g, groupIndex: i }))
-      : (data.value as AlertListResponse).items ?? []
+    if (isGroupedResponse(data.value)) {
+      if (!isGrouped.value) return [] // Grouped data but ungrouped view - transitioning
+      return data.value.groups.map((g, i) => ({ ...g, groupIndex: i }))
+    }
+    if (isGrouped.value) return [] // Ungrouped data but grouped view - transitioning
+    return data.value.items ?? []
   })
 
   const paginationInfo = computed(() => {

@@ -43,8 +43,20 @@ const {
 } = await useAlertsData(urlState)
 
 // Local UI state
-const isChangingView = ref(false)
 const rowSelection = ref<Record<string, boolean>>({})
+
+// Skeleton hint for known row counts (e.g., clicking badge "3" → show 3 skeleton rows)
+const { hint: skeletonHint, clearHint } = useSkeletonHint()
+
+// Show skeleton when loading or no data (displayData returns [] during view transitions)
+const showSkeleton = computed(() => pending.value || displayData.value.length === 0)
+
+// Skeleton row count: use hint if available, else previous data length, else reasonable default
+const skeletonRowCount = computed(() => {
+  if (skeletonHint.value) return Math.min(skeletonHint.value, 100)
+  if (displayData.value.length > 0) return displayData.value.length
+  return Math.min(urlState.pageSize.value, 20)
+})
 
 // Live mode / SSE (extracted to composable)
 const {
@@ -151,11 +163,11 @@ const table = useVueTable({
   },
 })
 
-// Reset flags on status change
+// Reset state when fetch completes
 watch(status, (newStatus) => {
   if (newStatus === 'success' || newStatus === 'error') {
-    isChangingView.value = false
     resetSilentRefresh()
+    clearHint() // Clear skeleton hint after data loads
   }
 })
 
@@ -170,7 +182,6 @@ provideAlertTableContext({
 // Event handlers
 function handleToggleView() {
   const newView = urlState.view.value === 'grouped' ? 'ungrouped' : 'grouped'
-  isChangingView.value = true
   rowSelection.value = {}
 
   const newQuery: Record<string, string | undefined> = { ...route.query as Record<string, string | undefined>, view: newView }
@@ -221,7 +232,8 @@ function handleBulkDelete() {
       @refresh="refresh"
     />
 
-    <div class="flex-1 min-h-0 rounded-lg border overflow-hidden flex flex-col">
+    <!-- :key forces complete table remount on view switch - prevents column/data mismatch flicker -->
+    <div :key="urlState.view.value" class="flex-1 min-h-0 rounded-lg border overflow-hidden flex flex-col">
       <div class="flex-1 overflow-auto relative overscroll-none">
         <TableFlat role="table" aria-label="Security alerts table">
           <TableHeader class="sticky top-0 z-10">
@@ -246,8 +258,8 @@ function handleBulkDelete() {
               />
             </Transition>
 
-            <template v-if="status === 'idle' || (status === 'pending' && !data) || isChangingView">
-              <TableRow v-for="i in 20" :key="`skeleton-${i}`" class="h-11 border-b border-border/40">
+            <template v-if="showSkeleton">
+              <TableRow v-for="i in skeletonRowCount" :key="`skeleton-${i}`" class="h-11 border-b border-border/40">
                 <TableCell
                   v-for="(_, idx) in columns.length"
                   :key="`skeleton-${i}-${idx}`"
@@ -275,7 +287,7 @@ function handleBulkDelete() {
               </TableRow>
             </template>
 
-            <TableRow v-else-if="!isChangingView && status !== 'pending'">
+            <TableRow v-else>
               <TableCell :colspan="columns.length" class="h-24 text-center">
                 <span v-if="error">Error loading alerts. Please try again.</span>
                 <span v-else>No alerts found.</span>

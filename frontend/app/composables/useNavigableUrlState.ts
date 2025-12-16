@@ -232,7 +232,13 @@ export function useNavigableUrlState(options: {
   }
 
   // Navigate to alert details (always a user action)
-  const navigateToDetails = async (details: { sourceIp: string; targetIp: string; classification: string }) => {
+  const navigateToDetails = async (details: { sourceIp: string; targetIp: string; classification: string; expectedCount?: number }) => {
+    // Set skeleton hint if we know expected row count
+    if (details.expectedCount) {
+      const { setHint } = useSkeletonHint()
+      setHint(details.expectedCount)
+    }
+
     const currentFilters = filters.value
 
     await router.push({
