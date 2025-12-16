@@ -8,7 +8,6 @@ Alert routes using FastAPI best practices.
 
 import asyncio
 import logging
-from datetime import datetime
 from enum import Enum
 from typing import Optional, AsyncGenerator, Annotated
 
