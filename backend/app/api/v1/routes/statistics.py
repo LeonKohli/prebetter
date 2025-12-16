@@ -12,8 +12,7 @@ from sqlalchemy.orm import Session
 from enum import Enum
 
 from app.database.config import get_prelude_db
-from app.database.query_builders import build_alerts_statistics_query
-from app.repositories.alerts import AlertRepository
+from app.repositories.alerts import AlertRepository, StatisticsRepository
 from app.schemas.filters import AlertFilterParams
 from app.schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
 from app.core.datetime_utils import get_current_time, ensure_timezone, get_time_range
@@ -175,29 +174,18 @@ async def get_statistics_summary(
     Returns counts grouped by severity, classification, analyzer, and IPs.
     """
     start_date, end_date = get_time_range(time_range)
-    query = build_alerts_statistics_query(db, start_date, end_date)
 
     try:
-        from sqlalchemy import func, select
-
-        # Count total alerts
-        base_subquery = query["base"].distinct().subquery()
-        total_alerts = db.scalar(select(func.count()).select_from(base_subquery)) or 0
-
-        # Execute all distribution queries
-        alerts_by_severity = db.execute(query["severity"]).all()
-        alerts_by_classification = db.execute(query["classification"]).all()
-        alerts_by_analyzer = db.execute(query["analyzer"]).all()
-        alerts_by_source_ip = db.execute(query["source_ip"]).all()
-        alerts_by_target_ip = db.execute(query["target_ip"]).all()
+        repo = StatisticsRepository(db)
+        stats = repo.get_summary(start_date, end_date)
 
         return StatisticsSummary(
-            total_alerts=total_alerts,
-            alerts_by_severity={k: v for k, v in alerts_by_severity if k},
-            alerts_by_classification={k: v for k, v in alerts_by_classification if k},
-            alerts_by_analyzer={k: v for k, v in alerts_by_analyzer if k},
-            alerts_by_source_ip={k: v for k, v in alerts_by_source_ip if k},
-            alerts_by_target_ip={k: v for k, v in alerts_by_target_ip if k},
+            total_alerts=stats["total_alerts"],
+            alerts_by_severity=stats["alerts_by_severity"],
+            alerts_by_classification=stats["alerts_by_classification"],
+            alerts_by_analyzer=stats["alerts_by_analyzer"],
+            alerts_by_source_ip=stats["alerts_by_source_ip"],
+            alerts_by_target_ip=stats["alerts_by_target_ip"],
             time_range_hours=time_range,
             start_at=start_date,
             end_at=end_date,
