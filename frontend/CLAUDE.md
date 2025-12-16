@@ -205,9 +205,10 @@ NUXT_SESSION_PASSWORD=your-very-secure-password-here-minimum-32-chars
 2. **Embrace Reactivity** - Use computed properties and let Vue handle updates automatically
 3. **Composition Over Complexity** - Keep components focused, extract logic into composables
 4. **Leverage VueUse** - Don't reinvent common patterns (intervals, timeouts, visibility, etc.)
-5. **Group Related State** - Use reactive objects for related data instead of multiple refs
-6. **Minimize Side Effects** - Keep components predictable and testable
-7. **Think in Terms of Data Flow** - Let data drive the UI, not manual DOM updates
+5. **Prefer ref Over reactive** - Use `ref` for most state; `reactive` only when you need a cohesive object
+6. **Prefer shallowRef as Default** - Use `shallowRef` unless you specifically need deep reactivity
+7. **Minimize Side Effects** - Keep components predictable and testable
+8. **Think in Terms of Data Flow** - Let data drive the UI, not manual DOM updates
 
 ### Event Naming Conventions
 
@@ -261,19 +262,23 @@ NUXT_SESSION_PASSWORD=your-very-secure-password-here-minimum-32-chars
    - ✅ Performance helpers: `useThrottleFn`, `useRefHistory`
    - ❌ Avoid for simple reactivity that Vue handles natively
 
-**Example:**
+**Example - v-model patterns:**
 ```typescript
-// ❌ Don't use VueUse for simple v-model (even VueUse docs recommend against it)
-import { useVModel } from '@vueuse/core'
-const model = useVModel(props, 'modelValue', emit)
-
-// ✅ Best: Use native Vue defineModel (Vue 3.4+) for simple cases
+// ✅ Best: Use native Vue defineModel (Vue 3.4+) - the standard approach
 const model = defineModel<string>()
 
-// ✅ Good: Use computed when you need more control (fallbacks, transformations)
+// ✅ Good: Use computed when you need transformations or fallbacks
 const model = computed({
   get: () => props.modelValue ?? props.defaultValue ?? '',
-  set: (value) => emit('updateModelValue', value)
+  set: (value) => emit('update:modelValue', value)
+})
+
+// ⚠️ VueUse useVModel - only for advanced cases (pre-3.4 compat, passive mode, clone, validation)
+import { useVModel } from '@vueuse/core'
+const model = useVModel(props, 'modelValue', emit, {
+  passive: true,      // Watch-based sync instead of v-model
+  clone: true,        // Deep clone on change
+  shouldEmit: (v) => v.length > 0  // Validation before emit
 })
 ```
 
@@ -306,8 +311,8 @@ const model = computed({
 ### Common Patterns to Follow
 
 - Prefer `computed` over `watch` for derived state
-- Use `reactive` for forms and complex state objects
-- Use `shallowRef` for large objects when deep reactivity isn't needed
+- Prefer `ref` over `reactive` - use `reactive` only when object cohesion matters
+- Prefer `shallowRef` as the default - only use `ref` when you need deep reactivity
 - Always use TypeScript for type safety
 - Extract reusable logic into composables
 - Create factory functions to reduce repetitive patterns
@@ -315,9 +320,9 @@ const model = computed({
 ### Performance Patterns
 
 - `lazy: true` for non-critical fetches
-- `deep: false` for large datasets
-- Conditional fetching with computed
-- `shallowRef` for large objects
+- `deep: false` for large datasets (Nuxt useFetch default)
+- Conditional fetching with computed URLs/queries
+- `shallowRef` as default (not just for large objects)
 
 ## Security Implementation
 
@@ -376,11 +381,11 @@ Use `definePageMeta({ requiresAuth: true })` - see existing pages for examples.
 ### Creating a Reusable Component
 - Define props with TypeScript interfaces
 - Use `computed()` for derived state
-- Group related state in `reactive()` objects
+- Prefer `ref()` for state; use `reactive()` only when object cohesion is important
 - See `components/` directory for patterns
 
 ### Handling Forms
-Use `reactive()` for form data + vee-validate with Zod schemas - see `pages/login.vue` for reference.
+Use vee-validate with Zod schemas for validation. Either `ref()` or `reactive()` works for form state - `reactive()` is acceptable here since form fields are a cohesive unit. See `pages/login.vue` for reference.
 
 ## Important Conventions
 
@@ -405,37 +410,61 @@ Use `reactive()` for form data + vee-validate with Zod schemas - see `pages/logi
 
 ## useFetch Best Practices
 
-**Prefer Nuxt's native reactivity over manual watchers:**
-- Use `watch: [ref1, ref2]` option in useFetch instead of `watch: false` + manual watchers
-- Nuxt automatically watches reactive URL and query params
-- Only use manual control when you need guards (e.g., skip if rows selected)
+**Nuxt's native reactivity:**
+- Nuxt **automatically watches** reactive URL and query params - no manual setup needed
+- When a reactive query param changes, useFetch automatically refetches
+- Use `watch: false` to **disable** this auto-watching (for manual control)
+- Use `watch: [ref]` to add **additional** dependencies beyond query params
 
-**For computed values that include `new Date()` or time-based calculations:**
+**Key-based caching:**
+- The `key` option controls caching and deduplication
+- When `key` changes, Nuxt creates a **new fetch** and cleans up old cached data
+- Use computed keys for dynamic cache invalidation: `key: computed(() => \`data-${token.value}\`)`
+- Same key across components = shared cached data
+
+**For time-based calculations (e.g., `new Date()`):**
 - Vue can't track time passing as a reactive dependency
-- Add a refresh token dependency to invalidate the cache: `void refreshToken.value`
+- Include a refresh token in the `key` to force cache invalidation: `void refreshToken.value`
+- This creates a reactive dependency that triggers recalculation when bumped
 
-**Example - letting Nuxt handle reactivity:**
+**Example - SSE-triggered refresh with key-based invalidation:**
 ```typescript
+const sseToken = ref(0) // Bump this when SSE arrives
+
+const fetchKey = computed(() => `alerts-${JSON.stringify({
+  filters: filters.value,
+  t: sseToken.value  // Token in key = new fetch when SSE fires
+})}`)
+
+const fetchQuery = computed(() => {
+  // For sliding time windows, depend on token to recalculate dates
+  if (isRelativePreset(preset)) {
+    void sseToken.value  // Creates dependency, forces fresh Date() on token change
+  }
+  return { start: range.from.toISOString(), end: range.to.toISOString() }
+})
+
 const { data } = useFetch('/api/data', {
+  key: fetchKey,
   query: fetchQuery,
-  watch: [refreshToken],  // Nuxt refetches when token changes
+  dedupe: 'defer',  // Wait for pending request instead of canceling
 })
 ```
 
-  ## Key Development Philosophy
+## Key Development Philosophy
 
-  **When developing Vue/Nuxt components:**
-  - Write declarative code that describes the desired state
-  - Let Vue's reactivity handle updates automatically
-  - Use composables and computed properties extensively
-  - Avoid manual DOM manipulation and imperative patterns
-  - Group related state in reactive objects
-  - **ALWAYS check VueUse and Context7 before implementing utilities**
+**When developing Vue/Nuxt components:**
+- Write declarative code that describes the desired state
+- Let Vue's reactivity handle updates automatically
+- Use composables and computed properties extensively
+- Avoid manual DOM manipulation and imperative patterns
+- Prefer `ref` and `shallowRef` over `reactive` (VueUse best practice)
+- **ALWAYS check VueUse and Context7 before implementing utilities**
 
-  **Development Process:**
-  1. Check if VueUse has a utility for your need
-  2. Use Context7 to find Vue/Nuxt best practices
-  3. Follow established patterns from the documentation
-  4. Only create custom solutions when absolutely necessary
+**Development Process:**
+1. Check if VueUse has a utility for your need
+2. Use Context7 to find Vue/Nuxt best practices
+3. Follow established patterns from the documentation
+4. Only create custom solutions when absolutely necessary
 
-  **Remember**: The goal is clean, maintainable code that leverages existing solutions rather than reinventing them.
+**Remember**: The goal is clean, maintainable code that leverages existing solutions rather than reinventing them.
