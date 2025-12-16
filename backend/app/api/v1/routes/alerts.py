@@ -7,7 +7,7 @@ Alert routes using FastAPI best practices.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from typing import Optional, AsyncGenerator, Annotated
@@ -38,11 +38,8 @@ from app.database.models import (
 )
 from app.models.prelude import (
     Alert,
-    Impact,
     Classification,
     DetectTime,
-    Analyzer,
-    CreateTime,
 )
 from app.schemas.prelude import (
     AlertListResponse,
@@ -173,75 +170,72 @@ async def stream_alerts(
     async def event_generator() -> AsyncGenerator[str, None]:
         current_last_id = last_id
 
-        # Respect Last-Event-ID header for native SSE resume support
-        header_last_id = request.headers.get("last-event-id")
-        if header_last_id:
-            try:
-                parsed_header_id = int(header_last_id)
-                current_last_id = max(parsed_header_id, current_last_id or 0)
-            except ValueError:
-                # Ignore malformed header values
-                pass
+        try:
+            # Respect Last-Event-ID header for native SSE resume support
+            header_last_id = request.headers.get("last-event-id")
+            if header_last_id:
+                try:
+                    parsed_header_id = int(header_last_id)
+                    current_last_id = max(parsed_header_id, current_last_id or 0)
+                except ValueError:
+                    # Ignore malformed header values
+                    pass
 
-        # Get initial max ID if not provided - use short-lived session
-        if current_last_id is None:
-            with PreludeSessionLocal() as db:
-                max_id = db.scalar(select(func.max(Alert._ident)))
-                current_last_id = max_id or 0
+            # Get initial max ID if not provided - use short-lived session
+            if current_last_id is None:
+                with PreludeSessionLocal() as db:
+                    max_id = db.scalar(select(func.max(Alert._ident)))
+                    current_last_id = max_id or 0
 
-        # Send immediate heartbeat to establish connection
-        # This transitions EventSource from CONNECTING to OPEN instantly
-        yield ": connected\n\n"
+            # Send immediate heartbeat to establish connection
+            # This transitions EventSource from CONNECTING to OPEN instantly
+            yield ": connected\n\n"
 
-        heartbeat_counter = 0
+            heartbeat_counter = 0
 
-        while True:
-            # Check if client disconnected
-            if await request.is_disconnected():
-                break
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    break
 
-            # Acquire fresh session for EACH poll - releases immediately after
-            # This is critical: SSE connections can live for hours/days
-            with PreludeSessionLocal() as db:
-                query, models = build_alert_base_query(db)
-                query = query.where(Alert._ident > current_last_id).order_by(
-                    Alert._ident.asc()
-                ).limit(50)
+                # Acquire fresh session for EACH poll - releases immediately after
+                # This is critical: SSE connections can live for hours/days
+                with PreludeSessionLocal() as db:
+                    query, models = build_alert_base_query(db)
+                    query = query.where(Alert._ident > current_last_id).order_by(
+                        Alert._ident.asc()
+                    ).limit(50)
 
-                results = db.execute(query).all()
+                    results = db.execute(query).all()
 
-                if results:
-                    for result in results:
-                        alert_item = alert_result_to_list_item(result)
-                        # SSE format: event type + data
-                        yield (
-                            f"id: {alert_item.id}\n"
-                            f"event: alert\n"
-                            f"data: {alert_item.model_dump_json()}\n\n"
-                        )
-                        current_last_id = int(alert_item.id)
+                    if results:
+                        for result in results:
+                            alert_item = alert_result_to_list_item(result)
+                            # SSE format: event type + data
+                            yield (
+                                f"id: {alert_item.id}\n"
+                                f"event: alert\n"
+                                f"data: {alert_item.model_dump_json()}\n\n"
+                            )
+                            current_last_id = int(alert_item.id)
 
-                    # Reset heartbeat counter when we send data
-                    heartbeat_counter = 0
-                else:
-                    heartbeat_counter += 1
-                    # Send heartbeat every 6th iteration (30 seconds at 5s intervals)
-                    if heartbeat_counter >= 6:
-                        yield ": heartbeat\n\n"
+                        # Reset heartbeat counter when we send data
                         heartbeat_counter = 0
+                    else:
+                        heartbeat_counter += 1
+                        # Send heartbeat every 6th iteration (30 seconds at 5s intervals)
+                        if heartbeat_counter >= 6:
+                            yield ": heartbeat\n\n"
+                            heartbeat_counter = 0
 
-            # Session is now CLOSED - connection returned to pool
-            await asyncio.sleep(5)
+                # Session is now CLOSED - connection returned to pool
+                await asyncio.sleep(5)
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+        except asyncio.CancelledError:
+            # Server shutdown/reload - exit cleanly so uvicorn doesn't hang
+            return
+
+    return EventSourceResponse(event_generator())
 
 
 @router.get("/groups", response_model=GroupedAlertResponse)
