@@ -4,12 +4,12 @@ from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.database.config import get_prelude_db, apply_standard_alert_filters
+from app.database.config import get_prelude_db
 from app.database.query_builders import (
     build_alerts_timeline_query,
     build_alerts_statistics_query,
 )
-from app.models.prelude import DetectTime, Impact, Classification, Analyzer
+from app.models.prelude import Impact, Classification, Analyzer
 from app.schemas.prelude import TimelineResponse, TimelineDataPoint, StatisticsSummary
 from app.core.datetime_utils import get_current_time, ensure_timezone, get_time_range
 from enum import Enum
@@ -41,9 +41,12 @@ async def get_timeline(
     severity: Optional[str] = None,
     classification: Optional[str] = None,
     analyzer_name: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    target_ip: Optional[str] = None,
     db: Session = Depends(get_prelude_db),
 ) -> TimelineResponse:
     try:
+        # Default date range based on time frame
         if not end_date:
             end_date = get_current_time()
         if not start_date:
@@ -58,35 +61,31 @@ async def get_timeline(
 
         start_date = ensure_timezone(start_date)
         end_date = ensure_timezone(end_date)
-        if time_frame == TimeFrame.HOUR:
-            date_format = "%Y-%m-%d %H:00:00"
-        elif time_frame == TimeFrame.DAY:
-            date_format = "%Y-%m-%d 00:00:00"
-        elif time_frame == TimeFrame.WEEK:
-            date_format = "%Y-%m-%d 00:00:00"
-        else:
-            date_format = "%Y-%m-01 00:00:00"
 
-        timeline_query = build_alerts_timeline_query(db, date_format)
+        # Date format for grouping
+        date_formats = {
+            TimeFrame.HOUR: "%Y-%m-%d %H:00:00",
+            TimeFrame.DAY: "%Y-%m-%d 00:00:00",
+            TimeFrame.WEEK: "%Y-%m-%d 00:00:00",
+            TimeFrame.MONTH: "%Y-%m-01 00:00:00",
+        }
+        date_format = date_formats[time_frame]
 
-        timeline_query = timeline_query.where(DetectTime.time >= start_date)
-        timeline_query = timeline_query.where(DetectTime.time <= end_date)
-
-        timeline_query = apply_standard_alert_filters(
-            query=timeline_query,
+        # ONE call - query builder handles ALL filtering
+        query = build_alerts_timeline_query(
+            db,
+            date_format,
+            start_date=start_date,
+            end_date=end_date,
             severity=severity,
             classification=classification,
-            server=None,
-            Impact=Impact,
-            Classification=Classification,
-            DetectTime=DetectTime,
+            analyzer_name=analyzer_name,
+            source_ip=source_ip,
+            target_ip=target_ip,
         )
 
-        if analyzer_name:
-            timeline_query = timeline_query.where(Analyzer.name == analyzer_name)
-
         results = db.execute(
-            timeline_query.group_by(
+            query.group_by(
                 text("time_bucket"), Impact.severity, Classification.text, Analyzer.name
             ).order_by(text("time_bucket"))
         ).all()

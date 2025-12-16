@@ -75,9 +75,12 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
       start_date: dateRange.value.start.toISOString(),
       end_date: dateRange.value.end.toISOString(),
     }
-    const { severity, classification_text } = urlState.filters.value
+    // Include all relevant filters so chart matches table data
+    const { severity, classification_text, source_ipv4, target_ipv4 } = urlState.filters.value
     if (severity) query.severity = String(severity)
     if (classification_text) query.classification = String(classification_text)
+    if (source_ipv4) query.source_ip = String(source_ipv4)
+    if (target_ipv4) query.target_ip = String(target_ipv4)
     return query
   })
 
