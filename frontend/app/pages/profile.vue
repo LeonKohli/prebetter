@@ -79,18 +79,16 @@ interface AlertState {
 }
 
 const alert = ref<AlertState | null>(null)
-let alertTimeout: NodeJS.Timeout | null = null
+
+// VueUse timeout handles cleanup automatically on unmount
+const { start: startAlertTimeout, stop: stopAlertTimeout } = useTimeoutFn(() => {
+  alert.value = null
+}, 5000, { immediate: false })
 
 const showAlert = (alertData: AlertState) => {
   alert.value = alertData
-  
-  if (alertTimeout) {
-    clearTimeout(alertTimeout)
-  }
-  
-  alertTimeout = setTimeout(() => {
-    alert.value = null
-  }, 5000)
+  stopAlertTimeout()
+  startAlertTimeout()
 }
 
 const handleProfileUpdate = async () => {
@@ -114,11 +112,7 @@ const handlePasswordChanged = () => {
   })
 }
 
-onUnmounted(() => {
-  if (alertTimeout) {
-    clearTimeout(alertTimeout)
-  }
-})
+// useTimeoutFn handles cleanup automatically on unmount
 </script>
 
 <style scoped>
