@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Optional, AsyncGenerator, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sse_starlette.sse import EventSourceResponse
+from sse_starlette import EventSourceResponse, ServerSentEvent
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
@@ -151,7 +151,7 @@ async def stream_alerts(
         user_service = UserService(user_db)
         validate_access_token(token, user_service)
 
-    async def event_generator() -> AsyncGenerator[str, None]:
+    async def event_generator() -> AsyncGenerator[ServerSentEvent | dict, None]:
         current_last_id = last_id
 
         try:
@@ -171,9 +171,9 @@ async def stream_alerts(
                     max_id = db.scalar(select(func.max(Alert._ident)))
                     current_last_id = max_id or 0
 
-            # Send immediate heartbeat to establish connection
+            # Send immediate comment to establish connection
             # This transitions EventSource from CONNECTING to OPEN instantly
-            yield ": connected\n\n"
+            yield ServerSentEvent(comment="connected")
 
             heartbeat_counter = 0
 
@@ -195,21 +195,21 @@ async def stream_alerts(
                     if results:
                         for result in results:
                             alert_item = alert_result_to_list_item(result)
-                            # SSE format: event type + data
-                            yield (
-                                f"id: {alert_item.id}\n"
-                                f"event: alert\n"
-                                f"data: {alert_item.model_dump_json()}\n\n"
-                            )
+                            # sse-starlette handles proper SSE formatting
+                            yield {
+                                "id": str(alert_item.id),
+                                "event": "alert",
+                                "data": alert_item.model_dump_json(),
+                            }
                             current_last_id = int(alert_item.id)
 
                         # Reset heartbeat counter when we send data
                         heartbeat_counter = 0
                     else:
                         heartbeat_counter += 1
-                        # Send heartbeat every 6th iteration (30 seconds at 5s intervals)
+                        # Send keepalive every 6th iteration (30 seconds at 5s intervals)
                         if heartbeat_counter >= 6:
-                            yield ": heartbeat\n\n"
+                            yield ServerSentEvent(comment="keepalive")
                             heartbeat_counter = 0
 
                 # Session is now CLOSED - connection returned to pool

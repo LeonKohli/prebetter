@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from sse_starlette.sse import EventSourceResponse
+from sse_starlette import EventSourceResponse, ServerSentEvent
 
 from app.api.v1.routes.auth import get_current_user
 from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
@@ -111,7 +111,7 @@ async def stream_heartbeats(
     Manual session management inside the generator is the standard pattern.
     """
 
-    async def event_generator() -> AsyncGenerator[str, None]:
+    async def event_generator() -> AsyncGenerator[ServerSentEvent | dict, None]:
         # Parse initial timestamp if provided
         current_last_ts: datetime | None = None
         if last_timestamp:
@@ -131,9 +131,9 @@ async def stream_heartbeats(
                     if max_ts:
                         current_last_ts = ensure_timezone(max_ts)
 
-            # Send immediate heartbeat to establish connection
+            # Send immediate comment to establish connection
             # This transitions EventSource from CONNECTING to OPEN instantly
-            yield ": connected\n\n"
+            yield ServerSentEvent(comment="connected")
 
             heartbeat_counter = 0
 
@@ -161,12 +161,14 @@ async def stream_heartbeats(
                         latest_ts = ensure_timezone(result.latest_ts)
                         new_count = result.new_count
 
-                        # Send update event with the new data
-                        event_data = json.dumps({
-                            "latest_timestamp": latest_ts.isoformat(),
-                            "new_count": new_count,
-                        })
-                        yield f"event: heartbeat_update\ndata: {event_data}\n\n"
+                        # Send update event - sse-starlette handles JSON serialization
+                        yield {
+                            "event": "heartbeat_update",
+                            "data": json.dumps({
+                                "latest_timestamp": latest_ts.isoformat(),
+                                "new_count": new_count,
+                            }),
+                        }
 
                         # Update tracking timestamp
                         current_last_ts = latest_ts
@@ -175,7 +177,7 @@ async def stream_heartbeats(
                         heartbeat_counter += 1
                         # Send keepalive comment every 6th iteration (30 seconds at 5s intervals)
                         if heartbeat_counter >= 6:
-                            yield ": heartbeat\n\n"
+                            yield ServerSentEvent(comment="keepalive")
                             heartbeat_counter = 0
 
                 # Session is now CLOSED - connection returned to pool
