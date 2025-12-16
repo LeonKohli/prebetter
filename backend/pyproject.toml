@@ -21,6 +21,7 @@ dependencies = [
     "pytest-asyncio>=1.2.0",
     "pytest-cov>=6.0.0",
     "ruff>=0.9.4",
+    "sse-starlette>=3.0.4",
 ]
 
 [tool.pytest.ini_options]
