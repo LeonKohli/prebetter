@@ -1,24 +1,19 @@
 """
-Export routes using FastAPI best practices.
-
-- Uses Repository pattern for data access
-- Uses Pydantic filter schemas for consistent filtering
-- Streaming CSV export with server-side cursors
+Export routes - streaming CSV export with server-side cursors.
 """
 
-from fastapi import APIRouter, Depends, Query, Path, HTTPException
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from typing import Iterator
-from datetime import datetime, timedelta
 import csv
-from io import StringIO
+from datetime import datetime, timedelta
 from enum import Enum
+from io import StringIO
+from typing import Annotated, Iterator
 
-from app.database.config import get_prelude_db
-from app.repositories.alerts import AlertRepository
-from app.schemas.filters import AlertFilterParams
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi.responses import StreamingResponse
+
 from app.core.datetime_utils import ensure_timezone, get_current_time
+from app.repositories.alerts import AlertRepository, get_alert_repository
+from app.schemas.filters import AlertFilterParams
 from ..routes.auth import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -93,28 +88,17 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
 
 @router.get("/alerts/{format}")
 async def export_alerts(
-    format: ExportFormat = Path(
-        ..., description="Export format (currently only supports 'csv')"
-    ),
-    alert_ids: list[int] | None = Query(
-        None, description="List of specific alert IDs to export"
-    ),
-    start_date: datetime | None = Query(
-        None, description="Start date for filtering alerts"
-    ),
-    end_date: datetime | None = Query(
-        None, description="End date for filtering alerts"
-    ),
-    severity: str | None = Query(None, description="Filter by severity level"),
+    repo: Annotated[AlertRepository, Depends(get_alert_repository)],
+    format: ExportFormat = Path(..., description="Export format (csv)"),
+    alert_ids: list[int] | None = Query(None, description="Specific alert IDs"),
+    start_date: datetime | None = Query(None, description="Start date (UTC)"),
+    end_date: datetime | None = Query(None, description="End date (UTC)"),
+    severity: str | None = Query(None, description="Filter by severity"),
     classification: str | None = Query(None, description="Filter by classification"),
-    source_ip: str | None = Query(None, description="Filter by source IP address"),
-    target_ip: str | None = Query(None, description="Filter by target IP address"),
-    server: str | None = Query(None, description="Filter by server name"),
-    hours_back: int | None = Query(
-        None,
-        description="Export alerts from the past N hours (alternative to start/end dates)",
-    ),
-    db: Session = Depends(get_prelude_db),
+    source_ip: str | None = Query(None, description="Filter by source IP"),
+    target_ip: str | None = Query(None, description="Filter by target IP"),
+    server: str | None = Query(None, description="Filter by server"),
+    hours_back: int | None = Query(None, description="Past N hours (overrides dates)"),
 ) -> StreamingResponse:
     """
     Export alerts in the specified format.
@@ -143,21 +127,12 @@ async def export_alerts(
         server=server,
     )
 
-    # Parse alert_ids if provided
-    parsed_alert_ids = None
-    if alert_ids:
-        parsed_alert_ids = []
-        for aid in alert_ids:
-            try:
-                parsed_alert_ids.append(int(aid))
-            except (ValueError, TypeError):
-                continue
+    # Parse alert_ids if provided (already int from Query, but validate)
+    parsed_alert_ids = [aid for aid in (alert_ids or []) if isinstance(aid, int)]
 
-    # Use repository for data access
-    repo = AlertRepository(db)
     results = repo.get_export_stream(
         filters=filters,
-        alert_ids=parsed_alert_ids if parsed_alert_ids else None,
+        alert_ids=parsed_alert_ids or None,
     )
 
     # Define CSV header row - match the exact order expected by tests

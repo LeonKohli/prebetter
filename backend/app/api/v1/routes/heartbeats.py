@@ -1,22 +1,25 @@
-from fastapi import APIRouter, Depends, Query, Request
-from sse_starlette.sse import EventSourceResponse
-from sqlalchemy import select, func
-from sqlalchemy.orm import Session
-from collections import Counter, defaultdict
-from datetime import datetime
-from typing import Dict, Any, AsyncGenerator, Optional
-from pydantic import ValidationError
-import logging
 import asyncio
 import json
+import logging
+from collections import Counter, defaultdict
+from datetime import datetime
+from typing import Any, AsyncGenerator, Dict, Optional
 
-from app.database.config import get_prelude_db, PreludeSessionLocal
+from fastapi import APIRouter, Depends, Query, Request
+from pydantic import ValidationError
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+from sse_starlette.sse import EventSourceResponse
+
+from app.database.config import PreludeSessionLocal, get_prelude_db
 from app.database.query_builders import (
     build_heartbeats_timeline_query,
     build_efficient_heartbeats_query,
 )
 from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
+from app.database.models import determine_heartbeat_status
 from app.models.prelude import AnalyzerTime
+from app.schemas.filters import calculate_total_pages
 from app.schemas.prelude import (
     HeartbeatTreeResponse,
     HeartbeatNodeInfo,
@@ -304,6 +307,6 @@ async def timeline_heartbeats(
             "total": total_count,
             "page": page,
             "size": size,
-            "pages": (total_count + size - 1) // size,
+            "pages": calculate_total_pages(total_count, size),
         },
     }

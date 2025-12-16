@@ -150,8 +150,17 @@ def prelude_test_db(prelude_db_connection) -> Generator[Session, None, None]:
 # =============================================================================
 
 @pytest.fixture
-def client() -> TestClient:
-    """TestClient for the FastAPI app."""
+def client(prelude_db_engine) -> TestClient:
+    """TestClient for the FastAPI app.
+
+    Sets up app.state.pair_table since TestClient doesn't trigger lifespan
+    without using `with` statement (which we can't use for fixture-based testing).
+    """
+    from app.repositories.alerts import reflect_pair_table
+
+    # Reflect pair_table and set on app.state (normally done in lifespan)
+    app.state.pair_table = reflect_pair_table(prelude_db_engine)
+
     return TestClient(app)
 
 

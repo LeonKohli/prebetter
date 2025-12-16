@@ -13,8 +13,6 @@ from sqlalchemy import (
     literal_column,
     text,
 )
-from sqlalchemy import Table, MetaData
-from sqlalchemy.exc import NoSuchTableError
 from datetime import datetime
 
 from ..models.prelude import (
@@ -44,50 +42,6 @@ from .config import (
     get_analyzer_join_conditions,
     get_node_join_conditions,
 )
-
-# Cache for reflected Prebetter_Pair table. Reflection occurs once per process.
-_PAIR_TABLE = None
-_PAIR_TABLE_MISSING = False
-
-
-# NOTE: _build_classification_subquery removed - moved to GroupedAlertRepository
-
-
-# NOTE: These globals are accessed without locks. This is acceptable because:
-# 1. The Table object is immutable once created
-# 2. Python's GIL makes simple assignment atomic
-# 3. Worst case of race condition = redundant reflection (benign)
-# 4. If table is missing, callers raise RuntimeError anyway
-# Restart the app if Prebetter_Pair is added after startup.
-
-
-def _get_prebetter_pair_table(db: Session):
-    """Reflect Prebetter_Pair if present; cache result for this process.
-
-    Returns the reflected Table object, or None if the table doesn't exist.
-    Raises exceptions for actual DB errors (connection issues, etc.).
-
-    Note: Requires app restart if table is created after first check.
-    """
-    global _PAIR_TABLE, _PAIR_TABLE_MISSING
-
-    if _PAIR_TABLE is not None:
-        return _PAIR_TABLE
-    if _PAIR_TABLE_MISSING:
-        return None
-
-    metadata = MetaData()
-    bind = db.get_bind()
-    engine = bind.engine if hasattr(bind, "engine") else bind
-
-    try:
-        _PAIR_TABLE = Table("Prebetter_Pair", metadata, autoload_with=engine)
-        return _PAIR_TABLE
-    except NoSuchTableError:
-        # Table doesn't exist - this is expected if accelerator not installed
-        _PAIR_TABLE_MISSING = True
-        return None
-    # Other exceptions (connection errors, etc.) propagate up
 
 
 def build_alert_base_query(db: Session):
