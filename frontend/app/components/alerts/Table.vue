@@ -48,8 +48,13 @@ const rowSelection = ref<Record<string, boolean>>({})
 // Skeleton hint for known row counts (e.g., clicking badge "3" → show 3 skeleton rows)
 const { hint: skeletonHint, clearHint } = useSkeletonHint()
 
-// Show skeleton when loading or no data (displayData returns [] during view transitions)
-const showSkeleton = computed(() => pending.value || displayData.value.length === 0)
+// Show skeleton ONLY on initial load or view transitions, NOT during SSE/background refresh
+// isSilentRefresh = SSE update, data persists, overlay handles loading indication
+const showSkeleton = computed(() => {
+  if (isSilentRefresh.value) return false
+  // Initial load (no data) or view transition (displayData returns [] when format mismatches)
+  return pending.value && (displayData.value.length === 0 || !data.value)
+})
 
 // Skeleton row count: use hint if available, else previous data length, else reasonable default
 const skeletonRowCount = computed(() => {
@@ -61,6 +66,7 @@ const skeletonRowCount = computed(() => {
 // Live mode / SSE (extracted to composable)
 const {
   isLive,
+  isSilentRefresh,
   sseStatus,
   sseError,
   showLoadingOverlay,
