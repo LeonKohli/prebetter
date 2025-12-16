@@ -679,73 +679,7 @@ def build_alert_detail_query(db: Session, alert_id: int):
     }
 
 
-def build_alerts_timeline_query(
-    db: Session,
-    date_format: str,
-    *,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    analyzer_name: Optional[str] = None,
-    source_ip: Optional[str] = None,
-    target_ip: Optional[str] = None,
-):
-    """Build complete timeline query with all filters applied.
-
-    Returns a ready-to-execute query - no external filter application needed.
-    """
-    source_addr = aliased(Address)
-    target_addr = aliased(Address)
-
-    query = (
-        select(
-            func.date_format(DetectTime.time, date_format).label("time_bucket"),
-            func.count(Alert._ident.distinct()).label("total"),
-            Impact.severity,
-            Classification.text.label("classification"),
-            Analyzer.name.label("analyzer"),
-        )
-        .select_from(Alert)
-        .join(DetectTime, Alert._ident == DetectTime._message_ident)
-        .outerjoin(Impact, Impact._message_ident == Alert._ident)
-        .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
-        .outerjoin(
-            source_addr,
-            and_(
-                source_addr._message_ident == Alert._ident,
-                source_addr._parent_type == "S",
-                source_addr.category == "ipv4-addr",
-            ),
-        )
-        .outerjoin(
-            target_addr,
-            and_(
-                target_addr._message_ident == Alert._ident,
-                target_addr._parent_type == "T",
-                target_addr.category == "ipv4-addr",
-            ),
-        )
-    )
-
-    # Apply all filters directly - single source of truth
-    if start_date:
-        query = query.where(DetectTime.time >= start_date)
-    if end_date:
-        query = query.where(DetectTime.time <= end_date)
-    if severity:
-        query = query.where(Impact.severity == severity)
-    if classification:
-        query = query.where(Classification.text == classification)
-    if analyzer_name:
-        query = query.where(Analyzer.name == analyzer_name)
-    if source_ip:
-        query = query.where(source_addr.address == source_ip)
-    if target_ip:
-        query = query.where(target_addr.address == target_ip)
-
-    return query
+# NOTE: build_alerts_timeline_query removed - replaced by AlertRepository.get_timeline()
 
 
 def build_alerts_statistics_query(
