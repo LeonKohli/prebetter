@@ -151,7 +151,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-const { urlState, table, isGrouped, pending, relativeRefreshToken } = useAlertTableContext()
+const { urlState, table, isGrouped, pending } = useAlertTableContext()
+const { token: sseRefreshToken } = useSseRefreshToken()
 const route = useRoute()
 
 function toggleLive() {
@@ -186,13 +187,15 @@ async function backToGroups() {
 // Separate ref to hold stable object reference (prevents re-render loops)
 const dateRangeRef = shallowRef<DateRangeValue>({ from: undefined, to: undefined })
 
-// Update dateRangeRef when filters change
+// Update dateRangeRef when filters change or SSE fires (for sliding windows)
 watchEffect(() => {
   const filters = urlState.filters.value
   const presetId = filters.date_preset as string | undefined
-  relativeRefreshToken.value // track for relative preset refresh
 
   if (isValidPresetId(presetId)) {
+    if (isRelativePreset(presetId)) {
+      void sseRefreshToken.value // Track SSE for sliding window refresh
+    }
     const { from, to } = getPresetRange(presetId)
     dateRangeRef.value = { from, to, presetId }
   } else if (filters.start_date && filters.end_date) {
@@ -201,6 +204,8 @@ watchEffect(() => {
       to: new Date(filters.end_date as string)
     }
   } else {
+    // Default fallback - also a sliding window
+    void sseRefreshToken.value
     const { from, to } = getPresetRange('last-24-hours')
     dateRangeRef.value = { from, to, presetId: 'last-24-hours' as DatePresetId }
   }

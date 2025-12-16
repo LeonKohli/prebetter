@@ -37,6 +37,13 @@ const {
   getActivePresetId,
 } = useTimelineData(urlState)
 
+// Key forces ApexCharts re-render when data changes (vue3-apexcharts reactivity workaround)
+const chartKey = computed(() => {
+  const total = chartSeries.value[0]?.data?.reduce((sum, p) => sum + p.y, 0) ?? 0
+  const points = chartSeries.value[0]?.data?.length ?? 0
+  return `chart-${points}-${total}`
+})
+
 const chartRef = useTemplateRef<ChartInstance>('chart')
 const isMobile = computed(() => width.value < 768)
 const chartHeight = computed(() => isMobile.value ? 140 : 180)
@@ -192,6 +199,7 @@ const formattedTotal = computed(() => {
 
       <apexchart
         v-if="chartSeries[0]?.data.length"
+        :key="chartKey"
         ref="chart"
         type="bar"
         :height="chartHeight"

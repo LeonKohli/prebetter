@@ -27,21 +27,19 @@ const urlState = useNavigableUrlState({
 })
 
 // Data fetching (extracted to composable)
+// Nuxt natively watches reactive query params - no manual watchers needed
 const {
   data,
   pending,
   error,
   status,
   refresh,
-  execute,
   isGrouped,
   displayData,
   paginationInfo,
   tableTotals,
   fetchKey,
-  relativeRefreshToken,
   getActivePresetId,
-  triggerRelativeRefresh,
 } = await useAlertsData(urlState)
 
 // Local UI state
@@ -59,9 +57,6 @@ const {
 } = useAlertsLiveMode({
   status,
   rowSelection,
-  refresh,
-  getActivePresetId,
-  triggerRelativeRefresh,
 })
 
 // Dialog state
@@ -156,9 +151,6 @@ const table = useVueTable({
   },
 })
 
-// Debounced fetch execution
-watchDebounced(fetchKey, () => execute(), { debounce: 50 })
-
 // Reset flags on status change
 watch(status, (newStatus) => {
   if (newStatus === 'success' || newStatus === 'error') {
@@ -173,7 +165,6 @@ provideAlertTableContext({
   table: table as Table<AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert>,
   isGrouped,
   pending,
-  relativeRefreshToken
 })
 
 // Event handlers
