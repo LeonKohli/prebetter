@@ -59,7 +59,8 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
   }
 
   // Store received alerts (newest first, limited buffer)
-  const alerts = ref<AlertListItem[]>([])
+  // shallowRef: array is replaced entirely, no deep reactivity needed
+  const alerts = shallowRef<AlertListItem[]>([])
   const maxBufferSize = 100
 
   // Parse incoming alert data
