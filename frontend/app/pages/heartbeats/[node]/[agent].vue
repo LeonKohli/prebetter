@@ -23,7 +23,7 @@
         <HeartbeatStatusBadge v-if="agentInfo" :status="agentInfo.status" />
       </CardHeader>
       <CardContent>
-        <template v-if="statusPending">
+        <template v-if="statusInitialLoading">
           <div class="flex items-center gap-2 text-sm text-muted-foreground">
             <Icon name="lucide:loader-2" class="size-4 animate-spin" />
             Loading agent details…
@@ -154,7 +154,8 @@ useSeoMeta({
 
 const {
   nodes,
-  pending: statusPending,
+  pending: statusPending, // Keep pending for refresh button state
+  isInitialLoading: statusInitialLoading, // Use for skeletons
   refresh: refreshStatus,
   days,
   setDays,
@@ -163,7 +164,7 @@ const {
 
 const {
   items: timelineItems,
-  pending: timelinePending,
+  isInitialLoading: timelinePending, // Only true on first load
   error: timelineError,
   pagination: timelinePagination,
   hours: timelineHours,
