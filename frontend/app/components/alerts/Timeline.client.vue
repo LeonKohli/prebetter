@@ -44,9 +44,88 @@ const chartKey = computed(() => {
   return `chart-${points}-${total}`
 })
 
+/**
+ * Calculate optimal x-axis range based on actual data points.
+ * When filtered data is sparse, tighten the range to avoid massive bars.
+ *
+ * Note: ApexCharts has NO built-in auto-range for datetime axes with sparse data.
+ * This custom calculation is the standard approach per ApexCharts community patterns.
+ */
+const dynamicXAxisRange = computed(() => {
+  const data = chartSeries.value[0]?.data ?? []
+  const fullStart = dateRange.value.start.getTime()
+  const fullEnd = dateRange.value.end.getTime()
+
+  // No data or plenty of points → use full requested range
+  if (data.length === 0 || data.length >= 8) {
+    return { min: fullStart, max: fullEnd }
+  }
+
+  // Find actual data bounds
+  const timestamps = data.map(p => p.x)
+  const dataMin = Math.min(...timestamps)
+  const dataMax = Math.max(...timestamps)
+
+  // Time unit for padding based on timeFrame
+  const HOUR = 60 * 60 * 1000
+  const DAY = 24 * HOUR
+  const padding = timeFrame.value === 'hour' ? HOUR
+    : timeFrame.value === 'day' ? DAY
+    : timeFrame.value === 'week' ? DAY * 7
+    : DAY * 30
+
+  // Single data point → center with symmetric padding
+  if (data.length === 1) {
+    const singlePadding = padding * 4
+    return {
+      min: Math.max(fullStart, dataMin - singlePadding),
+      max: Math.min(fullEnd, dataMax + singlePadding),
+    }
+  }
+
+  // Few points → fit to data with proportional padding
+  const dataSpan = dataMax - dataMin
+  const edgePadding = Math.max(padding, dataSpan * 0.25)
+  return {
+    min: Math.max(fullStart, dataMin - edgePadding),
+    max: Math.min(fullEnd, dataMax + edgePadding),
+  }
+})
+
+/**
+ * Calculate optimal bar width based on data point count.
+ * Prevents massive bars when there are few data points.
+ */
+const dynamicColumnWidth = computed(() => {
+  const pointCount = chartSeries.value[0]?.data?.length ?? 0
+
+  // Thresholds for column width
+  if (pointCount <= 1) return '30%'
+  if (pointCount <= 3) return '40%'
+  if (pointCount <= 6) return '50%'
+  if (pointCount <= 12) return '60%'
+  return '80%'
+})
+
 const chartRef = useTemplateRef<ChartInstance>('chart')
 const isMobile = computed(() => width.value < 768)
 const chartHeight = computed(() => isMobile.value ? 140 : 180)
+
+/**
+ * Calculate optimal tick count for x-axis based on data density.
+ */
+const dynamicTickAmount = computed(() => {
+  const pointCount = chartSeries.value[0]?.data?.length ?? 0
+  const chartWidth = isMobile.value ? 300 : 600 // Approximate
+
+  // For very few points, limit ticks to avoid cluttered labels
+  if (pointCount <= 2) return 3
+  if (pointCount <= 5) return Math.min(pointCount + 1, 5)
+  if (pointCount <= 10) return 6
+
+  // For more points, calculate based on available width (~80px per label)
+  return Math.min(Math.floor(chartWidth / 80), 12)
+})
 
 const hasCustomDateRange = computed(() => {
   const filters = urlState.filters.value
@@ -79,13 +158,22 @@ const chartOptions = computed<ApexOptions>(() => ({
     },
   },
   plotOptions: {
-    bar: { borderRadius: 3, columnWidth: '80%' },
+    bar: { borderRadius: 3, columnWidth: dynamicColumnWidth.value },
   },
   xaxis: {
     type: 'datetime',
-    min: dateRange.value.start.getTime(),
-    max: dateRange.value.end.getTime(),
-    labels: { datetimeUTC: false },
+    min: dynamicXAxisRange.value.min,
+    max: dynamicXAxisRange.value.max,
+    tickAmount: dynamicTickAmount.value,
+    labels: {
+      datetimeUTC: false,
+      rotate: -45,
+      rotateAlways: false, // Only rotate when labels would overlap
+      hideOverlappingLabels: true,
+      style: {
+        fontSize: '11px',
+      },
+    },
     crosshairs: {
       width: 'barWidth',
       fill: { type: 'solid', color: 'var(--color-muted)' },
