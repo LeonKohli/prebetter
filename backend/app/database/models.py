@@ -272,7 +272,7 @@ def process_additional_data(add_data_rows):
                     # Preserve original bytes (base64) and a readable text view
                     try:
                         b64 = base64.b64encode(raw_data).decode("ascii")
-                    except Exception:
+                    except (TypeError, ValueError):
                         b64 = ""
                     text_value = raw_data.decode("utf-8", errors="replace")
                     current_value = {"readable": text_value, "original": b64}

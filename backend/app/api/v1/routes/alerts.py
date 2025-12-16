@@ -115,7 +115,7 @@ async def list_alerts(
 
     # Convert results to response schema
     alert_items = [alert_result_to_list_item(alert) for alert in results]
-    total_pages = (total + pagination.size - 1) // pagination.size
+    total_pages = pagination.total_pages(total)
 
     return AlertListResponse(
         items=alert_items,
@@ -225,38 +225,15 @@ async def stream_alerts(
 
 @router.get("/groups", response_model=GroupedAlertResponse)
 async def get_grouped_alerts(
-    page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(100, ge=1, le=100, description="Number of groups per page"),
-    sort_by: SortField = Query(
-        SortField.TOTAL_COUNT, description="Field to sort by (default: total_count)"
-    ),
-    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    source_ip: Optional[str] = None,
-    target_ip: Optional[str] = None,
-    server: Optional[str] = None,
-    # Dependencies - proper DI chain
-    repo: Annotated[GroupedAlertRepository, Depends(get_grouped_alert_repository)] = None,
-    _: Annotated[User, Depends(get_current_user)] = None,
+    repo: Annotated[GroupedAlertRepository, Depends(get_grouped_alert_repository)],
+    _: Annotated[User, Depends(get_current_user)],
+    filters: Annotated[AlertFilterParams, Depends()],
+    pagination: Annotated[PaginationParams, Depends()],
+    sort_by: SortField = Query(SortField.TOTAL_COUNT, description="Field to sort by"),
+    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order"),
 ) -> GroupedAlertResponse:
     """Retrieve alerts grouped by source and target IP addresses."""
     try:
-        # Build filter params - single source of truth
-        filters = AlertFilterParams(
-            severity=severity,
-            classification=classification,
-            start_date=start_date,
-            end_date=end_date,
-            source_ip=source_ip,
-            target_ip=target_ip,
-            server=server,
-        )
-        pagination = PaginationParams(page=page, size=size)
-
-        # Repository injected via DI chain - no manual instantiation
         result = repo.get_groups(
             filters=filters,
             pagination=pagination,
@@ -264,39 +241,32 @@ async def get_grouped_alerts(
             sort_order=sort_order.value,
         )
 
-        # Process results into response format
         alerts_map = process_grouped_alerts_details(result["details"])
         groups = [grouped_alert_to_response(pair, alerts_map) for pair in result["pairs"]]
-
-        # Calculate total alerts on page
         total_alerts_on_page = sum(group.total_count or 0 for group in groups)
 
         return GroupedAlertResponse(
             groups=groups,
             pagination=PaginatedResponse(
                 total=result["total_pairs"],
-                page=page,
-                size=size,
+                page=pagination.page,
+                size=pagination.size,
                 pages=result["total_pages"],
             ),
             total_alerts=total_alerts_on_page,
         )
-
     except HTTPException:
-        raise  # Re-raise HTTP exceptions (like 503 for missing table)
+        raise
     except Exception as e:
         logger.exception("Error fetching grouped alerts: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Error fetching grouped alerts",
-        )
+        raise HTTPException(status_code=500, detail="Error fetching grouped alerts")
 
 
 @router.get("/{alert_id}", response_model=AlertDetail)
 async def get_alert_detail(
     alert_id: int,
-    db: Session = Depends(get_prelude_db),
-    _: Annotated[User, Depends(get_current_user)] = None,
+    db: Annotated[Session, Depends(get_prelude_db)],
+    _: Annotated[User, Depends(get_current_user)],
 ) -> AlertDetail:
     """Get detailed information about a specific alert."""
     try:

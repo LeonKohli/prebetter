@@ -7,6 +7,8 @@ from .database.init_db import (
     check_database_connections,
     check_pair_accelerator,
 )
+from .database.config import prelude_engine
+from .repositories.alerts import reflect_pair_table
 from .services.health import update_health_state, get_health_status, HealthResponse
 from .middleware.setup import setup_middleware
 import logging
@@ -48,6 +50,15 @@ async def lifespan(app: FastAPI):
             )
             # Fail startup as requested: avoid unpredictable fallbacks
             raise
+
+        # Reflect Prebetter_Pair table ONCE at startup, store in app.state
+        # This avoids global mutable state and makes the table available via DI
+        logger.info("Reflecting Prebetter_Pair table...")
+        app.state.pair_table = reflect_pair_table(prelude_engine)
+        if app.state.pair_table is not None:
+            logger.info("Prebetter_Pair table reflected successfully.")
+        else:
+            logger.warning("Prebetter_Pair table not found - grouped alerts disabled.")
 
         update_health_state(ready=True)
         logger.info("Application startup complete.")
