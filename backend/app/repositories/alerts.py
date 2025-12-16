@@ -421,12 +421,37 @@ def get_grouped_alert_repository(
     return GroupedAlertRepository(db, pair_table)
 
 
+def _filter_null_keys(results) -> dict:
+    """Filter out null keys from query results. DRY helper for aggregations."""
+    return {k: v for k, v in results if k}
+
+
 class StatisticsRepository(BaseRepository):
     """
     Repository for statistics queries.
 
     Encapsulates all statistics aggregation logic.
     """
+
+    def _base_alert_query(self, start_date, end_date):
+        """Build base query with date filter applied. DRY helper."""
+        return (
+            select(Alert)
+            .select_from(Alert)
+            .join(DetectTime, Alert._ident == DetectTime._message_ident)
+            .where(DetectTime.time >= start_date)
+            .where(DetectTime.time <= end_date)
+        )
+
+    def _aggregation_query(self, select_cols, start_date, end_date):
+        """Build aggregation query with date filter. DRY helper."""
+        return (
+            select(*select_cols)
+            .select_from(Alert)
+            .join(DetectTime, Alert._ident == DetectTime._message_ident)
+            .where(DetectTime.time >= start_date)
+            .where(DetectTime.time <= end_date)
+        )
 
     def get_summary(self, start_date, end_date) -> dict:
         """
@@ -442,62 +467,45 @@ class StatisticsRepository(BaseRepository):
         source_addr = aliased(Address)
         target_addr = aliased(Address)
 
-        # Base query for total count
-        base_query = (
-            select(Alert)
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
-        )
-
         # Total alerts count
-        base_subquery = base_query.distinct().subquery()
+        base_subquery = self._base_alert_query(start_date, end_date).distinct().subquery()
         total_alerts = self.db.scalar(select(func.count()).select_from(base_subquery)) or 0
 
         # Severity distribution
         severity_query = (
-            select(Impact.severity, func.count(Alert._ident.distinct()))
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
+            self._aggregation_query(
+                [Impact.severity, func.count(Alert._ident.distinct())], start_date, end_date
+            )
             .outerjoin(Impact, Impact._message_ident == Alert._ident)
             .group_by(Impact.severity)
         )
-        alerts_by_severity = {k: v for k, v in self.db.execute(severity_query).all() if k}
+        alerts_by_severity = _filter_null_keys(self.db.execute(severity_query).all())
 
         # Classification distribution
         classification_query = (
-            select(Classification.text, func.count(Alert._ident.distinct()))
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
+            self._aggregation_query(
+                [Classification.text, func.count(Alert._ident.distinct())], start_date, end_date
+            )
             .outerjoin(Classification, Classification._message_ident == Alert._ident)
             .group_by(Classification.text)
         )
-        alerts_by_classification = {k: v for k, v in self.db.execute(classification_query).all() if k}
+        alerts_by_classification = _filter_null_keys(self.db.execute(classification_query).all())
 
         # Analyzer distribution
         analyzer_query = (
-            select(Analyzer.name, func.count(Alert._ident.distinct()))
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
+            self._aggregation_query(
+                [Analyzer.name, func.count(Alert._ident.distinct())], start_date, end_date
+            )
             .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
             .group_by(Analyzer.name)
         )
-        alerts_by_analyzer = {k: v for k, v in self.db.execute(analyzer_query).all() if k}
+        alerts_by_analyzer = _filter_null_keys(self.db.execute(analyzer_query).all())
 
         # Top source IPs
         source_ip_query = (
-            select(source_addr.address, func.count(Alert._ident.distinct()))
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
+            self._aggregation_query(
+                [source_addr.address, func.count(Alert._ident.distinct())], start_date, end_date
+            )
             .outerjoin(
                 source_addr,
                 and_(
@@ -510,15 +518,13 @@ class StatisticsRepository(BaseRepository):
             .order_by(func.count(Alert._ident.distinct()).desc())
             .limit(10)
         )
-        alerts_by_source_ip = {k: v for k, v in self.db.execute(source_ip_query).all() if k}
+        alerts_by_source_ip = _filter_null_keys(self.db.execute(source_ip_query).all())
 
         # Top target IPs
         target_ip_query = (
-            select(target_addr.address, func.count(Alert._ident.distinct()))
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
+            self._aggregation_query(
+                [target_addr.address, func.count(Alert._ident.distinct())], start_date, end_date
+            )
             .outerjoin(
                 target_addr,
                 and_(
@@ -531,7 +537,7 @@ class StatisticsRepository(BaseRepository):
             .order_by(func.count(Alert._ident.distinct()).desc())
             .limit(10)
         )
-        alerts_by_target_ip = {k: v for k, v in self.db.execute(target_ip_query).all() if k}
+        alerts_by_target_ip = _filter_null_keys(self.db.execute(target_ip_query).all())
 
         return {
             "total_alerts": total_alerts,

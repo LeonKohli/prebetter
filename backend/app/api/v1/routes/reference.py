@@ -2,11 +2,11 @@ import logging
 from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.database.config import get_prelude_db
-from app.models.prelude import Classification, Impact, Analyzer, Node
+from app.database.config import get_node_join_conditions, get_prelude_db
+from app.models.prelude import Analyzer, Classification, Impact, Node
 from app.api.v1.routes.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -69,11 +69,7 @@ async def get_unique_servers(
             .select_from(Analyzer)
             .outerjoin(
                 Node,
-                and_(
-                    Node._message_ident == Analyzer._message_ident,
-                    Node._parent_type == "A",
-                    Node._parent0_index == Analyzer._index,
-                ),
+                get_node_join_conditions(Analyzer._message_ident, "A", Analyzer._index),
             )
             .where(
                 Analyzer.name.isnot(None),

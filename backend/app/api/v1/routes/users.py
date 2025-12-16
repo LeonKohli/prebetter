@@ -1,12 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.v1.routes.auth import get_current_user
 from app.database.config import get_prebetter_db
 from app.models.users import User
-from app.schemas.filters import calculate_total_pages
+from app.schemas.filters import PaginationParams
 from app.schemas.prelude import PaginatedResponse
 from app.schemas.users import (
     PasswordChangeRequest,
@@ -55,24 +55,22 @@ async def create_user(
 async def list_users(
     current_user: Annotated[User, Depends(get_current_superuser)],
     user_service: Annotated[UserService, Depends(get_user_service)],
-    page: int = Query(1, ge=1),
-    size: int = Query(100, ge=1, le=100),
+    pagination: Annotated[PaginationParams, Depends()],
 ) -> PaginatedUserResponse:
     """
     List all users with pagination (superusers only).
-    Uses page and size for pagination.
     Returns a standardized paginated response.
     """
-    skip = (page - 1) * size
     total_users = user_service.count_users()
-    users = user_service.list_users(skip=skip, limit=size)
-
-    total_pages = calculate_total_pages(total_users, size)
+    users = user_service.list_users(skip=pagination.offset, limit=pagination.size)
 
     return PaginatedUserResponse(
         items=[UserSchema.model_validate(user) for user in users],
         pagination=PaginatedResponse(
-            total=total_users, page=page, size=size, pages=total_pages
+            total=total_users,
+            page=pagination.page,
+            size=pagination.size,
+            pages=pagination.total_pages(total_users),
         ),
     )
 

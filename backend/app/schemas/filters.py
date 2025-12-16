@@ -124,7 +124,7 @@ class PaginationParams(BaseModel):
 
     def total_pages(self, total: int) -> int:
         """Calculate total pages for a given total count."""
-        return (total + self.size - 1) // self.size
+        return calculate_total_pages(total, self.size)
 
 
 class TimelineFilterParams(AlertFilterParams):
