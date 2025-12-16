@@ -5,15 +5,15 @@ const props = defineProps<{
   name?: string | null
 }>()
 
-const copied = reactive<Record<string, boolean>>({})
+const copied = ref<Record<string, boolean>>({})
 const hexPre = ref<HTMLElement | null>(null)
 const asciiPre = ref<HTMLElement | null>(null)
 
 function copyWithFeedback(key: string, text: string) {
   if (!text) return
   navigator.clipboard.writeText(text)
-  copied[key] = true
-  setTimeout(() => (copied[key] = false), 1500)
+  copied.value[key] = true
+  setTimeout(() => (copied.value[key] = false), 1500)
 }
 
 function getSelectionWithin(el: HTMLElement | null): string | null {
