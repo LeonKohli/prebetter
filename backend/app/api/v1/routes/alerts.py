@@ -1,3 +1,11 @@
+"""
+Alert routes using FastAPI best practices.
+
+- Uses Repository pattern for data access
+- Uses Pydantic filter schemas for consistent filtering
+- Clean separation of concerns
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -6,6 +14,7 @@ from typing import Optional, AsyncGenerator, Annotated
 from datetime import datetime
 from enum import Enum
 import asyncio
+
 from app.database.config import (
     get_prelude_db,
     PreludeSessionLocal,
@@ -51,6 +60,8 @@ from app.schemas.prelude import (
     GroupedAlertResponse,
     PaginatedResponse,
 )
+from app.schemas.filters import AlertFilterParams, PaginationParams
+from app.repositories.alerts import AlertRepository
 from app.core.datetime_utils import get_current_time, ensure_timezone
 from app.api.v1.routes.auth import (
     get_current_user,
@@ -87,30 +98,20 @@ async def list_alerts(
     size: int = Query(100, ge=1, le=100, description="Number of items per page"),
     sort_by: SortField = Query(SortField.DETECT_TIME, description="Field to sort by"),
     sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
-    severity: Optional[str] = None,
-    classification: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    source_ip: Optional[str] = None,
-    target_ip: Optional[str] = None,
-    server: Optional[str] = None,
+    # Filter params - explicit Query for OpenAPI docs
+    severity: str | None = Query(None, description="Filter by severity (comma-separated)"),
+    classification: str | None = Query(None, description="Filter by classification"),
+    start_date: datetime | None = Query(None, description="Start date (UTC)"),
+    end_date: datetime | None = Query(None, description="End date (UTC)"),
+    source_ip: str | None = Query(None, description="Filter by source IP"),
+    target_ip: str | None = Query(None, description="Filter by target IP"),
+    server: str | None = Query(None, description="Filter by server name"),
     db: Session = Depends(get_prelude_db),
     _: Annotated[User, Depends(get_current_user)] = None,
 ) -> AlertListResponse:
     """Retrieve a paginated list of alerts with filtering and sorting."""
-    # Future date validation prevents empty results from test queries
-    if start_date:
-        start_date_tz = ensure_timezone(start_date)
-        if start_date_tz is not None and start_date_tz > get_current_time():
-            return AlertListResponse(
-                items=[],
-                pagination=PaginatedResponse(total=0, page=page, size=size, pages=0),
-            )
-
-    query, models = build_alert_base_query(db)
-
-    query = apply_standard_alert_filters(
-        query=query,
+    # Build filter params object - single source of truth
+    filters = AlertFilterParams(
         severity=severity,
         classification=classification,
         start_date=start_date,
@@ -118,41 +119,23 @@ async def list_alerts(
         source_ip=source_ip,
         target_ip=target_ip,
         server=server,
-        **models,
-        Impact=Impact,
-        Classification=Classification,
-        DetectTime=DetectTime,
-        Analyzer=Analyzer,
     )
 
-    sort_options = {
-        SortField.DETECT_TIME: DetectTime.time,
-        SortField.CREATE_TIME: CreateTime.time,
-        SortField.SEVERITY: Impact.severity,
-        SortField.CLASSIFICATION: Classification.text,
-        SortField.SOURCE_IP: models["source_addr"].address,
-        SortField.TARGET_IP: models["target_addr"].address,
-        SortField.ANALYZER: Analyzer.name,
-        SortField.ALERT_ID: Alert._ident,
-    }
+    # Build pagination params
+    pagination = PaginationParams(page=page, size=size)
 
-    query = apply_sorting(query, sort_by, sort_order, sort_options, DetectTime.time)
+    # Use repository for data access - all query logic encapsulated
+    repo = AlertRepository(db)
+    results, total = repo.get_list(
+        filters=filters,
+        pagination=pagination,
+        sort_by=sort_by.value,
+        sort_order=sort_order.value,
+    )
 
-    # SQLAlchemy 2.0 optimized count using scalar_subquery
-    # This is more efficient than creating a full subquery
-    count_stmt = select(func.count()).select_from(query.distinct().subquery())
-    total = db.scalar(count_stmt) or 0
-
+    # Convert results to response schema
+    alert_items = [alert_result_to_list_item(alert) for alert in results]
     total_pages = (total + size - 1) // size
-
-    offset = (page - 1) * size
-
-    # distinct() prevents duplicates from joins, _ident ensures stable pagination
-    alerts = db.execute(
-        query.distinct().order_by(Alert._ident).offset(offset).limit(size)
-    ).all()
-
-    alert_items = [alert_result_to_list_item(alert) for alert in alerts]
 
     return AlertListResponse(
         items=alert_items,
