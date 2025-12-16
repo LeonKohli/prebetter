@@ -1,36 +1,23 @@
 /**
  * Live mode (SSE) composable for alerts table.
+ *
+ * Bumps the shared SSE token when new alerts arrive, which triggers
+ * all components using sliding time windows (timeline, table, toolbar).
  */
 export function useAlertsLiveMode(opts: {
   status: Ref<'idle' | 'pending' | 'success' | 'error'>
   rowSelection: Ref<Record<string, boolean>>
-  refresh: () => Promise<void>
-  getActivePresetId: () => DatePresetId | undefined
-  triggerRelativeRefresh: () => void
 }) {
   const isSilentRefresh = ref(false)
   const isLive = ref(true)
   const { bump: bumpSseToken } = useSseRefreshToken()
 
-  async function performSseRefresh() {
+  function performSseRefresh() {
+    // Skip if already loading or rows selected
     if (opts.status.value === 'pending' || Object.keys(opts.rowSelection.value).length > 0) return
 
-    // Bump shared token so timeline chart also refreshes
-    bumpSseToken()
-
-    const presetId = opts.getActivePresetId()
-    if (presetId && isRelativePreset(presetId)) {
-      isSilentRefresh.value = true
-      opts.triggerRelativeRefresh()
-      return
-    }
-
-    try {
-      isSilentRefresh.value = true
-      await opts.refresh()
-    } finally {
-      isSilentRefresh.value = false
-    }
+    isSilentRefresh.value = true
+    bumpSseToken() // Triggers all components that depend on sseRefreshToken
   }
 
   const { status: sseStatus, error: sseError, close: sseClose, open: sseOpen } = useAlertStream({
@@ -40,7 +27,8 @@ export function useAlertsLiveMode(opts: {
 
   function toggleLive() {
     isLive.value = !isLive.value
-    isLive.value ? (sseOpen(), opts.refresh()) : sseClose()
+    if (isLive.value) sseOpen()
+    else sseClose()
   }
 
   const showLoadingOverlay = computed(() => opts.status.value === 'pending' && !isSilentRefresh.value)

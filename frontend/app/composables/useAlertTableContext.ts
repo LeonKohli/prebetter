@@ -6,7 +6,6 @@ export interface AlertTableContext {
   table: Table<AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert>
   isGrouped: ComputedRef<boolean>
   pending: Ref<boolean>
-  relativeRefreshToken: Ref<number>
 }
 
 const AlertTableKey = Symbol('AlertTableContext') as InjectionKey<AlertTableContext>
