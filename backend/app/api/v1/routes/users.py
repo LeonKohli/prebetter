@@ -21,7 +21,7 @@ from app.services.users import UserService
 router = APIRouter()
 
 
-def get_user_service(db: Session = Depends(get_prebetter_db)) -> UserService:
+def get_user_service(db: Annotated[Session, Depends(get_prebetter_db)]) -> UserService:
     """Dependency to get a UserService instance."""
     return UserService(db)
 
@@ -43,7 +43,7 @@ async def get_current_superuser(
 async def create_user(
     user: UserCreate,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> User:
     """
     Create a new user (accessible by superusers only).
@@ -54,7 +54,7 @@ async def create_user(
 @router.get("/", response_model=PaginatedUserResponse)
 async def list_users(
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
     page: int = Query(1, ge=1),
     size: int = Query(100, ge=1, le=100),
 ) -> PaginatedUserResponse:
@@ -81,7 +81,7 @@ async def list_users(
 async def get_user(
     user_id: str,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> User:
     """
     Retrieve details for a specific user by user_id (superusers only).
@@ -99,7 +99,7 @@ async def update_user(
     user_id: str,
     user_update: UserUpdate,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> User:
     """
     Update a user's details (superusers only).
@@ -111,7 +111,7 @@ async def update_user(
 async def delete_user(
     user_id: str,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> None:
     """
     Delete a user by user_id (superusers only).
@@ -123,7 +123,7 @@ async def delete_user(
 async def change_password(
     payload: PasswordChangeRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> None:
     """
     Allow any authenticated user to change their own password.
@@ -136,7 +136,7 @@ async def reset_user_password(
     user_id: str,
     payload: PasswordResetRequest,
     current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> User:
     """
     Reset a user's password (accessible by superusers only).
