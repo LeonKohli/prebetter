@@ -3,7 +3,7 @@ import json
 import logging
 from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Annotated, Any, AsyncGenerator, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import ValidationError
@@ -11,24 +11,23 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
-from app.database.config import PreludeSessionLocal, get_prelude_db
-from app.database.query_builders import (
-    build_heartbeats_timeline_query,
-    build_efficient_heartbeats_query,
-)
+from app.api.v1.routes.auth import get_current_user
 from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
+from app.database.config import PreludeSessionLocal, get_prelude_db
 from app.database.models import determine_heartbeat_status
+from app.database.query_builders import (
+    build_efficient_heartbeats_query,
+    build_heartbeats_timeline_query,
+)
 from app.models.prelude import AnalyzerTime
 from app.schemas.filters import calculate_total_pages
 from app.schemas.prelude import (
-    HeartbeatTreeResponse,
-    HeartbeatNodeInfo,
     AgentInfo,
+    HeartbeatNodeInfo,
     HeartbeatTimelineItem,
+    HeartbeatTreeResponse,
     PaginatedHeartbeatTimelineResponse,
 )
-from app.api.v1.routes.auth import get_current_user
-from app.database.models import determine_heartbeat_status
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
@@ -91,8 +90,8 @@ def _derive_heartbeat_metadata(
 @router.get("/stream")
 async def stream_heartbeats(
     request: Request,
+    _: Annotated[Any, Depends(get_current_user)],  # Auth only - no DB session held
     last_timestamp: Optional[str] = Query(None, description="Last known heartbeat timestamp (ISO format)"),
-    _: None = Depends(get_current_user),  # Auth only - no DB session held
 ):
     """
     Server-Sent Events endpoint for real-time heartbeat updates.
@@ -191,8 +190,8 @@ async def stream_heartbeats(
 
 @router.get("/status", response_model=HeartbeatTreeResponse)
 async def heartbeat_status(
+    db: Annotated[Session, Depends(get_prelude_db)],
     days: int = Query(1, ge=1, le=30, description="Days of history to look back"),
-    db: Session = Depends(get_prelude_db),
 ):
     query = build_efficient_heartbeats_query(db, days)
     results = db.execute(query).all()
@@ -268,10 +267,10 @@ async def heartbeat_status(
 
 @router.get("/timeline", response_model=PaginatedHeartbeatTimelineResponse)
 async def timeline_heartbeats(
+    db: Annotated[Session, Depends(get_prelude_db)],
     hours: int = Query(24, ge=1, le=168, description="Hours of history to show"),
     page: int = Query(1, ge=1),
     size: int = Query(100, ge=1, le=1000),
-    db: Session = Depends(get_prelude_db),
 ):
     start_time, _ = get_time_range(hours)
 

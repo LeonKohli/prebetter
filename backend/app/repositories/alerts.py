@@ -10,7 +10,8 @@ Usage:
 """
 
 import ipaddress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
+
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import select, func, and_, literal_column, literal, or_, text, Table, MetaData
@@ -373,7 +374,7 @@ class AlertRepository(BaseRepository[Alert]):
 
 
 def get_alert_repository(
-    db: Session = Depends(get_prelude_db),
+    db: Annotated[Session, Depends(get_prelude_db)],
 ) -> AlertRepository:
     """
     FastAPI dependency for AlertRepository.
@@ -391,7 +392,7 @@ def get_alert_repository(
 
 
 def get_statistics_repository(
-    db: Session = Depends(get_prelude_db),
+    db: Annotated[Session, Depends(get_prelude_db)],
 ) -> "StatisticsRepository":
     """FastAPI dependency for StatisticsRepository."""
     return StatisticsRepository(db)
@@ -413,8 +414,8 @@ def get_pair_table(request: Request) -> Table:
 
 
 def get_grouped_alert_repository(
-    db: Session = Depends(get_prelude_db),
-    pair_table: Table = Depends(get_pair_table),
+    db: Annotated[Session, Depends(get_prelude_db)],
+    pair_table: Annotated[Table, Depends(get_pair_table)],
 ) -> "GroupedAlertRepository":
     """FastAPI dependency for GroupedAlertRepository."""
     return GroupedAlertRepository(db, pair_table)

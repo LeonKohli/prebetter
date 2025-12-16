@@ -31,7 +31,7 @@ router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
 
-def get_user_service(db: Session = Depends(get_prebetter_db)) -> UserService:
+def get_user_service(db: Annotated[Session, Depends(get_prebetter_db)]) -> UserService:
     return UserService(db)
 
 
@@ -78,7 +78,7 @@ def validate_access_token(token: str, user_service: UserService) -> User:
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> User:
     """Retrieve the current user based on JWT token."""
     return validate_access_token(token, user_service)
@@ -87,7 +87,7 @@ async def get_current_user(
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> Token:
     """Authenticate user and return access + refresh token pair."""
     user = authenticate_user(user_service, form_data.username, form_data.password)
@@ -113,7 +113,7 @@ async def login_for_access_token(
 @router.post("/refresh", response_model=Token)
 async def refresh_access_token(
     refresh_data: RefreshRequest,
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> Token:
     """Exchange valid refresh token for new access token."""
     credentials_exception = HTTPException(
@@ -166,7 +166,7 @@ async def read_users_me(
 async def update_profile(
     profile_update: UserUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
-    user_service: UserService = Depends(get_user_service),
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> User:
     """Update authenticated user profile (excluding password and privileges)."""
     # Prevent privilege escalation

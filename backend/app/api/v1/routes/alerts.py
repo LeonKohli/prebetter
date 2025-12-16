@@ -504,11 +504,11 @@ async def get_alert_detail(
 @router.delete("")
 @router.delete("/")
 async def delete_alerts(
+    db: Annotated[Session, Depends(get_prelude_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
     ids: Optional[str] = Query(None, description="Alert ID(s) - '123' or '1,2,3'"),
     source_ip: Optional[str] = Query(None, description="Filter by source IP"),
     target_ip: Optional[str] = Query(None, description="Filter by target IP"),
-    db: Session = Depends(get_prelude_db),
-    current_user=Depends(get_current_user),
 ):
     """
     Delete alerts by IDs or by IP pair filter.
