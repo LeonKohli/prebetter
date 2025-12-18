@@ -29,7 +29,7 @@
                   <FormControl>
                     <Input
                       v-bind="componentField"
-                      placeholder="your.username"
+                      placeholder="Username"
                       autocomplete="username"
                       autofocus
                       :disabled="isSubmitting"
