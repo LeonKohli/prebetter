@@ -135,16 +135,15 @@ const onSubmit = form.handleSubmit(async (values) => {
 
     await session.fetch()
 
-    const redirect =
-      typeof route.query.redirect === 'string' && route.query.redirect.trim().length > 0
-        ? route.query.redirect
-        : '/'
-
-    try {
-      await navigateTo(redirect, { replace: true })
-    } catch {
-      window.location.href = redirect
+    // Validate redirect to prevent open redirect attacks
+    // Pattern from Nuxt Content Studio - only allow safe relative paths
+    const rawRedirect = route.query.redirect
+    let redirect = '/'
+    if (typeof rawRedirect === 'string' && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')) {
+      redirect = rawRedirect
     }
+
+    await navigateTo(redirect, { replace: true })
   } catch (error) {
     console.error('Login error:', error)
     const fetchError = error as { data?: { message?: string; detail?: string }; statusMessage?: string }
