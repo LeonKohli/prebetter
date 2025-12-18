@@ -215,7 +215,7 @@
               </InputGroupAddon>
               <InputGroupInput
                 v-model="sourceIpDraft"
-                placeholder="e.g. 10.128.9 or 192.168.0.0/16"
+                placeholder="10.0.0.1 or 10.0.0.0/24"
                 class="font-mono"
                 @keydown.enter="applySourceIp"
                 @blur="applySourceIp"
@@ -244,7 +244,7 @@
               </InputGroupAddon>
               <InputGroupInput
                 v-model="targetIpDraft"
-                placeholder="e.g. 10.128.9 or 192.168.0.0/16"
+                placeholder="10.0.0.1 or 10.0.0.0/24"
                 class="font-mono"
                 @keydown.enter="applyTargetIp"
                 @blur="applyTargetIp"
