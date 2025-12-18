@@ -40,15 +40,26 @@ export default defineEventHandler(async (event) => {
   // AbortController to cancel backend fetch when client disconnects
   const abortController = new AbortController()
 
-  // Fetch SSE from backend with abort signal
-  const response = await fetch(target, {
-    headers: {
-      'Authorization': `Bearer ${session.secure!.apiToken}`,
-      'Accept': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-    },
-    signal: abortController.signal,
-  })
+  const timeoutId = setTimeout(() => abortController.abort(), 10000)
+
+  let response: Response
+  try {
+    response = await fetch(target, {
+      headers: {
+        'Authorization': `Bearer ${session.secure!.apiToken}`,
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+      signal: abortController.signal,
+    })
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if ((err as Error).name === 'AbortError') {
+      throw createError({ statusCode: 504, statusMessage: 'Backend connection timeout' })
+    }
+    throw createError({ statusCode: 503, statusMessage: 'Backend unavailable' })
+  }
+  clearTimeout(timeoutId)
 
   if (!response.ok || !response.body) {
     throw createError({

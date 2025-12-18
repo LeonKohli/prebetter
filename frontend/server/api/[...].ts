@@ -52,7 +52,11 @@ export default defineEventHandler(async (event: H3Event) => {
   }
 
   try {
-    const fetchOptions: Record<string, unknown> = { method: event.method, headers }
+    const fetchOptions: Record<string, unknown> = {
+      method: event.method,
+      headers,
+      timeout: 30000,
+    }
     if (event.method !== 'GET' && event.method !== 'HEAD') {
       const body = await readBody(event)
       if (body !== undefined) fetchOptions.body = body
@@ -61,9 +65,22 @@ export default defineEventHandler(async (event: H3Event) => {
   } catch (error) {
     const fetchError = error as FetchError
 
-    // 401 = clear session, client middleware handles redirect on next navigation
     if (fetchError.statusCode === 401) {
       await clearUserSession(event)
+    }
+
+    if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
+      throw createError({
+        statusCode: 504,
+        statusMessage: 'Gateway Timeout',
+      })
+    }
+
+    if (fetchError.cause && String(fetchError.cause).includes('ECONNREFUSED')) {
+      throw createError({
+        statusCode: 503,
+        statusMessage: 'Service Unavailable',
+      })
     }
 
     throw createError({
