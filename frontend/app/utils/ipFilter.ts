@@ -23,6 +23,7 @@ function expandPartialIP(segments: string[]): { min: string; max: string } {
 
 function parseCIDR(value: string): { network: string; broadcast: string } | null {
   const [ip, prefixStr] = value.split('/')
+  if (!ip || !prefixStr) return null
   const prefix = parseInt(prefixStr, 10)
   if (isNaN(prefix) || prefix < 0 || prefix > 32) return null
 

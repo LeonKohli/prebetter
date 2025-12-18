@@ -96,7 +96,9 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     if (!data.value?.data) return [{ name: 'Alerts', data: [] as { x: number; y: number }[] }]
     return [{
       name: 'Alerts',
-      data: data.value.data.map(p => ({ x: new Date(p.timestamp).getTime(), y: p.total }))
+      data: data.value.data
+        .map(p => ({ x: new Date(p.timestamp).getTime(), y: p.total }))
+        .filter(p => Number.isFinite(p.x))
     }]
   })
 
