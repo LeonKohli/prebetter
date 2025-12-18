@@ -43,16 +43,14 @@ export function useHeartbeatStream(options: UseHeartbeatStreamOptions = {}) {
 
   const url = '/api/heartbeats-stream'
 
-  // VueUse's useEventSource handles reconnection automatically
-  // withCredentials: true is REQUIRED to send session cookies to the Nuxt server proxy
   const { status, data, error, close, open } = useEventSource(url, ['heartbeat_update'], {
     immediate,
     withCredentials: true,
     autoReconnect: {
-      retries: 3,
-      delay: 2000,
+      retries: 10,
+      delay: 5000,
       onFailed() {
-        console.error('[HeartbeatStream] Failed to connect after 3 retries')
+        console.error('[HeartbeatStream] Failed to connect after max retries')
       },
     },
   })

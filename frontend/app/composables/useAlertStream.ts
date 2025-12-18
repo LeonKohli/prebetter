@@ -36,16 +36,14 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
 
   const url = '/api/alerts-stream'
 
-  // VueUse's useEventSource handles reconnection and Last-Event-ID header natively
-  // withCredentials: true is REQUIRED to send session cookies to the Nuxt server proxy
   const { status, data, error, close, open } = useEventSource(url, ['alert'], {
     immediate,
     withCredentials: true,
     autoReconnect: {
-      retries: -1,
-      delay: 2000,
+      retries: 10,
+      delay: 5000,
       onFailed() {
-        console.error('[AlertStream] Failed to reconnect to alert stream')
+        console.error('[AlertStream] Failed to reconnect after max retries')
       },
     },
   })

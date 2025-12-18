@@ -10,21 +10,25 @@ settings = get_settings()
 prelude_engine = create_engine(
     settings.PRELUDE_DATABASE_URL,
     pool_pre_ping=True,
+    pool_recycle=3600,
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
-    echo=False,  # SQL logging disabled - too noisy even in debug
-    future=True,  # Enable 2.0 style behaviors
+    connect_args={"connect_timeout": 10, "read_timeout": 30, "write_timeout": 30},
+    echo=False,
+    future=True,
 )
 
 prebetter_engine = create_engine(
     settings.PREBETTER_DATABASE_URL,
     pool_pre_ping=True,
+    pool_recycle=3600,
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
-    echo=False,  # SQL logging disabled - too noisy even in debug
-    future=True,  # Enable 2.0 style behaviors
+    connect_args={"connect_timeout": 10, "read_timeout": 30, "write_timeout": 30},
+    echo=False,
+    future=True,
 )
 
 
@@ -81,6 +85,9 @@ def get_prelude_db() -> Generator[Session, None, None]:
     db = PreludeSessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -89,6 +96,9 @@ def get_prebetter_db() -> Generator[Session, None, None]:
     db = PrebetterSessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

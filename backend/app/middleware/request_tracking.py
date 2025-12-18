@@ -30,7 +30,8 @@ async def request_middleware(request: Request, call_next):
         process_time = time.time() - start_time
         logger_adapter.error(
             f"Database connection error: {str(e)} - "
-            f"Request: {request.method} {request.url.path} - Duration: {process_time:.3f}s"
+            f"Request: {request.method} {request.url.path} - Duration: {process_time:.3f}s",
+            exc_info=True,
         )
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -43,7 +44,8 @@ async def request_middleware(request: Request, call_next):
         process_time = time.time() - start_time
         logger_adapter.error(
             f"Database error: {str(e)} - "
-            f"Request: {request.method} {request.url.path} - Duration: {process_time:.3f}s"
+            f"Request: {request.method} {request.url.path} - Duration: {process_time:.3f}s",
+            exc_info=True,
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
