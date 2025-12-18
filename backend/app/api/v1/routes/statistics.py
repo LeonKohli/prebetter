@@ -118,12 +118,18 @@ async def get_timeline(
     severity: str | None = Query(None, description="Filter by severity"),
     classification: str | None = Query(None, description="Filter by classification"),
     analyzer_name: str | None = Query(None, description="Filter by analyzer name"),
-    source_ip: str | None = Query(None, description="Filter by source IP"),
-    target_ip: str | None = Query(None, description="Filter by target IP"),
+    source_ip: str | None = Query(
+        None, description="Filter by source IP or CIDR (e.g., 192.168.0.0/16)"
+    ),
+    target_ip: str | None = Query(
+        None, description="Filter by target IP or CIDR (e.g., 10.0.0.0/8)"
+    ),
 ) -> TimelineResponse:
     """Get timeline data for alerts chart."""
     try:
-        computed_start, computed_end = _compute_date_range(time_frame, start_date, end_date)
+        computed_start, computed_end = _compute_date_range(
+            time_frame, start_date, end_date
+        )
 
         filters = AlertFilterParams(
             start_date=computed_start,
@@ -173,4 +179,6 @@ async def get_statistics_summary(
         )
     except Exception as e:
         logger.exception("Error generating statistics summary: %s", e)
-        raise HTTPException(status_code=500, detail="Error generating statistics summary")
+        raise HTTPException(
+            status_code=500, detail="Error generating statistics summary"
+        )

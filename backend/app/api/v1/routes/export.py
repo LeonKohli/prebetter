@@ -95,8 +95,12 @@ async def export_alerts(
     end_date: datetime | None = Query(None, description="End date (UTC)"),
     severity: str | None = Query(None, description="Filter by severity"),
     classification: str | None = Query(None, description="Filter by classification"),
-    source_ip: str | None = Query(None, description="Filter by source IP"),
-    target_ip: str | None = Query(None, description="Filter by target IP"),
+    source_ip: str | None = Query(
+        None, description="Filter by source IP or CIDR (e.g., 192.168.0.0/16)"
+    ),
+    target_ip: str | None = Query(
+        None, description="Filter by target IP or CIDR (e.g., 10.0.0.0/8)"
+    ),
     server: str | None = Query(None, description="Filter by server"),
     hours_back: int | None = Query(None, description="Past N hours (overrides dates)"),
 ) -> StreamingResponse:
