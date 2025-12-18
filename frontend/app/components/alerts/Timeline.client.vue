@@ -152,6 +152,7 @@ const chartOptions = computed<ApexOptions>(() => ({
       enabled: !isMobile.value,
       type: 'x',
       autoScaleYaxis: true,
+      allowMouseWheelZoom: false,
     },
     events: {
       zoomed: handleZoomed,
