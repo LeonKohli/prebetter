@@ -207,8 +207,8 @@ function setDateRange(start: Date, end: Date) {
 
 const debouncedSetDateRange = useDebounceFn(setDateRange, 300)
 
-function handleZoomed(_: unknown, { xaxis }: { xaxis: { min: number; max: number } }) {
-  if (xaxis.min && xaxis.max && xaxis.max > xaxis.min) {
+function handleZoomed(_: unknown, { xaxis }: { xaxis: { min?: number; max?: number } }) {
+  if (xaxis.min !== undefined && xaxis.max !== undefined && xaxis.max > xaxis.min) {
     debouncedSetDateRange(new Date(xaxis.min), new Date(xaxis.max))
   }
 }
@@ -229,10 +229,15 @@ function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPoint
       start = timestamp
       end = new Date(timestamp.getTime() + HOUR)
       break
-    case 'day':
-      start = new Date(timestamp.setHours(0, 0, 0, 0))
-      end = new Date(new Date(start).setHours(23, 59, 59, 999))
+    case 'day': {
+      const dayStart = new Date(timestamp)
+      dayStart.setHours(0, 0, 0, 0)
+      const dayEnd = new Date(dayStart)
+      dayEnd.setHours(23, 59, 59, 999)
+      start = dayStart
+      end = dayEnd
       break
+    }
     case 'week':
       start = timestamp
       end = new Date(timestamp.getTime() + WEEK)
