@@ -14,7 +14,17 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import select, func, and_, literal_column, literal, or_, text, Table, MetaData
+from sqlalchemy import (
+    select,
+    func,
+    and_,
+    literal_column,
+    literal,
+    or_,
+    text,
+    Table,
+    MetaData,
+)
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.engine import Engine
 
@@ -117,7 +127,9 @@ class AlertRepository(BaseRepository[Alert]):
             )
             .outerjoin(Classification, Classification._message_ident == Alert._ident)
             .outerjoin(Impact, Impact._message_ident == Alert._ident)
-            .outerjoin(CorrelationAlert, CorrelationAlert._message_ident == Alert._ident)
+            .outerjoin(
+                CorrelationAlert, CorrelationAlert._message_ident == Alert._ident
+            )
             .outerjoin(
                 self._source_addr,
                 and_(
@@ -173,12 +185,31 @@ class AlertRepository(BaseRepository[Alert]):
         if filters.end_date:
             query = query.where(DetectTime.time <= filters.end_date)
 
-        # IP filters (exact match)
-        if filters.source_ip:
-            query = query.where(source_addr.address == filters.source_ip)
+        source_range = filters.source_ip_range()
+        if source_range:
+            if source_range.is_cidr:
+                ip_as_int = func.inet_aton(source_addr.address)
+                query = query.where(
+                    and_(
+                        ip_as_int >= source_range.network_int,
+                        ip_as_int <= source_range.broadcast_int,
+                    )
+                )
+            else:
+                query = query.where(source_addr.address == source_range.original)
 
-        if filters.target_ip:
-            query = query.where(target_addr.address == filters.target_ip)
+        target_range = filters.target_ip_range()
+        if target_range:
+            if target_range.is_cidr:
+                ip_as_int = func.inet_aton(target_addr.address)
+                query = query.where(
+                    and_(
+                        ip_as_int >= target_range.network_int,
+                        ip_as_int <= target_range.broadcast_int,
+                    )
+                )
+            else:
+                query = query.where(target_addr.address == target_range.original)
 
         # Severity filter (supports comma-separated)
         severity_list = filters.severity_list()
@@ -468,13 +499,19 @@ class StatisticsRepository(BaseRepository):
         target_addr = aliased(Address)
 
         # Total alerts count
-        base_subquery = self._base_alert_query(start_date, end_date).distinct().subquery()
-        total_alerts = self.db.scalar(select(func.count()).select_from(base_subquery)) or 0
+        base_subquery = (
+            self._base_alert_query(start_date, end_date).distinct().subquery()
+        )
+        total_alerts = (
+            self.db.scalar(select(func.count()).select_from(base_subquery)) or 0
+        )
 
         # Severity distribution
         severity_query = (
             self._aggregation_query(
-                [Impact.severity, func.count(Alert._ident.distinct())], start_date, end_date
+                [Impact.severity, func.count(Alert._ident.distinct())],
+                start_date,
+                end_date,
             )
             .outerjoin(Impact, Impact._message_ident == Alert._ident)
             .group_by(Impact.severity)
@@ -484,17 +521,23 @@ class StatisticsRepository(BaseRepository):
         # Classification distribution
         classification_query = (
             self._aggregation_query(
-                [Classification.text, func.count(Alert._ident.distinct())], start_date, end_date
+                [Classification.text, func.count(Alert._ident.distinct())],
+                start_date,
+                end_date,
             )
             .outerjoin(Classification, Classification._message_ident == Alert._ident)
             .group_by(Classification.text)
         )
-        alerts_by_classification = _filter_null_keys(self.db.execute(classification_query).all())
+        alerts_by_classification = _filter_null_keys(
+            self.db.execute(classification_query).all()
+        )
 
         # Analyzer distribution
         analyzer_query = (
             self._aggregation_query(
-                [Analyzer.name, func.count(Alert._ident.distinct())], start_date, end_date
+                [Analyzer.name, func.count(Alert._ident.distinct())],
+                start_date,
+                end_date,
             )
             .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
             .group_by(Analyzer.name)
@@ -504,7 +547,9 @@ class StatisticsRepository(BaseRepository):
         # Top source IPs
         source_ip_query = (
             self._aggregation_query(
-                [source_addr.address, func.count(Alert._ident.distinct())], start_date, end_date
+                [source_addr.address, func.count(Alert._ident.distinct())],
+                start_date,
+                end_date,
             )
             .outerjoin(
                 source_addr,
@@ -523,7 +568,9 @@ class StatisticsRepository(BaseRepository):
         # Top target IPs
         target_ip_query = (
             self._aggregation_query(
-                [target_addr.address, func.count(Alert._ident.distinct())], start_date, end_date
+                [target_addr.address, func.count(Alert._ident.distinct())],
+                start_date,
+                end_date,
             )
             .outerjoin(
                 target_addr,
@@ -581,18 +628,45 @@ class GroupedAlertRepository(BaseRepository):
             query = query.where(DetectTime.time <= ensure_timezone(filters.end_date))
 
         # IP filters (direct on pair table for performance)
-        if filters.source_ip:
-            query = query.where(pair_table.c.source_ip == func.inet_aton(filters.source_ip))
-        if filters.target_ip:
-            query = query.where(pair_table.c.target_ip == func.inet_aton(filters.target_ip))
+        source_range = filters.source_ip_range()
+        if source_range:
+            if source_range.is_cidr:
+                query = query.where(
+                    and_(
+                        pair_table.c.source_ip >= source_range.network_int,
+                        pair_table.c.source_ip <= source_range.broadcast_int,
+                    )
+                )
+            else:
+                query = query.where(
+                    pair_table.c.source_ip == func.inet_aton(source_range.original)
+                )
+
+        target_range = filters.target_ip_range()
+        if target_range:
+            if target_range.is_cidr:
+                query = query.where(
+                    and_(
+                        pair_table.c.target_ip >= target_range.network_int,
+                        pair_table.c.target_ip <= target_range.broadcast_int,
+                    )
+                )
+            else:
+                query = query.where(
+                    pair_table.c.target_ip == func.inet_aton(target_range.original)
+                )
 
         # Severity filter - use subquery to avoid Cartesian product
         if filters.severity:
             severity_list = filters.severity_list()
             if len(severity_list) == 1:
-                severity_subq = select(Impact._message_ident).where(Impact.severity == severity_list[0])
+                severity_subq = select(Impact._message_ident).where(
+                    Impact.severity == severity_list[0]
+                )
             else:
-                severity_subq = select(Impact._message_ident).where(Impact.severity.in_(severity_list))
+                severity_subq = select(Impact._message_ident).where(
+                    Impact.severity.in_(severity_list)
+                )
             query = query.where(pair_table.c._message_ident.in_(severity_subq))
 
         # Classification filter - use subquery for semi-join optimization
@@ -625,7 +699,9 @@ class GroupedAlertRepository(BaseRepository):
                 .where(Analyzer._parent_type == "A")
             )
             if len(server_list) == 1:
-                server_subq = server_subq.where(Node.name.startswith(server_list[0] + "."))
+                server_subq = server_subq.where(
+                    Node.name.startswith(server_list[0] + ".")
+                )
             else:
                 conditions = [Node.name.startswith(s + ".") for s in server_list]
                 server_subq = server_subq.where(or_(*conditions))
@@ -695,7 +771,9 @@ class GroupedAlertRepository(BaseRepository):
 
         # Add severity column for sorting
         if sort_by_severity:
-            pairs_query = pairs_query.add_columns(func.max(Impact.severity).label("max_severity"))
+            pairs_query = pairs_query.add_columns(
+                func.max(Impact.severity).label("max_severity")
+            )
             pairs_query = pairs_query.outerjoin(
                 Impact, Impact._message_ident == DetectTime._message_ident
             )
@@ -721,7 +799,9 @@ class GroupedAlertRepository(BaseRepository):
 
         # Add analyzer column for sorting (using Node.name)
         if sort_by_analyzer:
-            pairs_query = pairs_query.add_columns(func.max(Node.name).label("max_analyzer"))
+            pairs_query = pairs_query.add_columns(
+                func.max(Node.name).label("max_analyzer")
+            )
             analyzer_join_condition = and_(
                 Analyzer._message_ident == DetectTime._message_ident,
                 Analyzer._parent_type == "A",
@@ -796,11 +876,13 @@ class GroupedAlertRepository(BaseRepository):
         # QUERY 3: Get details for the pairs on this page
         # =====================================================================
         if pairs:
+
             def ip_to_int(ip: str) -> int:
                 return int(ipaddress.IPv4Address(ip))
 
             pair_keys = [
-                (ip_to_int(p.source_ipv4) << 32) + ip_to_int(p.target_ipv4) for p in pairs
+                (ip_to_int(p.source_ipv4) << 32) + ip_to_int(p.target_ipv4)
+                for p in pairs
             ]
 
             detail_query = (
@@ -808,13 +890,17 @@ class GroupedAlertRepository(BaseRepository):
                     func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
                     func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
                     Classification.text.label("classification"),
-                    func.count(func.distinct(pair_table.c._message_ident)).label("count"),
+                    func.count(func.distinct(pair_table.c._message_ident)).label(
+                        "count"
+                    ),
                     func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
                     literal(None).label("analyzer_hosts"),
                     func.max(DetectTime.time).label("latest_time"),
                 )
                 .select_from(DetectTime)
-                .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
+                .join(
+                    pair_table, pair_table.c._message_ident == DetectTime._message_ident
+                )
                 .outerjoin(
                     Classification,
                     Classification._message_ident == DetectTime._message_ident,
@@ -833,14 +919,22 @@ class GroupedAlertRepository(BaseRepository):
             # Apply filters to detail query
             if classification_list:
                 if len(classification_list) == 1:
-                    detail_query = detail_query.where(Classification.text == classification_list[0])
+                    detail_query = detail_query.where(
+                        Classification.text == classification_list[0]
+                    )
                 else:
-                    detail_query = detail_query.where(Classification.text.in_(classification_list))
+                    detail_query = detail_query.where(
+                        Classification.text.in_(classification_list)
+                    )
 
             if filters.start_date:
-                detail_query = detail_query.where(DetectTime.time >= ensure_timezone(filters.start_date))
+                detail_query = detail_query.where(
+                    DetectTime.time >= ensure_timezone(filters.start_date)
+                )
             if filters.end_date:
-                detail_query = detail_query.where(DetectTime.time <= ensure_timezone(filters.end_date))
+                detail_query = detail_query.where(
+                    DetectTime.time <= ensure_timezone(filters.end_date)
+                )
 
             details = self.db.execute(detail_query).all()
         else:

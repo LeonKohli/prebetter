@@ -215,7 +215,7 @@
               </InputGroupAddon>
               <InputGroupInput
                 v-model="sourceIpDraft"
-                placeholder="e.g. 192.168.1.1"
+                placeholder="e.g. 10.128.9 or 192.168.0.0/16"
                 class="font-mono"
                 @keydown.enter="applySourceIp"
                 @blur="applySourceIp"
@@ -226,6 +226,13 @@
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
+            <p
+              v-if="sourceIpHint"
+              class="text-xs px-1"
+              :class="sourceIpHint.startsWith('Matches:') ? 'text-muted-foreground' : 'text-destructive'"
+            >
+              {{ sourceIpHint }}
+            </p>
           </div>
 
           <!-- Target IP Filter -->
@@ -237,7 +244,7 @@
               </InputGroupAddon>
               <InputGroupInput
                 v-model="targetIpDraft"
-                placeholder="e.g. 10.0.0.1"
+                placeholder="e.g. 10.128.9 or 192.168.0.0/16"
                 class="font-mono"
                 @keydown.enter="applyTargetIp"
                 @blur="applyTargetIp"
@@ -248,6 +255,13 @@
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
+            <p
+              v-if="targetIpHint"
+              class="text-xs px-1"
+              :class="targetIpHint.startsWith('Matches:') ? 'text-muted-foreground' : 'text-destructive'"
+            >
+              {{ targetIpHint }}
+            </p>
           </div>
         </div>
       </div>
@@ -256,6 +270,8 @@
 </template>
 
 <script setup lang="ts">
+import { getIPFilterHint } from '~/utils/ipFilter'
+
 const { urlState } = useAlertTableContext()
 
 const isOpen = ref(false)
@@ -355,6 +371,9 @@ const targetIpDraft = ref('')
 
 watch(() => urlState.filters.value.source_ipv4, v => { sourceIpDraft.value = String(v ?? '') }, { immediate: true })
 watch(() => urlState.filters.value.target_ipv4, v => { targetIpDraft.value = String(v ?? '') }, { immediate: true })
+
+const sourceIpHint = computed(() => getIPFilterHint(sourceIpDraft.value))
+const targetIpHint = computed(() => getIPFilterHint(targetIpDraft.value))
 
 function applySourceIp() {
   const value = sourceIpDraft.value.trim()
