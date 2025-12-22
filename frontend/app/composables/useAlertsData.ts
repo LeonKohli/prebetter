@@ -8,6 +8,8 @@
  * - Non-relative presets (today): Dates stay fixed, but data still refreshes
  * - Explicit user dates: No SSE refresh (user-selected range)
  */
+import { getPresetRange, isRelativePreset, getActivePresetId, type DatePresetId } from '@/utils/datePresets'
+
 export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>) {
   const { sortFieldMap, filterFieldMap } = useAlertTableColumns()
   const { token: sseRefreshToken } = useSseRefreshToken()
@@ -15,18 +17,8 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
   const isGrouped = computed(() => urlState.view.value === 'grouped')
   const fetchUrl = computed(() => isGrouped.value ? '/api/alerts/groups' : '/api/alerts')
 
-  function getActivePresetId(): DatePresetId | undefined {
-    const preset = urlState.filters.value.date_preset
-    return typeof preset === 'string' && isValidPresetId(preset) ? preset : undefined
-  }
-
-  /**
-   * Fetch key includes SSE token for live updates.
-   * Token is included for ANY preset (triggers SSE refresh) but NOT for explicit user-selected dates.
-   * When token changes, Nuxt creates new fetch with fresh query evaluation.
-   */
   const fetchKey = computed(() => {
-    const presetId = getActivePresetId()
+    const presetId = getActivePresetId(urlState.filters.value)
     const filters = urlState.filters.value
     const hasExplicitDates = !!(filters.start_date && filters.end_date) && !presetId
     // Include token for SSE refresh: any preset OR default fallback (but not explicit user dates)
@@ -44,7 +36,7 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
   })
 
   const fetchQuery = computed(() => {
-    const activePreset = getActivePresetId()
+    const activePreset = getActivePresetId(urlState.filters.value)
     const sortBy = urlState.sortBy.value
     const mappedSort = sortBy in sortFieldMap ? sortFieldMap[sortBy as keyof typeof sortFieldMap] : sortBy
     const urlFilters = urlState.filters.value
@@ -130,6 +122,5 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
   return {
     data, pending, error, status, refresh,
     isGrouped, displayData, paginationInfo, tableTotals, fetchKey,
-    getActivePresetId,
   }
 }

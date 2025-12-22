@@ -12,6 +12,7 @@
  */
 import type { ApexOptions } from 'apexcharts'
 import { useDebounceFn, useWindowSize } from '@vueuse/core'
+import { getActivePresetId } from '@/utils/datePresets'
 
 interface ChartInstance {
   updateOptions(options: ApexOptions, redrawPaths?: boolean, animate?: boolean): Promise<void>
@@ -34,32 +35,26 @@ const {
   totalAlerts,
   timeFrame,
   dateRange,
-  getActivePresetId,
 } = useTimelineData(urlState)
 
-/**
- * Calculate optimal x-axis range based on actual data points.
- * When filtered data is sparse, tighten the range to avoid massive bars.
- *
- * Note: ApexCharts has NO built-in auto-range for datetime axes with sparse data.
- * This custom calculation is the standard approach per ApexCharts community patterns.
- */
+const hasCustomDateRange = computed(() => {
+  const filters = urlState.filters.value
+  return !!(filters.start_date && filters.end_date && !getActivePresetId(filters))
+})
+
 const dynamicXAxisRange = computed(() => {
   const data = chartSeries.value[0]?.data ?? []
   const fullStart = dateRange.value.start.getTime()
   const fullEnd = dateRange.value.end.getTime()
 
-  // No data or plenty of points → use full requested range
   if (data.length === 0 || data.length >= 8) {
     return { min: fullStart, max: fullEnd }
   }
 
-  // Find actual data bounds
   const timestamps = data.map(p => p.x)
   const dataMin = Math.min(...timestamps)
   const dataMax = Math.max(...timestamps)
 
-  // Time unit for padding based on timeFrame
   const HOUR = 60 * 60 * 1000
   const DAY = 24 * HOUR
   const padding = timeFrame.value === 'hour' ? HOUR
@@ -67,7 +62,6 @@ const dynamicXAxisRange = computed(() => {
     : timeFrame.value === 'week' ? DAY * 7
     : DAY * 30
 
-  // Single data point → center with symmetric padding
   if (data.length === 1) {
     const singlePadding = padding * 4
     return {
@@ -76,7 +70,6 @@ const dynamicXAxisRange = computed(() => {
     }
   }
 
-  // Few points → fit to data with proportional padding
   const dataSpan = dataMax - dataMin
   const edgePadding = Math.max(padding, dataSpan * 0.25)
   return {
@@ -118,11 +111,6 @@ const dynamicTickAmount = computed(() => {
 
   // For more points, calculate based on available width (~80px per label)
   return Math.min(Math.floor(chartWidth / 80), 12)
-})
-
-const hasCustomDateRange = computed(() => {
-  const filters = urlState.filters.value
-  return !!(filters.start_date && filters.end_date && !getActivePresetId())
 })
 
 // Chart color from design system (--chart-1 changes between light/dark)
