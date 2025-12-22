@@ -26,7 +26,7 @@
       <DropdownMenuItem
         class="text-destructive focus:text-destructive focus:bg-destructive/10"
         @click="$emit('delete', user)"
-        :disabled="user.id === currentUserId || (user.is_superuser && isLastSuperuser)"
+        :disabled="user.id === currentUserId || props.isLastSuperuser"
       >
         <Icon name="lucide:trash" class="mr-2 size-4" />
         Delete
@@ -49,15 +49,16 @@ interface User {
 interface Props {
   user: User
   currentUserId: string
+  isLastSuperuser?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  isLastSuperuser: false,
+})
 
 defineEmits<{
   edit: [user: User]
   delete: [user: User]
   resetPassword: [user: User]
 }>()
-
-const isLastSuperuser = computed(() => false)
 </script>
