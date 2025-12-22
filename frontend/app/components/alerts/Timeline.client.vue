@@ -157,8 +157,9 @@ const chartOptions = computed<ApexOptions>(() => ({
     tickAmount: dynamicTickAmount.value,
     labels: {
       datetimeUTC: false,
+      format: 'HH:mm',
       rotate: -45,
-      rotateAlways: false, // Only rotate when labels would overlap
+      rotateAlways: false,
       hideOverlappingLabels: true,
       style: {
         fontSize: '11px',
