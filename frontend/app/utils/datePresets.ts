@@ -180,6 +180,11 @@ export function isValidPresetId(id: string | undefined): id is DatePresetId {
   return !!id && PRESET_MAP.has(id as DatePresetId)
 }
 
+export function getActivePresetId(filters: Record<string, unknown>): DatePresetId | undefined {
+  const preset = filters.date_preset
+  return typeof preset === 'string' && isValidPresetId(preset) ? preset : undefined
+}
+
 export function getPresetRange(id: DatePresetId, now = new Date()): { from: Date; to: Date } {
   // TypeScript guarantees id is a valid DatePresetId, so preset always exists
   return PRESET_MAP.get(id)!.computeRange(now)

@@ -1,30 +1,11 @@
 import type { TimelineResponse, TimeFrame } from '~~/shared/types/timeline'
-import { getPresetRange, isValidPresetId, isRelativePreset, type DatePresetId } from '@/utils/datePresets'
+import { getPresetRange, isRelativePreset, getActivePresetId } from '@/utils/datePresets'
 
-/**
- * Timeline data composable for the alerts chart.
- *
- * SSE refresh behavior:
- * - All presets: Token in fetchKey → triggers data refresh on SSE
- * - Relative presets (last-24h): Token in dateRange → dates recalculate with fresh Date()
- * - Non-relative presets (today): Dates stay fixed, but data still refreshes
- * - Explicit user dates: No SSE refresh (user-selected range)
- */
 export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState>) {
   const { token: sseRefreshToken } = useSseRefreshToken()
 
-  function getActivePresetId(): DatePresetId | undefined {
-    const preset = urlState.filters.value.date_preset
-    return typeof preset === 'string' && isValidPresetId(preset) ? preset : undefined
-  }
-
-  /**
-   * Date range computed with SSE refresh support.
-   * Uses `void sseRefreshToken.value` to create reactive dependency for sliding windows,
-   * forcing recalculation with fresh Date() when SSE arrives.
-   */
   const dateRange = computed(() => {
-    const presetId = getActivePresetId()
+    const presetId = getActivePresetId(urlState.filters.value)
     const filters = urlState.filters.value
 
     if (presetId) {
@@ -51,16 +32,10 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     return 'week'
   })
 
-  /**
-   * Fetch key includes token for live updates.
-   * Token is included for ANY preset (triggers SSE refresh) but NOT for explicit user-selected dates.
-   * When key changes, Nuxt creates new fetch with fresh query evaluation.
-   */
   const fetchKey = computed(() => {
-    const presetId = getActivePresetId()
+    const presetId = getActivePresetId(urlState.filters.value)
     const filters = urlState.filters.value
     const hasExplicitDates = !!(filters.start_date && filters.end_date) && !presetId
-    // Include token for SSE refresh: any preset OR default fallback (but not explicit user dates)
     const includeToken = !!presetId || !hasExplicitDates
 
     return `timeline-${btoa(JSON.stringify({
@@ -109,6 +84,6 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
   return {
     data, pending, error, status, refresh,
     chartSeries, totalAlerts, timeFrame, dateRange,
-    fetchKey, getActivePresetId,
+    fetchKey,
   }
 }
