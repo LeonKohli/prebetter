@@ -1,4 +1,4 @@
-export interface IPFilterResult {
+interface IPFilterResult {
   isValid: boolean
   isRange: boolean
   original: string

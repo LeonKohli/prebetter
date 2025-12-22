@@ -208,15 +208,6 @@ class AnalyzerInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class TableDeletionStats(BaseModel):
-    """Number of rows deleted per table during alert cleanup."""
-
-    table_name: str = Field(..., description="Name of the Prelude table")
-    rows_deleted: int = Field(..., ge=0, description="Rows removed from the table")
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class WebServiceInfo(BaseModel):
     url: str
     cgi: Optional[str] = None
@@ -437,29 +428,6 @@ class HeartbeatListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class HeartbeatDetail(HeartbeatListItem):
-    analyzer: AnalyzerInfo  # Extended analyzer info with OS details
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class HeartbeatTreeItem(BaseModel):
-    name: str
-    model: str
-    version: str
-    class_: str = Field(..., alias="class")
-    last_heartbeat_at: str
-    status: str
-    node_location: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class HostInfo(BaseModel):
-    os: str | None
-    analyzers: list[AnalyzerInfo]
-
-
 class HeartbeatTimelineItem(BaseModel):
     timestamp: datetime
     host_name: str
@@ -467,24 +435,6 @@ class HeartbeatTimelineItem(BaseModel):
     model: str
     version: str
     class_: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class TreeAgentInfo(BaseModel):
-    name: str
-    model: str
-    version: str
-    class_: str = Field(..., alias="class")
-    last_heartbeat_at: datetime | None
-    status: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class TreeHostInfo(BaseModel):
-    os: str | None
-    agents: list[TreeAgentInfo]
 
     model_config = ConfigDict(from_attributes=True)
 
