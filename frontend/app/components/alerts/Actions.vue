@@ -1,11 +1,10 @@
 <script setup lang="ts">
 const props = defineProps<{
-  alert: AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert
+  alert: AlertListItem | CompactGroupedAlert
   isGrouped: boolean
-  // Callbacks passed from TanStack Table meta (type-safe direct invocation)
   onViewDetails?: (alertId: string) => void
   onRequestDeleteSingle?: (alert: AlertListItem) => void
-  onRequestDeleteGroup?: (alert: FlattenedGroupedAlert | CompactGroupedAlert) => void
+  onRequestDeleteGroup?: (alert: CompactGroupedAlert) => void
 }>()
 
 // Use injected context instead of creating new instance
@@ -40,7 +39,7 @@ function handleDelete() {
   if ('id' in props.alert && props.onRequestDeleteSingle) {
     props.onRequestDeleteSingle(props.alert)
   } else if (props.onRequestDeleteGroup) {
-    props.onRequestDeleteGroup(props.alert as FlattenedGroupedAlert | CompactGroupedAlert)
+    props.onRequestDeleteGroup(props.alert as CompactGroupedAlert)
   }
 }
 

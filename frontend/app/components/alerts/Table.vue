@@ -39,7 +39,6 @@ const {
   paginationInfo,
   tableTotals,
   fetchKey,
-  getActivePresetId,
 } = await useAlertsData(urlState)
 
 // Local UI state
@@ -158,7 +157,7 @@ const table = useVueTable({
     onRequestDeleteSingle: (alert: AlertListItem) => {
       openDeleteDialog({ mode: 'single', alert })
     },
-    onRequestDeleteGroup: (group: CompactGroupedAlert | FlattenedGroupedAlert) => {
+    onRequestDeleteGroup: (group: CompactGroupedAlert) => {
       openDeleteDialog({
         mode: 'grouped',
         sourceIp: group.source_ipv4 || '',
@@ -180,7 +179,7 @@ watch(status, (newStatus) => {
 // Provide context for child components
 provideAlertTableContext({
   urlState,
-  table: table as Table<AlertListItem | FlattenedGroupedAlert | CompactGroupedAlert>,
+  table: table as Table<AlertListItem | CompactGroupedAlert>,
   isGrouped,
   pending,
 })
