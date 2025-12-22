@@ -186,22 +186,25 @@ async def stream_alerts(
                 # This is critical: SSE connections can live for hours/days
                 with PreludeSessionLocal() as db:
                     query, models = build_alert_base_query(db)
-                    query = query.where(Alert._ident > current_last_id).order_by(
-                        Alert._ident.asc()
-                    ).limit(50)
+                    query = (
+                        query.where(Alert._ident > current_last_id)
+                        .order_by(Alert._ident.asc())
+                        .limit(50)
+                    )
 
                     results = db.execute(query).all()
 
                     if results:
-                        for result in results:
-                            alert_item = alert_result_to_list_item(result)
-                            # sse-starlette handles proper SSE formatting
-                            yield {
-                                "id": str(alert_item.id),
-                                "event": "alert",
-                                "data": alert_item.model_dump_json(),
-                            }
-                            current_last_id = int(alert_item.id)
+                        # Send minimal notification - just alert count and latest ID
+                        # Frontend uses this to trigger targeted refetch, not display
+                        # This avoids bandwidth waste of sending full AlertListItem
+                        latest_id = int(results[-1][0])  # Alert._ident is first column
+                        yield {
+                            "id": str(latest_id),
+                            "event": "alerts",
+                            "data": f'{{"count": {len(results)}, "latest_id": {latest_id}}}',
+                        }
+                        current_last_id = latest_id
 
                         # Reset heartbeat counter when we send data
                         heartbeat_counter = 0
@@ -241,7 +244,9 @@ async def get_grouped_alerts(
         )
 
         alerts_map = process_grouped_alerts_details(result["details"])
-        groups = [grouped_alert_to_response(pair, alerts_map) for pair in result["pairs"]]
+        groups = [
+            grouped_alert_to_response(pair, alerts_map) for pair in result["pairs"]
+        ]
         total_alerts_on_page = sum(group.total_count or 0 for group in groups)
 
         return GroupedAlertResponse(
