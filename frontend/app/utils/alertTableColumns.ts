@@ -12,7 +12,7 @@ declare module "@tanstack/vue-table" {
   interface TableMeta<TData extends RowData> {
     onViewDetails?: (alertId: string) => void;
     onRequestDeleteSingle?: (alert: AlertListItem) => void;
-    onRequestDeleteGroup?: (group: CompactGroupedAlert | FlattenedGroupedAlert) => void;
+    onRequestDeleteGroup?: (group: CompactGroupedAlert) => void;
   }
 }
 
