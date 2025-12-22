@@ -1,9 +1,3 @@
-/**
- * Live mode (SSE) composable for alerts table.
- *
- * Bumps the shared SSE token when new alerts arrive, which triggers
- * all components using sliding time windows (timeline, table, toolbar).
- */
 export function useAlertsLiveMode(opts: {
   status: Ref<'idle' | 'pending' | 'success' | 'error'>
   rowSelection: Ref<Record<string, boolean>>
@@ -21,7 +15,7 @@ export function useAlertsLiveMode(opts: {
   }
 
   const { status: sseStatus, error: sseError, close: sseClose, open: sseOpen } = useAlertStream({
-    onNewAlerts: () => { if (isLive.value) performSseRefresh() },
+    onNewAlerts: (_count) => { if (isLive.value) performSseRefresh() },
     debounceMs: 2000,
   })
 

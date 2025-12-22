@@ -1,42 +1,24 @@
 interface UseAlertStreamOptions {
-  /** Auto-connect on mount (default: true) */
   immediate?: boolean
-  /** Callback when new alerts arrive (debounced) */
-  onNewAlerts?: () => void
-  /** Debounce delay for onNewAlerts callback (default: 1000ms) */
+  onNewAlerts?: (count: number) => void
   debounceMs?: number
 }
 
-/**
- * Composable for receiving real-time alert updates via Server-Sent Events.
- *
- * @example
- * ```vue
- * <script setup>
- * const { latestAlert, isConnected, newAlertCount, alerts } = useAlertStream()
- *
- * // React to new alerts
- * watch(latestAlert, (alert) => {
- *   if (alert) toast.info(`New alert: ${alert.classification_text}`)
- * })
- * </script>
- * ```
- */
-export function useAlertStream(options: UseAlertStreamOptions = {}) {
-  const {
-    immediate = true,
-    onNewAlerts,
-    debounceMs = 1000
-  } = options
+interface AlertNotification {
+  count: number
+  latest_id: number
+}
 
-  // Debounced callback for new alerts - batches rapid updates
+export function useAlertStream(options: UseAlertStreamOptions = {}) {
+  const { immediate = true, onNewAlerts, debounceMs = 1000 } = options
+
   const debouncedOnNewAlerts = onNewAlerts
     ? useDebounceFn(onNewAlerts, debounceMs)
     : undefined
 
   const url = '/api/alerts-stream'
 
-  const { status, data, error, close, open } = useEventSource(url, ['alert'], {
+  const { status, data, error, close, open } = useEventSource(url, ['alerts'], {
     immediate,
     withCredentials: true,
     autoReconnect: {
@@ -48,63 +30,23 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
     },
   })
 
-  // Close SSE before page unload to prevent Firefox error:
-  // "The connection was interrupted while the page was loading"
-  // See: https://bugzilla.mozilla.org/show_bug.cgi?id=833462
   if (import.meta.client) {
     useEventListener('beforeunload', close)
     onScopeDispose(close)
   }
 
-  // Store received alerts (newest first, limited buffer)
-  // shallowRef: array is replaced entirely, no deep reactivity needed
-  const alerts = shallowRef<AlertListItem[]>([])
-  const maxBufferSize = 100
-
-  // Parse incoming alert data
-  const latestAlert = computed<AlertListItem | null>(() => {
-    if (!data.value) return null
+  watch(data, (raw) => {
+    if (!raw) return
     try {
-      return JSON.parse(data.value) as AlertListItem
-    } catch {
-      return null
-    }
+      const notification = JSON.parse(raw) as AlertNotification
+      debouncedOnNewAlerts?.(notification.count)
+    } catch {}
   })
-
-  // When we receive a new alert, add it to the buffer and notify
-  watch(latestAlert, (alert) => {
-    if (!alert) return
-    alerts.value = [alert, ...alerts.value].slice(0, maxBufferSize)
-    debouncedOnNewAlerts?.()
-  })
-
-  // Count of new alerts since stream started
-  const newAlertCount = computed(() => alerts.value.length)
-
-  // Connection state helpers
-  const isConnected = computed(() => status.value === 'OPEN')
-  const isConnecting = computed(() => status.value === 'CONNECTING')
-
-  // Clear the alerts buffer
-  function clearAlerts() {
-    alerts.value = []
-  }
 
   return {
-    // Connection state
     status,
-    isConnected,
-    isConnecting,
     error,
-
-    // Alert data
-    latestAlert,
-    alerts,
-    newAlertCount,
-
-    // Actions
     close,
     open,
-    clearAlerts,
   }
 }
