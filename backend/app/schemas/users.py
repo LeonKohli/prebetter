@@ -77,10 +77,6 @@ class User(UserInDBBase):
     pass
 
 
-class UserInDB(UserInDBBase):
-    hashed_password: str
-
-
 class Token(BaseModel):
     access_token: str
     refresh_token: str

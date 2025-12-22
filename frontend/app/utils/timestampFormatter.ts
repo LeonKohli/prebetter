@@ -6,7 +6,7 @@
  * which uses VueUse's useTimeAgo for reactive updates.
  */
 
-export interface TimestampOptions {
+interface TimestampOptions {
   /** Display timezone indicator (default: true) */
   showTimezone?: boolean
   /** Custom locale (default: 'de-DE') */

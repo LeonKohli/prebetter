@@ -253,26 +253,3 @@ class PaginationParams(BaseModel):
     def total_pages(self, total: int) -> int:
         """Calculate total pages for a given total count."""
         return calculate_total_pages(total, self.size)
-
-
-class TimelineFilterParams(AlertFilterParams):
-    """
-    Filter parameters specific to timeline queries.
-
-    Extends AlertFilterParams with timeline-specific fields.
-    """
-
-    time_frame: str = Field(
-        "hour",
-        description="Grouping interval: hour, day, week, month",
-        examples=["hour", "day", "week", "month"],
-    )
-
-    @field_validator("time_frame")
-    @classmethod
-    def validate_time_frame(cls, v: str) -> str:
-        """Validate time_frame is one of allowed values."""
-        allowed = {"hour", "day", "week", "month"}
-        if v not in allowed:
-            raise ValueError(f"time_frame must be one of: {', '.join(allowed)}")
-        return v
