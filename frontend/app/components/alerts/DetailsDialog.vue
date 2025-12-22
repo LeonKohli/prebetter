@@ -89,20 +89,6 @@ function copyWithFeedback(key: string, text: string) {
 
 // Timestamp formatting handled by centralized utility
 
-function getSeverityClass(severity?: string): string {
-  const severityLower = severity?.toLowerCase()
-  switch (severityLower) {
-    case 'high':
-      return 'text-destructive font-semibold'
-    case 'medium':
-      return 'text-accent font-semibold'
-    case 'low':
-      return 'text-muted-foreground font-semibold'
-    default:
-      return 'text-muted-foreground'
-  }
-}
-
 function getSeverityPillClass(severity?: string): string {
   const s = (severity || 'low').toLowerCase()
   const map: Record<string, string> = {
