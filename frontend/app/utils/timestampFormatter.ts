@@ -81,26 +81,3 @@ export function formatTimestampCompact(timestamp: string | Date | number | undef
     showTimezone: false
   })
 }
-
-/**
- * Format timestamp for detailed views (full format with timezone)
- */
-export function formatTimestampDetailed(timestamp: string | Date | number | undefined | null): string {
-  return formatTimestamp(timestamp, {
-    style: 'long',
-    showTimezone: true
-  })
-}
-
-/**
- * Format timestamp explicitly in the viewer's local timezone with abbreviation.
- */
-export function formatTimestampLocal(
-  timestamp: string | Date | number | undefined | null,
-  options: Omit<TimestampOptions, 'showTimezone'> = {}
-): string {
-  return formatTimestamp(timestamp, {
-    ...options,
-    showTimezone: true,
-  })
-}
