@@ -57,6 +57,7 @@
                 <ProfileUserActions
                   :user="user"
                   :current-user-id="currentUserId"
+                  :is-last-superuser="user.is_superuser && superuserCount === 1"
                   @edit="handleEditUser"
                   @delete="handleDeleteUser"
                   @reset-password="handleResetPassword"
@@ -199,6 +200,7 @@ const { data: response, pending, error, refresh } = await useFetch<{
 })
 
 const users = computed(() => response.value?.items || [])
+const superuserCount = computed(() => users.value.filter(u => u.is_superuser).length)
 const totalPages = computed(() => response.value?.pagination.pages || 1)
 const totalItems = computed(() => response.value?.pagination.total || 0)
 const startItem = computed(() => ((currentPage.value - 1) * pageSize.value) + 1)
