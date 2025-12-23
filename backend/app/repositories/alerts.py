@@ -312,10 +312,18 @@ class AlertRepository(BaseRepository[Alert]):
 
         Returns:
             List of aggregated timeline data points
+
+        Note:
+            Only counts alerts with BOTH source AND target IPv4 addresses to match
+            the grouped alerts view (which uses Prebetter_Pair table).
+            TODO: Consider showing address-less alerts separately in the UI.
         """
         source_addr = aliased(Address)
         target_addr = aliased(Address)
 
+        # Use inner joins for source/target to only count alerts that have BOTH addresses.
+        # This matches the grouped view behavior (Prebetter_Pair only has alerts with addresses).
+        # TODO: Review whether address-less alerts should be shown in a separate UI section.
         query = (
             select(
                 func.date_format(DetectTime.time, date_format).label("time_bucket"),
@@ -329,7 +337,7 @@ class AlertRepository(BaseRepository[Alert]):
             .outerjoin(Impact, Impact._message_ident == Alert._ident)
             .outerjoin(Classification, Classification._message_ident == Alert._ident)
             .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
-            .outerjoin(
+            .join(
                 source_addr,
                 and_(
                     source_addr._message_ident == Alert._ident,
@@ -337,7 +345,7 @@ class AlertRepository(BaseRepository[Alert]):
                     source_addr.category == "ipv4-addr",
                 ),
             )
-            .outerjoin(
+            .join(
                 target_addr,
                 and_(
                     target_addr._message_ident == Alert._ident,
