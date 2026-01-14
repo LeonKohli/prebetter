@@ -45,17 +45,17 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
   })
 
   const fetchQuery = computed(() => {
-    const query: Record<string, string> = {
+    const query: Record<string, string | boolean> = {
       time_frame: timeFrame.value,
       start_date: dateRange.value.start.toISOString(),
       end_date: dateRange.value.end.toISOString(),
     }
-    // Include all relevant filters so chart matches table data
-    const { severity, classification_text, source_ipv4, target_ipv4 } = urlState.filters.value
+    const { severity, classification_text, source_ipv4, target_ipv4, require_ips } = urlState.filters.value
     if (severity) query.severity = String(severity)
     if (classification_text) query.classification = String(classification_text)
     if (source_ipv4) query.source_ip = String(source_ipv4)
     if (target_ipv4) query.target_ip = String(target_ipv4)
+    if (require_ips === 'false') query.require_ips = false
     return query
   })
 
@@ -69,6 +69,7 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
 
   const chartSeries = computed(() => {
     if (!data.value?.data) return [{ name: 'Alerts', data: [] as { x: number; y: number }[] }]
+
     return [{
       name: 'Alerts',
       data: data.value.data

@@ -185,6 +185,11 @@ class AlertFilterParams(BaseModel):
         description="Filter by analyzer name",
         examples=["snort"],
     )
+    require_ips: bool = Field(
+        True,
+        description="Only include alerts with both source AND target IPv4 addresses. "
+        "Alerts without IPs are typically not useful for security analysis.",
+    )
 
     @field_validator("start_date", "end_date", mode="before")
     @classmethod
