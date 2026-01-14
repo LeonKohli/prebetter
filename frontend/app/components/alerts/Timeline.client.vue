@@ -17,14 +17,16 @@ import { getActivePresetId } from '@/utils/datePresets'
 interface ChartInstance {
   updateOptions(options: ApexOptions, redrawPaths?: boolean, animate?: boolean): Promise<void>
   resetSeries(): void
+  destroy(): void
 }
 
-const urlState = useNavigableUrlState({
-  defaultView: 'grouped',
-  defaultPageSize: 100,
-  defaultSortBy: 'detected_at',
-  defaultSortOrder: 'desc',
-})
+// Accept urlState from parent to ensure single source of truth
+// This eliminates race conditions when both Table and Timeline update URL state
+const props = defineProps<{
+  urlState: ReturnType<typeof useNavigableUrlState>
+}>()
+
+const urlState = props.urlState
 
 const colorMode = useColorMode()
 const { width } = useWindowSize()
@@ -47,13 +49,22 @@ const dynamicXAxisRange = computed(() => {
   const fullStart = dateRange.value.start.getTime()
   const fullEnd = dateRange.value.end.getTime()
 
-  if (data.length === 0 || data.length >= 8) {
+  if (data.length === 0) {
     return { min: fullStart, max: fullEnd }
   }
 
   const timestamps = data.map(p => p.x)
   const dataMin = Math.min(...timestamps)
   const dataMax = Math.max(...timestamps)
+
+  // Always include first bucket in x-axis range - bucket timestamps are truncated
+  // to hour boundaries, so first bucket may start before the requested range.
+  // Using Math.min ensures the bar renders within the visible x-axis.
+  const effectiveStart = Math.min(fullStart, dataMin)
+
+  if (data.length >= 8) {
+    return { min: effectiveStart, max: fullEnd }
+  }
 
   const HOUR = 60 * 60 * 1000
   const DAY = 24 * HOUR
@@ -63,9 +74,11 @@ const dynamicXAxisRange = computed(() => {
     : DAY * 30
 
   if (data.length === 1) {
-    const singlePadding = padding * 4
+    // Single data point: extend range by padding on each side, clamped to boundaries
+    // This keeps the bar within the visible range without collapsing the view
+    const singlePadding = padding * 2
     return {
-      min: Math.max(fullStart, dataMin - singlePadding),
+      min: Math.min(effectiveStart, Math.max(fullStart, dataMin - singlePadding)),
       max: Math.min(fullEnd, dataMax + singlePadding),
     }
   }
@@ -73,7 +86,7 @@ const dynamicXAxisRange = computed(() => {
   const dataSpan = dataMax - dataMin
   const edgePadding = Math.max(padding, dataSpan * 0.25)
   return {
-    min: Math.max(fullStart, dataMin - edgePadding),
+    min: Math.min(effectiveStart, dataMin - edgePadding),
     max: Math.min(fullEnd, dataMax + edgePadding),
   }
 })
@@ -94,6 +107,12 @@ const dynamicColumnWidth = computed(() => {
 })
 
 const chartRef = useTemplateRef<ChartInstance>('chart')
+
+// Prevent ApexCharts memory leaks - destroy chart instance on unmount
+onBeforeUnmount(() => {
+  chartRef.value?.destroy()
+})
+
 const isMobile = computed(() => width.value < 768)
 const chartHeight = computed(() => isMobile.value ? 140 : 180)
 
@@ -247,7 +266,7 @@ function handleReset() {
   const newFilters = { ...urlState.filters.value }
   delete (newFilters as Record<string, unknown>).start_date
   delete (newFilters as Record<string, unknown>).end_date
-  newFilters.date_preset = 'last_24_hours'
+  newFilters.date_preset = 'last-24-hours'
   urlState.filters.value = newFilters
   chartRef.value?.resetSeries()
 }
