@@ -308,6 +308,32 @@ const model = useVModel(props, 'modelValue', emit, {
 // 4. Follow the documented patterns and best practices
 ```
 
+### useState Lifecycle (No Cleanup Needed)
+
+**`useState` does NOT require `onUnmounted` cleanup:**
+
+```typescript
+// ✅ CORRECT - no cleanup needed
+const myState = useState('my-key', () => initialValue)
+
+// ❌ WRONG - unnecessary cleanup
+onUnmounted(() => {
+  myState.value = null  // Don't do this!
+})
+```
+
+**Why:**
+- `useState` is SSR-safe global state that persists during client-side navigation (intentional)
+- Cleanup hooks (`onUnmounted`) don't run during SSR, so adding cleanup can cause issues
+- State is automatically scoped per-request on server, shared on client
+
+**When to use `onUnmounted`:**
+- ✅ AbortController (cancel pending fetches)
+- ✅ Timers (`setInterval`, `setTimeout`)
+- ✅ Event listeners (`addEventListener`)
+- ✅ WebSocket connections
+- ❌ NOT for `useState` - use `clearNuxtState()` utility if you need to clear state
+
 ### Common Patterns to Follow
 
 - Prefer `computed` over `watch` for derived state

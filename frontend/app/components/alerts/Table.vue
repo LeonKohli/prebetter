@@ -14,17 +14,17 @@ import {
   getSortedRowModel,
   useVueTable,
 } from '@tanstack/vue-table'
+
+// Accept urlState from parent to ensure single source of truth
+// This eliminates race conditions when both Table and Timeline update URL state
+const props = defineProps<{
+  urlState: ReturnType<typeof useNavigableUrlState>
+}>()
+
 // URL state synchronization
 const router = useRouter()
 const route = useRoute()
-const urlState = useNavigableUrlState({
-  defaultView: 'grouped',
-  defaultPageSize: 100,
-  defaultSortBy: 'detected_at',
-  defaultSortOrder: 'desc',
-  defaultGroupedSortBy: 'detected_at',
-  defaultUngroupedSortBy: 'detected_at'
-})
+const urlState = props.urlState
 
 // Data fetching (extracted to composable)
 // Nuxt natively watches reactive query params - no manual watchers needed
@@ -62,6 +62,12 @@ const skeletonRowCount = computed(() => {
   return Math.min(urlState.pageSize.value, 20)
 })
 
+// Compute requireIps from URL filter state for SSE filtering
+const requireIps = computed(() => {
+  const val = urlState.filters.value.require_ips
+  return val === undefined || val === 'true' || val === 1 || val === '1'
+})
+
 // Live mode / SSE (extracted to composable)
 const {
   isLive,
@@ -74,6 +80,7 @@ const {
 } = useAlertsLiveMode({
   status,
   rowSelection,
+  requireIps,
 })
 
 // Dialog state

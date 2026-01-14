@@ -131,7 +131,7 @@ function updatePage(nextPage: number) {
   }
 }
 
-function handleUpdatePageSize(value: string | number | bigint | Record<string, any> | null) {
+function handleUpdatePageSize(value: string | number | bigint | boolean | Record<string, string | number> | null) {
   if (props.pending || !value) return
   const size = Number(value)
   if (!Number.isNaN(size) && size > 0) {

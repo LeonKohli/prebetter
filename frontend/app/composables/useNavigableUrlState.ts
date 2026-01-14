@@ -1,5 +1,6 @@
 import type { LocationQuery } from 'vue-router'
 import type { SortingState, ColumnFiltersState, VisibilityState } from '@tanstack/vue-table'
+import { useDebounceFn } from '@vueuse/core'
 
 type PageSize = 10 | 20 | 50 | 100
 type SortOrder = 'asc' | 'desc'
@@ -66,12 +67,30 @@ export function useNavigableUrlState(options: {
     return colString.split(',').filter(col => col.trim())
   }
 
-  // Update URL using router.push for user actions, router.replace for programmatic updates
-  const updateUrl = async (updates: LocationQuery, isUserAction = false) => {
+  // Debounce accumulator - batches rapid URL updates to prevent race conditions
+  // Uses plain object (not ref) to avoid reactivity overhead
+  let pendingUpdates: LocationQuery = {}
+  let pendingHasUserAction = false
+
+  // Clear pending updates to prevent stale debounced flushes from corrupting URL
+  // MUST be called before any direct router.push/replace that bypasses the debounce
+  const clearPendingUpdates = () => {
+    pendingUpdates = {}
+    pendingHasUserAction = false
+  }
+
+  const flushPendingUpdates = async () => {
+    if (Object.keys(pendingUpdates).length === 0) return
+    
+    // CRITICAL: Capture and reset BEFORE await to prevent concurrent flush issues
+    const updates = { ...pendingUpdates }
+    const isUserAction = pendingHasUserAction
+    pendingUpdates = {}
+    pendingHasUserAction = false
+    
     const currentQuery = { ...route.query }
     const newQuery = { ...currentQuery, ...updates }
     
-    // Remove empty values
     Object.keys(newQuery).forEach(key => {
       if (newQuery[key] === '' || newQuery[key] === null || newQuery[key] === undefined) {
         delete newQuery[key]
@@ -79,12 +98,19 @@ export function useNavigableUrlState(options: {
     })
     
     if (isUserAction) {
-      // User action: create history entry
       await router.push({ query: newQuery })
     } else {
-      // Programmatic update: replace current entry
       await router.replace({ query: newQuery })
     }
+  }
+
+  // 50ms debounce / 200ms maxWait: balances batching rapid updates vs responsiveness
+  const debouncedFlush = useDebounceFn(flushPendingUpdates, 50, { maxWait: 200 })
+
+  const updateUrl = (updates: LocationQuery, isUserAction = false) => {
+    Object.assign(pendingUpdates, updates)
+    if (isUserAction) pendingHasUserAction = true // Sticky: once true, stays true until flush
+    debouncedFlush()
   }
 
   // Computed refs that read from route.query
@@ -233,6 +259,8 @@ export function useNavigableUrlState(options: {
 
   // Navigate to alert details (always a user action)
   const navigateToDetails = async (details: { sourceIp: string; targetIp: string; classification: string; expectedCount?: number }) => {
+    clearPendingUpdates()
+    
     // Set skeleton hint if we know expected row count
     if (details.expectedCount) {
       const { setHint } = useSkeletonHint()
@@ -259,6 +287,7 @@ export function useNavigableUrlState(options: {
   }
 
   const resetToDefaults = (): void => {
+    clearPendingUpdates()
     router.replace({ query: {} })
   }
 

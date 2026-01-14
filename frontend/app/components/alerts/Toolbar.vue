@@ -168,8 +168,8 @@ const isDrilldown = computed(() => {
 async function backToGroups() {
   // Build a single navigation update to avoid racing URL pushes
   const { classification_text, source_ipv4, target_ipv4, ...rest } = urlState.filters.value
-  const newQuery: Record<string, any> = {
-    ...route.query,
+  const newQuery: Record<string, string | undefined> = {
+    ...route.query as Record<string, string | undefined>,
     view: 'grouped',
     sort: 'detected_at:desc',
     page: '1',
