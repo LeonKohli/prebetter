@@ -1,18 +1,19 @@
 import { z } from 'zod'
 
 // Strict schemas for create/edit forms
+// Zod 4: Use { error: 'message' } instead of string shorthand
 export const usernameSchema = z
   .string()
-  .min(3, 'Username must be at least 3 characters')
-  .max(50, 'Username must be less than 50 characters')
+  .min(3, { error: 'Username must be at least 3 characters' })
+  .max(50, { error: 'Username must be less than 50 characters' })
 
 export const emailSchema = z
   .string()
-  .email('Invalid email address')
+  .email({ error: 'Invalid email address' })
 
 export const fullNameSchema = z
   .string()
-  .max(100, 'Full name must be less than 100 characters')
+  .max(100, { error: 'Full name must be less than 100 characters' })
   .optional()
   .or(z.literal(''))
 
@@ -38,8 +39,8 @@ export const changePasswordSchema = z.object({
   newPassword: passwordSchema,
   confirmPassword: passwordSchema,
 }).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+  error: "Passwords don't match",
+  path: ['confirmPassword'],
 })
 
 export const resetPasswordSchema = z.object({

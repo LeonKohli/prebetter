@@ -10,12 +10,12 @@
 
       <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
-          <FormField v-slot="{ componentField }" name="newPassword">
+          <FormField v-slot="{ field }" name="newPassword">
             <FormItem>
               <FormLabel>New Password</FormLabel>
               <FormControl>
                 <div class="flex gap-2">
-                  <Input type="text" v-bind="componentField" placeholder="Enter new password" />
+                  <Input type="text" v-bind="field" placeholder="Enter new password" />
                   <Button type="button" size="sm" variant="outline" @click="generatePassword">
                     <Icon name="lucide:dice-3" class="size-4" />
                   </Button>
@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { toTypedSchema } from '@vee-validate/zod'
+import { toFormValidator } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
 interface User {
@@ -80,7 +80,7 @@ const isOpen = ref(false)
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toTypedSchema(resetPasswordSchema),
+  validationSchema: toFormValidator(resetPasswordSchema),
   initialValues: {
     newPassword: '',
   },

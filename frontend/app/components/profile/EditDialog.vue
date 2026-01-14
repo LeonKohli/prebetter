@@ -16,31 +16,31 @@
 
       <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
-          <FormField v-slot="{ componentField }" name="username">
+          <FormField v-slot="{ field }" name="username">
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input v-bind="componentField" placeholder="Enter username" />
+                <Input v-bind="field" placeholder="Enter username" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="email">
+          <FormField v-slot="{ field }" name="email">
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" v-bind="componentField" placeholder="Enter email" />
+                <Input type="email" v-bind="field" placeholder="Enter email" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="fullName">
+          <FormField v-slot="{ field }" name="fullName">
             <FormItem>
               <FormLabel>Full Name <span class="text-muted-foreground text-sm">(optional)</span></FormLabel>
               <FormControl>
-                <Input v-bind="componentField" placeholder="Enter your full name" />
+                <Input v-bind="field" placeholder="Enter your full name" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { toTypedSchema } from '@vee-validate/zod'
+import { toFormValidator } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 import type { User } from '#auth-utils'
 
@@ -82,7 +82,7 @@ const isOpen = ref(false)
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toTypedSchema(profileEditSchema),
+  validationSchema: toFormValidator(profileEditSchema),
   initialValues: {
     username: props.user.username,
     email: props.user.email,

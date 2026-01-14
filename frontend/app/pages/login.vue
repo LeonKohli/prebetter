@@ -23,12 +23,12 @@
                 </AlertDescription>
               </Alert>
 
-              <FormField v-slot="{ componentField }" name="username">
+              <FormField v-slot="{ field }" name="username">
                 <FormItem>
                   <FormLabel>Username</FormLabel>
                   <FormControl>
                     <Input
-                      v-bind="componentField"
+                      v-bind="field"
                       placeholder="Username"
                       autocomplete="username"
                       autofocus
@@ -39,13 +39,13 @@
                 </FormItem>
               </FormField>
 
-              <FormField v-slot="{ componentField }" name="password">
+              <FormField v-slot="{ field }" name="password">
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
                     <div class="relative">
                       <Input
-                        v-bind="componentField"
+                        v-bind="field"
                         :type="showPassword ? 'text' : 'password'"
                         placeholder="••••••••"
                         autocomplete="current-password"
@@ -87,7 +87,7 @@
 
 <script setup lang="ts">
 import { AlertTriangle, Eye, EyeOff } from 'lucide-vue-next'
-import { toTypedSchema } from '@vee-validate/zod'
+import { toFormValidator } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
 definePageMeta({
@@ -111,7 +111,7 @@ const togglePasswordVisibility = () => {
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toTypedSchema(loginSchema),
+  validationSchema: toFormValidator(loginSchema),
   initialValues: {
     username: '',
     password: '',

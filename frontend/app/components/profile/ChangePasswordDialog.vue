@@ -16,31 +16,31 @@
 
       <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
-          <FormField v-slot="{ componentField }" name="currentPassword">
+          <FormField v-slot="{ field }" name="currentPassword">
             <FormItem>
               <FormLabel>Current Password</FormLabel>
               <FormControl>
-                <Input type="password" v-bind="componentField" />
+                <Input type="password" v-bind="field" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="newPassword">
+          <FormField v-slot="{ field }" name="newPassword">
             <FormItem>
               <FormLabel>New Password</FormLabel>
               <FormControl>
-                <Input type="password" v-bind="componentField" />
+                <Input type="password" v-bind="field" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="confirmPassword">
+          <FormField v-slot="{ field }" name="confirmPassword">
             <FormItem>
               <FormLabel>Confirm New Password</FormLabel>
               <FormControl>
-                <Input type="password" v-bind="componentField" />
+                <Input type="password" v-bind="field" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { toTypedSchema } from '@vee-validate/zod'
+import { toFormValidator } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
 // Emits
@@ -77,7 +77,7 @@ const isOpen = ref(false)
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toTypedSchema(changePasswordSchema),
+  validationSchema: toFormValidator(changePasswordSchema),
   initialValues: {
     currentPassword: '',
     newPassword: '',
