@@ -16,50 +16,50 @@
 
       <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
-          <FormField v-slot="{ componentField }" name="username">
+          <FormField v-slot="{ field }" name="username">
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input v-bind="componentField" placeholder="Enter username" />
+                <Input v-bind="field" placeholder="Enter username" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="email">
+          <FormField v-slot="{ field }" name="email">
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" v-bind="componentField" placeholder="Enter email" />
+                <Input type="email" v-bind="field" placeholder="Enter email" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="fullName">
+          <FormField v-slot="{ field }" name="fullName">
             <FormItem>
               <FormLabel>Full Name</FormLabel>
               <FormControl>
-                <Input v-bind="componentField" placeholder="Enter full name (optional)" />
+                <Input v-bind="field" placeholder="Enter full name (optional)" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="password">
+          <FormField v-slot="{ field }" name="password">
             <FormItem>
               <FormLabel>Password</FormLabel>
               <FormControl>
-                <Input type="text" v-bind="componentField" placeholder="Enter password" />
+                <Input type="text" v-bind="field" placeholder="Enter password" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="isSuperuser" type="checkbox" :unchecked-value="false">
+          <FormField v-slot="{ value, handleChange }" name="isSuperuser" type="checkbox" :unchecked-value="false">
             <FormItem class="flex flex-row items-start space-x-3 space-y-0">
               <FormControl>
-                <Checkbox v-bind="componentField" />
+                <Checkbox :checked="value" @update:checked="handleChange" />
               </FormControl>
               <div class="space-y-1 leading-none">
                 <FormLabel>Administrator</FormLabel>
@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { toTypedSchema } from '@vee-validate/zod'
+import { toFormValidator } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 import type { User } from '#auth-utils'
 
@@ -101,7 +101,7 @@ const isOpen = ref(false)
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toTypedSchema(userCreateSchema),
+  validationSchema: toFormValidator(userCreateSchema),
   initialValues: {
     username: '',
     email: '',
