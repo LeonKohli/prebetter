@@ -109,13 +109,19 @@ class AlertRepository(BaseRepository[Alert]):
             CorrelationAlert.name.label("correlation_description"),
         ).distinct()
 
-    def _build_base_joins(self, query):
+    def _build_base_joins(self, query, require_ips: bool = True):
         """
         Apply standard JOINs for alert queries.
 
         All join conditions are defined HERE - single source of truth.
+
+        Args:
+            query: SQLAlchemy query to add joins to
+            require_ips: If True (default), use INNER JOINs to only include
+                alerts with both source AND target IPv4 addresses.
+                If False, use LEFT OUTER JOINs to include all alerts.
         """
-        return (
+        query = (
             query.select_from(Alert)
             .outerjoin(DetectTime, Alert._ident == DetectTime._message_ident)
             .outerjoin(
@@ -130,25 +136,35 @@ class AlertRepository(BaseRepository[Alert]):
             .outerjoin(
                 CorrelationAlert, CorrelationAlert._message_ident == Alert._ident
             )
-            .outerjoin(
-                self._source_addr,
-                and_(
-                    self._source_addr._message_ident == Alert._ident,
-                    self._source_addr._parent_type == "S",
-                    self._source_addr.category == "ipv4-addr",
-                ),
-            )
-            .outerjoin(
-                self._target_addr,
-                and_(
-                    self._target_addr._message_ident == Alert._ident,
-                    self._target_addr._parent_type == "T",
-                    self._target_addr.category == "ipv4-addr",
-                ),
-            )
-            .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
-            .outerjoin(Node, get_node_join_conditions(Alert._ident))
         )
+
+        # Source address join - INNER if require_ips, else LEFT OUTER
+        source_join_condition = and_(
+            self._source_addr._message_ident == Alert._ident,
+            self._source_addr._parent_type == "S",
+            self._source_addr.category == "ipv4-addr",
+        )
+        if require_ips:
+            query = query.join(self._source_addr, source_join_condition)
+        else:
+            query = query.outerjoin(self._source_addr, source_join_condition)
+
+        # Target address join - INNER if require_ips, else LEFT OUTER
+        target_join_condition = and_(
+            self._target_addr._message_ident == Alert._ident,
+            self._target_addr._parent_type == "T",
+            self._target_addr.category == "ipv4-addr",
+        )
+        if require_ips:
+            query = query.join(self._target_addr, target_join_condition)
+        else:
+            query = query.outerjoin(self._target_addr, target_join_condition)
+
+        query = query.outerjoin(
+            Analyzer, get_analyzer_join_conditions(Alert._ident)
+        ).outerjoin(Node, get_node_join_conditions(Alert._ident))
+
+        return query
 
     def _apply_filters(
         self,
@@ -265,7 +281,7 @@ class AlertRepository(BaseRepository[Alert]):
         """
         # Build query
         query = self._build_base_select()
-        query = self._build_base_joins(query)
+        query = self._build_base_joins(query, require_ips=filters.require_ips)
         query = self._apply_filters(query, filters)
 
         # Get total count before pagination
@@ -314,16 +330,13 @@ class AlertRepository(BaseRepository[Alert]):
             List of aggregated timeline data points
 
         Note:
-            Only counts alerts with BOTH source AND target IPv4 addresses to match
-            the grouped alerts view (which uses Prebetter_Pair table).
-            TODO: Consider showing address-less alerts separately in the UI.
+            When require_ips is True (default), only counts alerts with BOTH
+            source AND target IPv4 addresses.
         """
         source_addr = aliased(Address)
         target_addr = aliased(Address)
 
-        # Use inner joins for source/target to only count alerts that have BOTH addresses.
-        # This matches the grouped view behavior (Prebetter_Pair only has alerts with addresses).
-        # TODO: Review whether address-less alerts should be shown in a separate UI section.
+        # Build base query
         query = (
             select(
                 func.date_format(DetectTime.time, date_format).label("time_bucket"),
@@ -337,23 +350,26 @@ class AlertRepository(BaseRepository[Alert]):
             .outerjoin(Impact, Impact._message_ident == Alert._ident)
             .outerjoin(Classification, Classification._message_ident == Alert._ident)
             .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
-            .join(
-                source_addr,
-                and_(
-                    source_addr._message_ident == Alert._ident,
-                    source_addr._parent_type == "S",
-                    source_addr.category == "ipv4-addr",
-                ),
-            )
-            .join(
-                target_addr,
-                and_(
-                    target_addr._message_ident == Alert._ident,
-                    target_addr._parent_type == "T",
-                    target_addr.category == "ipv4-addr",
-                ),
-            )
         )
+
+        # Address joins - INNER if require_ips, else LEFT OUTER
+        source_join_condition = and_(
+            source_addr._message_ident == Alert._ident,
+            source_addr._parent_type == "S",
+            source_addr.category == "ipv4-addr",
+        )
+        target_join_condition = and_(
+            target_addr._message_ident == Alert._ident,
+            target_addr._parent_type == "T",
+            target_addr.category == "ipv4-addr",
+        )
+
+        if filters.require_ips:
+            query = query.join(source_addr, source_join_condition)
+            query = query.join(target_addr, target_join_condition)
+        else:
+            query = query.outerjoin(source_addr, source_join_condition)
+            query = query.outerjoin(target_addr, target_join_condition)
 
         # Apply shared filter logic - pass local aliases, skip server filter (no Node join)
         query = self._apply_filters(
@@ -389,7 +405,7 @@ class AlertRepository(BaseRepository[Alert]):
             SQLAlchemy Result object configured for streaming (yield_per)
         """
         query = self._build_base_select()
-        query = self._build_base_joins(query)
+        query = self._build_base_joins(query, require_ips=filters.require_ips)
 
         # If specific alert IDs provided, filter by those only
         if alert_ids:
@@ -611,6 +627,9 @@ class GroupedAlertRepository(BaseRepository):
     Encapsulates all grouped query logic - no more 3 separate query builders.
 
     The pair_table is injected via DI from app.state (reflected once at startup).
+
+    Note: Grouped view always requires IPs since it groups BY source/target IP pair.
+    The require_ips filter parameter is ignored for grouped queries.
     """
 
     def __init__(self, db: Session, pair_table: Table):

@@ -124,6 +124,9 @@ async def get_timeline(
     target_ip: str | None = Query(
         None, description="Filter by target IP or CIDR (e.g., 10.0.0.0/8)"
     ),
+    require_ips: bool = Query(
+        True, description="Only include alerts with both source AND target IPs"
+    ),
 ) -> TimelineResponse:
     """Get timeline data for alerts chart."""
     try:
@@ -139,6 +142,7 @@ async def get_timeline(
             analyzer_name=analyzer_name,
             source_ip=source_ip,
             target_ip=target_ip,
+            require_ips=require_ips,
         )
 
         date_format = DATE_FORMATS[time_frame]

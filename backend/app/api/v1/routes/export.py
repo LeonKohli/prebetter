@@ -103,6 +103,11 @@ async def export_alerts(
     ),
     server: str | None = Query(None, description="Filter by server"),
     hours_back: int | None = Query(None, description="Past N hours (overrides dates)"),
+    require_ips: bool = Query(
+        True,
+        description="Only include alerts with both source AND target IPs. "
+        "Set to false to include all alerts.",
+    ),
 ) -> StreamingResponse:
     """
     Export alerts in the specified format.

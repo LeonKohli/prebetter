@@ -263,7 +263,26 @@
               {{ targetIpHint }}
             </p>
           </div>
+
         </div>
+      </div>
+
+      <Separator />
+
+      <div class="p-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <Icon name="lucide:network" class="size-4 text-muted-foreground" />
+            <Label class="text-xs font-normal">Show all alerts</Label>
+          </div>
+          <Switch
+            :model-value="!requireIps"
+            @update:model-value="(v: boolean) => setRequireIps(!v)"
+          />
+        </div>
+        <p class="text-xs text-muted-foreground mt-1.5 pl-6">
+          Include alerts without IP addresses (switches to list view)
+        </p>
       </div>
     </PopoverContent>
   </Popover>
@@ -401,6 +420,24 @@ function clearTargetIp() {
   applyTargetIp()
 }
 
+const requireIps = computed(() => {
+  const val = urlState.filters.value.require_ips
+  return val === undefined || val === 'true' || val === 1 || val === '1'
+})
+
+function setRequireIps(checked: boolean) {
+  const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
+  if (checked) {
+    delete nextFilters.require_ips
+  } else {
+    nextFilters.require_ips = 'false'
+    if (urlState.view.value === 'grouped') {
+      urlState.view.value = 'ungrouped'
+    }
+  }
+  urlState.filters.value = nextFilters
+}
+
 // Active filter badges
 const activeFilters = computed(() => {
   const result: { key: string; label: string; color?: string; icon?: string }[] = []
@@ -420,12 +457,16 @@ const activeFilters = computed(() => {
   if (urlState.filters.value.target_ipv4) {
     result.push({ key: 'target_ipv4', label: String(urlState.filters.value.target_ipv4), icon: 'lucide:arrow-down-right' })
   }
+  if (!requireIps.value) {
+    result.push({ key: 'require_ips', label: 'All alerts', icon: 'lucide:globe' })
+  }
   return result
 })
 
 function clearFilter(key: string) {
   if (key === 'source_ipv4') return clearSourceIp()
   if (key === 'target_ipv4') return clearTargetIp()
+  if (key === 'require_ips') return setRequireIps(true)
 
   const [type, value] = key.split(':')
   if (type === 'severity') selectedSeverities.value = selectedSeverities.value.filter(v => v !== value)
@@ -442,6 +483,7 @@ function clearAllFilters() {
   delete nextFilters.classification_text
   delete nextFilters.source_ipv4
   delete nextFilters.target_ipv4
+  delete nextFilters.require_ips
   urlState.filters.value = nextFilters
 }
 </script>

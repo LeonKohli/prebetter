@@ -2,6 +2,7 @@ interface UseAlertStreamOptions {
   immediate?: boolean
   onNewAlerts?: (count: number) => void
   debounceMs?: number
+  requireIps?: Ref<boolean>
 }
 
 interface AlertNotification {
@@ -10,13 +11,19 @@ interface AlertNotification {
 }
 
 export function useAlertStream(options: UseAlertStreamOptions = {}) {
-  const { immediate = true, onNewAlerts, debounceMs = 1000 } = options
+  const { immediate = true, onNewAlerts, debounceMs = 1000, requireIps } = options
 
   const debouncedOnNewAlerts = onNewAlerts
     ? useDebounceFn(onNewAlerts, debounceMs)
     : undefined
 
-  const url = '/api/alerts-stream'
+  const url = computed(() => {
+    const base = '/api/alerts-stream'
+    if (requireIps && !requireIps.value) {
+      return `${base}?require_ips=false`
+    }
+    return base
+  })
 
   const { status, data, error, close, open } = useEventSource(url, ['alerts'], {
     immediate,

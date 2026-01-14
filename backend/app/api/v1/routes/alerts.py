@@ -131,6 +131,9 @@ async def stream_alerts(
     request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
     last_id: Optional[int] = Query(None, description="Last known alert ID"),
+    require_ips: bool = Query(
+        True, description="Only notify for alerts with both source AND target IPs"
+    ),
 ):
     """
     Server-Sent Events endpoint for real-time alert updates.
@@ -186,11 +189,18 @@ async def stream_alerts(
                 # This is critical: SSE connections can live for hours/days
                 with PreludeSessionLocal() as db:
                     query, models = build_alert_base_query(db)
-                    query = (
-                        query.where(Alert._ident > current_last_id)
-                        .order_by(Alert._ident.asc())
-                        .limit(50)
-                    )
+                    source_addr = models["source_addr"]
+                    target_addr = models["target_addr"]
+
+                    query = query.where(Alert._ident > current_last_id)
+
+                    if require_ips:
+                        query = query.where(
+                            source_addr.address.is_not(None),
+                            target_addr.address.is_not(None),
+                        )
+
+                    query = query.order_by(Alert._ident.asc()).limit(50)
 
                     results = db.execute(query).all()
 
