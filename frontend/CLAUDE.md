@@ -380,7 +380,6 @@ onUnmounted(() => {
 
 **Current Status:**
 - Vitest configured with 2 test files (date utilities only)
-- **⚠️ Critical Gap**: ~5% coverage - no component, page, or integration tests
 - Type checking via `bun run typecheck`
 
 **Testing Commands:**
@@ -388,16 +387,6 @@ onUnmounted(() => {
 bun run test        # Run tests (currently only 2 utility test files)
 bun run typecheck   # Check TypeScript types
 ```
-
-**Missing Test Coverage:**
-- ❌ All Vue components (30+ components untested)
-- ❌ All pages (login, dashboard, profile, etc.)
-- ❌ Authentication flow
-- ❌ Form validation and submission
-- ❌ API communication
-- ❌ State management
-- ❌ Route navigation
-- **Priority**: HIGH - Add component and integration tests
 
 ## Common Development Tasks
 
@@ -421,18 +410,6 @@ Use vee-validate with Zod schemas for validation. Either `ref()` or `reactive()`
 - **API Calls**: Always use proxy routes (`/api/*`)
 - **Type Safety**: TypeScript is enforced throughout
 - **Git Commits**: Never include "Co-Authored-By: Claude"
-
-## Known Issues & Limitations
-
-1. **Minimal Test Coverage** (~5%)
-   - Only date utility functions tested
-   - No component, page, or integration tests
-   - **Priority**: HIGH - Implement component testing
-
-2. **Empty Admin Directory**
-   - `/app/pages/admin/` exists but is empty
-   - Admin features currently in `/profile.vue`
-   - Consider populating or removing directory
 
 ## useFetch Best Practices
 

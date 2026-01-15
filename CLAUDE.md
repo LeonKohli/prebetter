@@ -142,30 +142,6 @@ When backend is running:
 - **Type Safety**: Enforce TypeScript and Python type hints
 - **Component Isolation**: Backend and frontend are independently deployable
 
-## Known Issues & Limitations
-
-### Security
-1. **No Rate Limiting**: Login endpoint (`/api/v1/auth/token`) has no rate limiting
-   - **Risk**: Vulnerable to brute force attacks
-   - **Priority**: HIGH - Implement before production deployment
-   - **Solution**: Add slowapi or similar rate limiting library
-
-2. **No Token Revocation**: JWTs valid until expiration
-   - Access tokens: 15 minutes (short window limits damage)
-   - Refresh tokens: 7 days (server-side only, never exposed to client)
-   - Logout only clears frontend session
-   - **Mitigation**: Short access token window + server-side storage reduces risk
-
-### Testing & CI/CD
-1. **Tests Not Running in CI**: 112 backend tests exist but don't execute in GitHub Actions
-   - **Priority**: URGENT - Enable pytest in CI pipeline
-   - Current CI only runs Ruff linting
-
-2. **Frontend Testing Gap**: Minimal test coverage (~5%)
-   - Only utility functions tested
-   - No component, page, or integration tests
-   - **Priority**: HIGH - Add component tests
-
 ## Session & Token Management
 
 ### Token Lifetimes
