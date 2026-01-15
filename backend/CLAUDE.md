@@ -100,57 +100,7 @@ ruff check . --fix
 ruff format .
 ```
 
-### Database
-```bash
-# Load Prelude database dump
-gunzip < prelude.sql.gz | mysql -u root -p prelude
-
-# Connect to databases
-mysql -u <username> -p prelude
-mysql -u <username> -p prebetter
-```
-
 ### Package Management (using uv)
-```bash
-# Create virtual environment
-uv venv
-
-# Activate virtual environment
-source .venv/bin/activate  # Linux/Mac
-
-# Install dependencies
-uv sync
-
-# Add new dependency
-uv add <package-name>
-```
-
-## Environment Configuration
-
-**Required** in `.env` file:
-```env
-# MySQL Connection (REQUIRED)
-MYSQL_USER=your_user
-MYSQL_PASSWORD=your_password
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_PRELUDE_DB=prelude
-MYSQL_PREBETTER_DB=prebetter
-
-# Security (CRITICAL - Change in production!)
-SECRET_KEY=your-secure-random-key-here  # Used for JWT signing (32+ characters)
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=15         # Short-lived access tokens (auto-refreshed)
-REFRESH_TOKEN_EXPIRE_DAYS=7            # Long-lived refresh tokens (session lifetime)
-BCRYPT_ROUNDS=14
-
-# Environment & Logging
-ENVIRONMENT=development  # development|production
-LOG_LEVEL=INFO          # DEBUG|INFO|WARNING|ERROR
-
-# CORS (Restrict in production!)
-BACKEND_CORS_ORIGINS=["http://localhost:3000"]  # Frontend URL
-```
 
 **Critical Notes**:
 - The codebase uses `SECRET_KEY` for JWT signing (NOT `JWT_SECRET_KEY`)
@@ -267,13 +217,6 @@ sort_options = {"detect_time": DetectTime.time}
 sort_options = {SortField.DETECT_TIME: DetectTime.time}
 ```
 
-## API Documentation
-
-- Interactive Swagger UI: `http://localhost:8000/api/v1/docs`
-- ReDoc: `http://localhost:8000/api/v1/redoc`
-- OpenAPI JSON: `http://localhost:8000/api/v1/openapi.json`
-
-
 ## Important Implementation Details
 
 ### Python & Dependencies
@@ -287,16 +230,6 @@ sort_options = {SortField.DETECT_TIME: DetectTime.time}
 - **Distinct Results**: Use `.distinct()` to eliminate duplicates
 - **Batch Processing**: Use `yield_per(1000)` for exports
 
-### Security Considerations
-- **Password Hashing**: Bcrypt with configurable rounds (default 14)
-- **JWT Claims**: Currently only `sub`, `exp`, `iat`, `jti`
-- **CORS**: Restricted by default via `BACKEND_CORS_ORIGINS`
-- **⚠️ No Rate Limiting**: Login endpoint vulnerable to brute force
-  - **Priority**: HIGH - Implement before production
-  - **Solution**: Add slowapi library with `@limiter.limit("5/minute")`
-- **⚠️ No Token Revocation**: Tokens valid until expiration, logout only clears frontend
-  - **Mitigation**: 8-hour window + server-side storage reduces risk
-
 ### Operational Details
 - **Timezone Handling**: All datetimes use UTC via `datetime_utils.ensure_timezone()`
 - **Request Tracking**: Unique ID in `X-Request-ID` header
@@ -308,7 +241,6 @@ sort_options = {SortField.DETECT_TIME: DetectTime.time}
 - **Test Suite**: 112 tests across 12 test modules
 - **Test Databases**: Uses separate test databases
 - **Fixtures**: Database sessions provided via `conftest.py`
-- **⚠️ CI/CD Gap**: Tests exist but don't run in GitHub Actions
   - **Priority**: URGENT - Add pytest step to CI pipeline
 
 ## Common Development Tasks
