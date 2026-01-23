@@ -218,6 +218,30 @@ HEARTBEAT_DELETE_STATEMENTS: Tuple[Tuple[str, str], ...] = (
     ),
 )
 
+# Tables to optimize after bulk deletes (ordered by typical size)
+TABLES_TO_OPTIMIZE: Tuple[str, ...] = (
+    "Prelude_Address",
+    "Prelude_Analyzer",
+    "Prelude_AdditionalData",
+    "Prelude_Node",
+    "Prelude_Process",
+    "Prelude_Reference",
+    "Prelude_CreateTime",
+    "Prelude_AnalyzerTime",
+    "Prelude_DetectTime",
+    "Prelude_Classification",
+    "Prelude_Impact",
+    "Prelude_Assessment",
+    "Prelude_Service",
+    "Prelude_Heartbeat",
+    "Prelude_Alert",
+    "Prelude_Source",
+    "Prelude_Target",
+    "Prelude_Alertident",
+    "Prelude_CorrelationAlert",
+    "Prebetter_Pair",
+)
+
 HEARTBEAT_ORPHAN_TASKS: Tuple[Tuple[str, str, str], ...] = (
     (
         "orphan_heartbeat_additional_data",
@@ -451,6 +475,29 @@ def _gather_preview(
     return preview
 
 
+def _optimize_tables(conn: Connection) -> int:
+    """Optimize tables to reclaim disk space after bulk deletes.
+
+    InnoDB doesn't release disk space after DELETE - it marks pages as reusable.
+    OPTIMIZE TABLE rebuilds the table and reclaims the freed space.
+
+    Returns:
+        Number of tables optimized
+    """
+    optimized = 0
+    for table in TABLES_TO_OPTIMIZE:
+        typer.echo(f"  Optimizing {table}...", nl=False)
+        try:
+            # OPTIMIZE TABLE returns a result set, not affected rows
+            conn.execute(text(f"OPTIMIZE TABLE {table}"))
+            conn.commit()
+            typer.secho(" done", fg=typer.colors.GREEN)
+            optimized += 1
+        except Exception as e:
+            typer.secho(f" failed: {e}", fg=typer.colors.RED)
+    return optimized
+
+
 @app.command()
 def run(
     alert_retention_days: int = typer.Option(
@@ -485,16 +532,22 @@ def run(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Preview what would be deleted without making changes"
     ),
+    optimize: bool = typer.Option(
+        True,
+        "--optimize/--no-optimize",
+        help="Optimize tables after cleanup to reclaim disk space",
+    ),
 ) -> None:
     """Execute cleanup with separate alert (-a) and heartbeat (-h) retention.
 
     Remove old alerts and heartbeats with independent retention policies.
     Heartbeats default to alert retention if -h not specified.
+    By default, tables are optimized after cleanup to reclaim disk space.
 
     Examples:
-        run -a 30           # Keep 30 days of both
+        run -a 30           # Keep 30 days of both, optimize tables
         run -a 30 -h 7      # Keep 30d alerts, 7d heartbeats
-        run -a 60 -h 14 --dry-run
+        run --no-optimize   # Skip table optimization
     """
     # Default heartbeat retention to alert retention if not specified
     if heartbeat_retention_days is None:
@@ -516,6 +569,7 @@ def run(
     )
     typer.echo(f"Batch size: {batch_size:,}")
     typer.echo(f"Cleanup orphans: {'Yes' if cleanup_orphans else 'No'}")
+    typer.echo(f"Optimize tables: {'Yes' if optimize else 'No'}")
 
     if dry_run:
         typer.secho(
@@ -625,6 +679,17 @@ def run(
                     orphan_stats.items(), key=lambda x: x[1], reverse=True
                 ):
                     typer.echo(f"  {table}: {count:,}")
+
+            # Optimize tables to reclaim disk space
+            if optimize and (alert_total > 0 or heartbeat_total > 0):
+                typer.echo("\n" + "=" * 60)
+                typer.secho("Optimizing Tables", fg=typer.colors.CYAN, bold=True)
+                typer.echo("=" * 60)
+                optimized_count = _optimize_tables(conn)
+                typer.secho(
+                    f"✓ Optimized {optimized_count} tables",
+                    fg=typer.colors.GREEN,
+                )
 
             typer.echo("=" * 60)
             typer.secho("✓ Cleanup complete!", fg=typer.colors.GREEN, bold=True)
