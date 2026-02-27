@@ -1,35 +1,30 @@
-# Prebetter - IDS Dashboard
+# Prebetter
 
-A modern Intrusion Detection System (IDS) dashboard that provides a comprehensive interface for monitoring and analyzing security alerts from Prelude IDS.
+A web dashboard for [Prelude IDS](https://www.prelude-siem.org/). Browse, filter, and analyze security alerts through a modern interface instead of Prelude's default tooling.
 
-## Overview
+## What is this?
 
-Prebetter consists of two main components working together:
+Prebetter connects directly to Prelude's MySQL database and gives you a web UI on top of it. You get alert filtering, timeline stats, heartbeat monitoring, CSV export, and user management with role-based access.
 
-- **Backend API**: FastAPI-based REST API that interfaces with Prelude databases
-- **Frontend Dashboard**: Nuxt.js 3 application providing interactive visualizations
+Prelude IDS is an open-source intrusion detection system. Its default interfaces are... not great. This project exists because we needed something better.
 
 ## Architecture
 
 ```
-prebetter/
-├── backend/          # FastAPI backend service
-├── frontend/         # Nuxt.js frontend application  
-├── CLAUDE.md        # AI assistant guidance
-└── README.md        # This file
+┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
+│   Browser    │────▶│   Frontend   │────▶│    Backend API   │
+│              │     │   (Nuxt 4)   │     │    (FastAPI)     │
+└─────────────┘     └──────────────┘     └────────┬────────┘
+                                                   │
+                                          ┌────────┴────────┐
+                                          │                 │
+                                    ┌─────▼─────┐   ┌──────▼──────┐
+                                    │ Prelude DB │   │ Prebetter DB│
+                                    │ (read-only)│   │  (users)    │
+                                    └───────────┘   └─────────────┘
 ```
 
-### Backend
-- FastAPI with Python 3.13+
-- Dual MySQL database system (Prelude + User management)
-- JWT authentication with role-based access control
-- Comprehensive API for alerts, statistics, and monitoring
-
-### Frontend  
-- Nuxt 3 with Vue 3 Composition API
-- Modern UI with shadcn-vue components
-- Real-time dashboards and data visualization
-- Responsive design with dark/light mode support
+The frontend is a Nuxt 4 / Vue 3 SPA (shadcn-vue, Tailwind CSS, dark/light mode). The backend is a FastAPI REST API with JWT auth. Two MySQL databases: Prelude's existing one (read-only) and a separate one for user management.
 
 ## Quick Start
 
@@ -72,37 +67,40 @@ prebetter/
 
 ## Features
 
-- **Security Alert Management**: View, filter, and analyze security alerts
-- **System Monitoring**: Real-time heartbeat monitoring of security agents
-- **Statistical Analysis**: Timeline views and summary statistics
-- **Data Export**: Export alerts in various formats for external analysis
-- **User Management**: Secure authentication and role-based access control
-- **Modern UI**: Responsive design with intuitive data visualization
+- Alert browsing with filtering by severity, classification, IP, date range
+- Alert grouping by source/target IP pairs
+- Heartbeat monitoring (which agents are alive, which dropped off)
+- Timeline and summary statistics
+- CSV export
+- JWT auth with superuser/regular user roles
+- Dark/light mode
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Nuxt 4, Vue 3, TypeScript, Tailwind CSS v4, shadcn-vue |
+| Backend | FastAPI, SQLAlchemy, Pydantic, PyJWT |
+| Database | MySQL 5.7+ (Prelude DB + user management DB) |
+| Package Managers | [uv](https://docs.astral.sh/uv/) (Python), [Bun](https://bun.sh/) (JS) |
 
 ## Documentation
 
-- **Backend Documentation**: See [backend/README.md](./backend/README.md)
-- **Frontend Documentation**: See [frontend/README.md](./frontend/README.md)
-- **Development Guide**: See [CLAUDE.md](./CLAUDE.md) for development patterns and best practices
-- **API Documentation**: Available at `/api/v1/docs` when backend is running
+- [Backend README](./backend/README.md) — API endpoints, database schema, setup details
+- [Frontend README](./frontend/README.md) — component structure, auth flow, styling
+- [API docs](http://localhost:8000/api/v1/docs) — interactive Swagger UI (when running)
 
-## Development
+## Motivation
 
-Each component has its own development workflow and requirements. Please refer to the individual README files in the `backend/` and `frontend/` directories for detailed instructions.
-
-### Key Technologies
-
-**Backend**: FastAPI, SQLAlchemy, PyJWT, pytest, ruff  
-**Frontend**: Nuxt 3, Vue 3, shadcn-vue, Tailwind CSS, TypeScript
+Prelude IDS does its job well, but the existing tools for actually looking at the data it collects haven't kept up. We needed a way to quickly browse alerts, see what's happening across our network, and not fight the UI while doing it. So we built one.
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes following the patterns in CLAUDE.md
-4. Test thoroughly
-5. Submit a pull request
+2. Create a feature branch from `dev`
+3. Test thoroughly
+4. Submit a pull request
 
 ## License
 
-This project is licensed under the GPL-3.0 License - see the LICENSE file for details.
+[GPL-3.0](./LICENSE)

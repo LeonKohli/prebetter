@@ -1,18 +1,10 @@
 # Prebetter Frontend
 
-Nuxt 4 application providing a modern IDS dashboard interface for Prelude IDS. Features real-time alert monitoring, heartbeat visualization, and user management.
+Nuxt 4 frontend for the Prebetter IDS dashboard. Handles alert views, heartbeat monitoring, charts, and user management.
 
-## Tech Stack
+## Tech stack
 
-- **Framework**: [Nuxt 4](https://nuxt.com/) with Vue 3 Composition API
-- **UI Components**: [shadcn-vue](https://www.shadcn-vue.com/) + [Reka UI](https://reka-ui.com/)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) with OKLCH color system
-- **Tables**: [TanStack Table](https://tanstack.com/table)
-- **Charts**: [ApexCharts](https://apexcharts.com/)
-- **Forms**: [vee-validate](https://vee-validate.logaretm.com/) + [Zod 4](https://zod.dev/)
-- **Auth**: [nuxt-auth-utils](https://github.com/atinux/nuxt-auth-utils) (server-side sessions)
-- **Icons**: [@nuxt/icon](https://nuxt.com/modules/icon) with Lucide
-- **Package Manager**: [Bun](https://bun.sh/)
+Built on [Nuxt 4](https://nuxt.com/) with Vue 3 Composition API. UI uses [shadcn-vue](https://www.shadcn-vue.com/) and [Reka UI](https://reka-ui.com/) on top of [Tailwind CSS v4](https://tailwindcss.com/) (OKLCH color system for theming). Tables powered by [TanStack Table](https://tanstack.com/table), charts by [ApexCharts](https://apexcharts.com/). Forms use [vee-validate](https://vee-validate.logaretm.com/) with [Zod 4](https://zod.dev/) for validation. Auth handled by [nuxt-auth-utils](https://github.com/atinux/nuxt-auth-utils) with server-side sessions. Uses [Bun](https://bun.sh/) as package manager.
 
 ## Quick Start
 
@@ -83,13 +75,13 @@ See `.env.example` for a complete template.
 
 ## Authentication
 
-The frontend uses a secure server-side proxy pattern:
+Tokens never touch the browser. Here's how it works:
 
-1. User credentials are sent to the frontend server
-2. Frontend authenticates with the backend and receives JWT tokens
-3. Tokens are stored in encrypted server-side sessions (never exposed to the browser)
-4. All API calls are proxied through the frontend server, which injects the JWT automatically
-5. The browser only sees an httpOnly session cookie
+1. User logs in, credentials go to the Nuxt server
+2. Server authenticates with the backend, gets JWT tokens
+3. Tokens are stored in an encrypted server-side session
+4. All API calls go through the Nuxt server, which injects the token
+5. Browser only ever sees an httpOnly session cookie
 
 ## Development
 
