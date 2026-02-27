@@ -12,16 +12,16 @@ Prelude IDS is an open-source intrusion detection system. Its default interfaces
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
-│   Browser    │────▶│   Frontend   │────▶│    Backend API   │
-│              │     │   (Nuxt 4)   │     │    (FastAPI)     │
+│   Browser   │────▶│   Frontend   │────▶│    Backend API  │
+│             │     │   (Nuxt 4)   │     │    (FastAPI)    │
 └─────────────┘     └──────────────┘     └────────┬────────┘
-                                                   │
-                                          ┌────────┴────────┐
+                                                  │
+                                          ┌───────┴─────────┐
                                           │                 │
-                                    ┌─────▼─────┐   ┌──────▼──────┐
-                                    │ Prelude DB │   │ Prebetter DB│
-                                    │ (read-only)│   │  (users)    │
-                                    └───────────┘   └─────────────┘
+                                    ┌─────▼──────┐   ┌──────▼───────┐
+                                    │ Prelude DB │   │ Prebetter DB │
+                                    │ (read-only │   │  (users)     │
+                                    └────────────┘   └──────────────┘
 ```
 
 The frontend is a Nuxt 4 / Vue 3 SPA (shadcn-vue, Tailwind CSS, dark/light mode). The backend is a FastAPI REST API with JWT auth. Two MySQL databases: Prelude's existing one (read-only) and a separate one for user management.
