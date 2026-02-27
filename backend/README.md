@@ -235,19 +235,13 @@ The API implements a structured lifecycle management approach:
      - `SECRET_KEY`: For JWT token generation.
      - `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time.
 
-5. **Import a dump of the Prelude Database (if needed for testing and development):**
-
-   ```bash
-   gunzip < prelude.sql.gz | mysql -u root -p prelude
-   ```
-
-6. **Start the API Server:**
+5. **Start the API Server:**
 
    ```bash
    fastapi dev
    ```
 
-7. **Create Initial User Account:**
+6. **Create Initial User Account:**
 
    The system no longer automatically creates default credentials for security reasons.
    You must manually create your first user account:
