@@ -9,10 +9,11 @@ Alert routes using FastAPI best practices.
 import asyncio
 import logging
 from enum import Enum
-from typing import Optional, AsyncGenerator, Annotated
+from collections.abc import AsyncIterable
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sse_starlette import EventSourceResponse, ServerSentEvent
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
@@ -126,15 +127,15 @@ async def list_alerts(
 
 # SSE endpoint for real-time alert streaming
 # IMPORTANT: Must be defined BEFORE /{alert_id} route to avoid path parameter matching
-@router.get("/stream")
+@router.get("/stream", response_class=EventSourceResponse)
 async def stream_alerts(
     request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
-    last_id: Optional[int] = Query(None, description="Last known alert ID"),
+    last_id: int | None = Query(None, description="Last known alert ID"),
     require_ips: bool = Query(
         True, description="Only notify for alerts with both source AND target IPs"
     ),
-):
+) -> AsyncIterable[ServerSentEvent]:
     """
     Server-Sent Events endpoint for real-time alert updates.
 
@@ -143,10 +144,6 @@ async def stream_alerts(
 
     IMPORTANT: This endpoint does NOT hold a database connection for the stream lifetime.
     Each poll acquires and releases a fresh session to avoid exhausting the pool.
-
-    Note: FastAPI's Depends() with yield is incompatible with SSE because the dependency
-    cleanup only runs when the request completes - which for SSE means never.
-    Manual session management inside the generator is the standard pattern.
     """
 
     # Authenticate once and immediately release the Prebetter DB session
@@ -154,85 +151,63 @@ async def stream_alerts(
         user_service = UserService(user_db)
         validate_access_token(token, user_service)
 
-    async def event_generator() -> AsyncGenerator[ServerSentEvent | dict, None]:
-        current_last_id = last_id
+    current_last_id = last_id
 
+    # Respect Last-Event-ID header for native SSE resume support
+    header_last_id = request.headers.get("last-event-id")
+    if header_last_id:
         try:
-            # Respect Last-Event-ID header for native SSE resume support
-            header_last_id = request.headers.get("last-event-id")
-            if header_last_id:
-                try:
-                    parsed_header_id = int(header_last_id)
-                    current_last_id = max(parsed_header_id, current_last_id or 0)
-                except ValueError:
-                    # Ignore malformed header values
-                    pass
+            parsed_header_id = int(header_last_id)
+            current_last_id = max(parsed_header_id, current_last_id or 0)
+        except ValueError:
+            pass
 
-            # Get initial max ID if not provided - use short-lived session
-            if current_last_id is None:
-                with PreludeSessionLocal() as db:
-                    max_id = db.scalar(select(func.max(Alert._ident)))
-                    current_last_id = max_id or 0
+    # Get initial max ID if not provided - use short-lived session
+    if current_last_id is None:
+        with PreludeSessionLocal() as db:
+            max_id = db.scalar(select(func.max(Alert._ident)))
+            current_last_id = max_id or 0
 
-            # Send immediate comment to establish connection
-            # This transitions EventSource from CONNECTING to OPEN instantly
-            yield ServerSentEvent(comment="connected")
+    # Send immediate comment to establish connection
+    # This transitions EventSource from CONNECTING to OPEN instantly
+    yield ServerSentEvent(comment="connected")
 
-            heartbeat_counter = 0
+    while True:
+        if await request.is_disconnected():
+            break
 
-            while True:
-                # Check if client disconnected
-                if await request.is_disconnected():
-                    break
+        # Acquire fresh session for EACH poll - releases immediately after
+        # This is critical: SSE connections can live for hours/days
+        with PreludeSessionLocal() as db:
+            query, models = build_alert_base_query(db)
+            source_addr = models["source_addr"]
+            target_addr = models["target_addr"]
 
-                # Acquire fresh session for EACH poll - releases immediately after
-                # This is critical: SSE connections can live for hours/days
-                with PreludeSessionLocal() as db:
-                    query, models = build_alert_base_query(db)
-                    source_addr = models["source_addr"]
-                    target_addr = models["target_addr"]
+            query = query.where(Alert._ident > current_last_id)
 
-                    query = query.where(Alert._ident > current_last_id)
+            if require_ips:
+                query = query.where(
+                    source_addr.address.is_not(None),
+                    target_addr.address.is_not(None),
+                )
 
-                    if require_ips:
-                        query = query.where(
-                            source_addr.address.is_not(None),
-                            target_addr.address.is_not(None),
-                        )
+            query = query.order_by(Alert._ident.asc()).limit(50)
 
-                    query = query.order_by(Alert._ident.asc()).limit(50)
+            results = db.execute(query).all()
 
-                    results = db.execute(query).all()
+            if results:
+                # Send minimal notification - just alert count and latest ID
+                # Frontend uses this to trigger targeted refetch, not display
+                latest_id = int(results[-1][0])  # Alert._ident is first column
+                yield ServerSentEvent(
+                    data={"count": len(results), "latest_id": latest_id},
+                    event="alerts",
+                    id=str(latest_id),
+                )
+                current_last_id = latest_id
 
-                    if results:
-                        # Send minimal notification - just alert count and latest ID
-                        # Frontend uses this to trigger targeted refetch, not display
-                        # This avoids bandwidth waste of sending full AlertListItem
-                        latest_id = int(results[-1][0])  # Alert._ident is first column
-                        yield {
-                            "id": str(latest_id),
-                            "event": "alerts",
-                            "data": f'{{"count": {len(results)}, "latest_id": {latest_id}}}',
-                        }
-                        current_last_id = latest_id
-
-                        # Reset heartbeat counter when we send data
-                        heartbeat_counter = 0
-                    else:
-                        heartbeat_counter += 1
-                        # Send keepalive every 6th iteration (30 seconds at 5s intervals)
-                        if heartbeat_counter >= 6:
-                            yield ServerSentEvent(comment="keepalive")
-                            heartbeat_counter = 0
-
-                # Session is now CLOSED - connection returned to pool
-                await asyncio.sleep(5)
-
-        except asyncio.CancelledError:
-            # Server shutdown/reload - exit cleanly so uvicorn doesn't hang
-            return
-
-    return EventSourceResponse(event_generator())
+        # Session is now CLOSED - connection returned to pool
+        await asyncio.sleep(5)
 
 
 @router.get("/groups", response_model=GroupedAlertResponse)
@@ -520,9 +495,9 @@ async def get_alert_detail(
 async def delete_alerts(
     db: Annotated[Session, Depends(get_prelude_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-    ids: Optional[str] = Query(None, description="Alert ID(s) - '123' or '1,2,3'"),
-    source_ip: Optional[str] = Query(None, description="Filter by source IP"),
-    target_ip: Optional[str] = Query(None, description="Filter by target IP"),
+    ids: str | None = Query(None, description="Alert ID(s) - '123' or '1,2,3'"),
+    source_ip: str | None = Query(None, description="Filter by source IP"),
+    target_ip: str | None = Query(None, description="Filter by target IP"),
 ):
     """
     Delete alerts by IDs or by IP pair filter.

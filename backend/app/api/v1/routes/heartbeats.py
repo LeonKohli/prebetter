@@ -1,15 +1,15 @@
 import asyncio
-import json
 import logging
 from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Annotated, Any, AsyncGenerator, Dict, Optional
+from collections.abc import AsyncIterable
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from sse_starlette import EventSourceResponse, ServerSentEvent
 
 from app.api.v1.routes.auth import get_current_user
 from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
@@ -64,7 +64,7 @@ def _normalise_interval(raw_interval: Any) -> int | None:
 
 
 def _derive_heartbeat_metadata(
-    row: Dict[str, Any], now: datetime
+    row: dict[str, Any], now: datetime
 ) -> tuple[datetime | None, int, str, int | None]:
     """Compute heartbeat metadata for response payloads."""
     last_heartbeat = _parse_last_heartbeat(getattr(row, "last_heartbeat", None))
@@ -87,107 +87,82 @@ def _derive_heartbeat_metadata(
 
 # SSE endpoint for real-time heartbeat updates
 # IMPORTANT: Must be defined BEFORE any path-parameter routes
-@router.get("/stream")
+@router.get("/stream", response_class=EventSourceResponse)
 async def stream_heartbeats(
     request: Request,
     _: Annotated[Any, Depends(get_current_user)],  # Auth only - no DB session held
-    last_timestamp: Optional[str] = Query(None, description="Last known heartbeat timestamp (ISO format)"),
-):
+    last_timestamp: str | None = Query(
+        None, description="Last known heartbeat timestamp (ISO format)"
+    ),
+) -> AsyncIterable[ServerSentEvent]:
     """
     Server-Sent Events endpoint for real-time heartbeat updates.
 
     Connect with EventSource and receive notifications when new heartbeats arrive.
     Pass `last_timestamp` (ISO format) to only receive updates for newer heartbeats.
 
-    Events sent:
-    - `heartbeat_update`: New heartbeat data with latest timestamp and count
-    - Comment lines (`: heartbeat`) for keepalive every 30 seconds
-
     IMPORTANT: This endpoint does NOT hold a database connection for the stream lifetime.
     Each poll acquires and releases a fresh session to avoid exhausting the pool.
-
-    Note: FastAPI's Depends() with yield is incompatible with SSE because the dependency
-    cleanup only runs when the request completes - which for SSE means never.
-    Manual session management inside the generator is the standard pattern.
     """
 
-    async def event_generator() -> AsyncGenerator[ServerSentEvent | dict, None]:
-        # Parse initial timestamp if provided
-        current_last_ts: datetime | None = None
-        if last_timestamp:
-            try:
-                current_last_ts = datetime.fromisoformat(last_timestamp.replace('Z', '+00:00'))
-                current_last_ts = ensure_timezone(current_last_ts)
-            except ValueError:
-                pass  # Invalid format, start fresh
-
+    # Parse initial timestamp if provided
+    current_last_ts: datetime | None = None
+    if last_timestamp:
         try:
-            # If no timestamp provided, get current max to avoid sending all historical data
-            if current_last_ts is None:
-                with PreludeSessionLocal() as db:
-                    max_ts = db.scalar(
-                        select(func.max(AnalyzerTime.time)).where(AnalyzerTime._parent_type == "H")
-                    )
-                    if max_ts:
-                        current_last_ts = ensure_timezone(max_ts)
+            current_last_ts = datetime.fromisoformat(
+                last_timestamp.replace("Z", "+00:00")
+            )
+            current_last_ts = ensure_timezone(current_last_ts)
+        except ValueError:
+            pass  # Invalid format, start fresh
 
-            # Send immediate comment to establish connection
-            # This transitions EventSource from CONNECTING to OPEN instantly
-            yield ServerSentEvent(comment="connected")
+    # If no timestamp provided, get current max to avoid sending all historical data
+    if current_last_ts is None:
+        with PreludeSessionLocal() as db:
+            max_ts = db.scalar(
+                select(func.max(AnalyzerTime.time)).where(
+                    AnalyzerTime._parent_type == "H"
+                )
+            )
+            if max_ts:
+                current_last_ts = ensure_timezone(max_ts)
 
-            heartbeat_counter = 0
+    # Send immediate comment to establish connection
+    # This transitions EventSource from CONNECTING to OPEN instantly
+    yield ServerSentEvent(comment="connected")
 
-            while True:
-                # Check if client disconnected
-                if await request.is_disconnected():
-                    break
+    while True:
+        if await request.is_disconnected():
+            break
 
-                # Acquire fresh session for EACH poll - releases immediately after
-                # This is critical: SSE connections can live for hours/days
-                with PreludeSessionLocal() as db:
-                    # Check for new heartbeats since last timestamp
-                    query = select(
-                        func.max(AnalyzerTime.time).label("latest_ts"),
-                        func.count(AnalyzerTime.time).label("new_count"),
-                    ).where(AnalyzerTime._parent_type == "H")
+        # Acquire fresh session for EACH poll - releases immediately after
+        # This is critical: SSE connections can live for hours/days
+        with PreludeSessionLocal() as db:
+            query = select(
+                func.max(AnalyzerTime.time).label("latest_ts"),
+                func.count(AnalyzerTime.time).label("new_count"),
+            ).where(AnalyzerTime._parent_type == "H")
 
-                    if current_last_ts:
-                        query = query.where(AnalyzerTime.time > current_last_ts)
+            if current_last_ts:
+                query = query.where(AnalyzerTime.time > current_last_ts)
 
-                    result = db.execute(query).first()
+            result = db.execute(query).first()
 
-                    if result and result.latest_ts and result.new_count > 0:
-                        # New heartbeats found
-                        latest_ts = ensure_timezone(result.latest_ts)
-                        new_count = result.new_count
+            if result and result.latest_ts and result.new_count > 0:
+                latest_ts = ensure_timezone(result.latest_ts)
 
-                        # Send update event - sse-starlette handles JSON serialization
-                        yield {
-                            "event": "heartbeat_update",
-                            "data": json.dumps({
-                                "latest_timestamp": latest_ts.isoformat(),
-                                "new_count": new_count,
-                            }),
-                        }
+                yield ServerSentEvent(
+                    data={
+                        "latest_timestamp": latest_ts.isoformat(),
+                        "new_count": result.new_count,
+                    },
+                    event="heartbeat_update",
+                )
 
-                        # Update tracking timestamp
-                        current_last_ts = latest_ts
-                        heartbeat_counter = 0
-                    else:
-                        heartbeat_counter += 1
-                        # Send keepalive comment every 6th iteration (30 seconds at 5s intervals)
-                        if heartbeat_counter >= 6:
-                            yield ServerSentEvent(comment="keepalive")
-                            heartbeat_counter = 0
+                current_last_ts = latest_ts
 
-                # Session is now CLOSED - connection returned to pool
-                await asyncio.sleep(5)
-
-        except asyncio.CancelledError:
-            # Server shutdown/reload - exit cleanly so uvicorn doesn't hang
-            return
-
-    return EventSourceResponse(event_generator())
+        # Session is now CLOSED - connection returned to pool
+        await asyncio.sleep(5)
 
 
 @router.get("/status", response_model=HeartbeatTreeResponse)
@@ -198,7 +173,7 @@ async def heartbeat_status(
     query = build_efficient_heartbeats_query(db, days)
     results = db.execute(query).all()
 
-    nodes_dict: Dict[str, Dict[str, Any]] = defaultdict(
+    nodes_dict: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"name": "", "os": None, "agents": {}}
     )
     total_agents = 0
