@@ -74,11 +74,15 @@ def test_statistics_summary(auth_client):
     print(f"\nTotal alerts in last 24 hours: {data['total_alerts']}")
     if data["alerts_by_severity"]:
         print(
-            f"Top severity: {max(data['alerts_by_severity'].items(), key=lambda x: x[1])[0]}"
+            f"Top severity: {
+                max(data['alerts_by_severity'].items(), key=lambda x: x[1])[0]
+            }"
         )
     if data["alerts_by_classification"]:
         print(
-            f"Top classification: {max(data['alerts_by_classification'].items(), key=lambda x: x[1])[0]}"
+            f"Top classification: {
+                max(data['alerts_by_classification'].items(), key=lambda x: x[1])[0]
+            }"
         )
 
 
@@ -149,26 +153,29 @@ def test_timeline_time_frames(auth_client):
         # Verify time frame is correct
         assert data["time_frame"] == time_frame
 
-        # Verify data points are properly spaced
+        # Verify data points are chronologically ordered and properly spaced.
+        # The API uses SQL GROUP BY so empty time periods are omitted — gaps
+        # between consecutive points are expected but each gap must be at
+        # least one time-frame unit.
         if len(data["data"]) > 1:
             timestamps = [
                 ensure_timezone(datetime.fromisoformat(point["timestamp"]))
                 for point in data["data"]
             ]
-            # Filter out None values
             valid_timestamps = [ts for ts in timestamps if ts is not None]
             if len(valid_timestamps) > 1:
-                time_diff = valid_timestamps[1] - valid_timestamps[0]
+                for i in range(1, len(valid_timestamps)):
+                    diff = valid_timestamps[i] - valid_timestamps[i - 1]
+                    assert diff.total_seconds() > 0, "Timestamps not ascending"
 
-                # Verify time difference based on time frame
-                if time_frame == "hour":
-                    assert time_diff.seconds == 3600  # 1 hour
-                elif time_frame == "day":
-                    assert time_diff.days == 1
-                elif time_frame == "week":
-                    assert time_diff.days == 7
-                elif time_frame == "month":
-                    assert 28 <= time_diff.days <= 31
+                    if time_frame == "hour":
+                        assert diff.total_seconds() >= 3600
+                    elif time_frame == "day":
+                        assert diff.days >= 1
+                    elif time_frame == "week":
+                        assert diff.days >= 7
+                    elif time_frame == "month":
+                        assert diff.days >= 28
 
     # Test invalid time frame
     response = auth_client.get("/api/v1/statistics/timeline?time_frame=invalid")

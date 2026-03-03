@@ -49,13 +49,17 @@ def test_list_alerts(auth_client):
     assert sort_response.status_code == 200
     sort_data = sort_response.json()
 
-    # Verify sorting works (if we have multiple items with severity)
-    if len(sort_data["items"]) > 1:
-        severities = [
-            item["severity"] for item in sort_data["items"] if item["severity"]
-        ]
-        if severities:
-            assert severities == sorted(severities, reverse=True)
+    # Verify items are sorted by severity descending (MySQL ENUM order, not alphabetical)
+    severity_order = {"info": 0, "low": 1, "medium": 2, "high": 3}
+    ordinals = [
+        severity_order[item["severity"]]
+        for item in sort_data["items"]
+        if item["severity"] in severity_order
+    ]
+    if len(ordinals) > 1:
+        assert ordinals == sorted(ordinals, reverse=True), (
+            f"Severity not sorted descending: {ordinals}"
+        )
 
     # Test filtering
     filter_params = {
