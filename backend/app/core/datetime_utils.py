@@ -1,8 +1,7 @@
 from datetime import datetime, UTC, timedelta
-from typing import Optional
 
 
-def ensure_timezone(dt: Optional[datetime]) -> Optional[datetime]:
+def ensure_timezone(dt: datetime | None) -> datetime | None:
     """
     Ensures a datetime object has timezone information (UTC).
     If the datetime is naive (has no timezone), UTC is assumed.
@@ -31,7 +30,7 @@ def get_current_time() -> datetime:
     return datetime.now(UTC)
 
 
-def format_datetime(dt: Optional[datetime], include_timezone: bool = True) -> str:
+def format_datetime(dt: datetime | None, include_timezone: bool = True) -> str:
     """
     Formats a datetime object consistently throughout the application.
 
@@ -53,7 +52,7 @@ def format_datetime(dt: Optional[datetime], include_timezone: bool = True) -> st
     return dt.strftime(format_string)
 
 
-def parse_datetime(dt_str: Optional[str]) -> Optional[datetime]:
+def parse_datetime(dt_str: str | None) -> datetime | None:
     """
     Parses a datetime string into a timezone-aware datetime object.
     Assumes UTC if no timezone information is present in the string.

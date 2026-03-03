@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated, List
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
-@router.get("/classifications", response_model=List[str])
+@router.get("/classifications", response_model=list[str])
 async def get_unique_classifications(
     db: Annotated[Session, Depends(get_prelude_db)],
-) -> List[str]:
+) -> list[str]:
     """Get a list of unique classification texts."""
     try:
         results = (
@@ -36,10 +36,10 @@ async def get_unique_classifications(
         raise HTTPException(status_code=500, detail="Error fetching classifications")
 
 
-@router.get("/severities", response_model=List[str])
+@router.get("/severities", response_model=list[str])
 async def get_unique_severities(
     db: Annotated[Session, Depends(get_prelude_db)],
-) -> List[str]:
+) -> list[str]:
     """Get a list of unique impact severities."""
     try:
         results = (
@@ -58,27 +58,33 @@ async def get_unique_severities(
         raise HTTPException(status_code=500, detail="Error fetching severities")
 
 
-@router.get("/servers", response_model=List[str])
+@router.get("/servers", response_model=list[str])
 async def get_unique_servers(
     db: Annotated[Session, Depends(get_prelude_db)],
-) -> List[str]:
+) -> list[str]:
     """Get a list of unique short node names (servers like server-001)."""
     try:
-        results = db.execute(
-            select(Node.name)
-            .select_from(Analyzer)
-            .outerjoin(
-                Node,
-                get_node_join_conditions(Analyzer._message_ident, "A", Analyzer._index),
+        results = (
+            db.execute(
+                select(Node.name)
+                .select_from(Analyzer)
+                .outerjoin(
+                    Node,
+                    get_node_join_conditions(
+                        Analyzer._message_ident, "A", Analyzer._index
+                    ),
+                )
+                .where(
+                    Analyzer.name.isnot(None),
+                    Analyzer._parent_type == "A",
+                    Analyzer._index == -1,
+                    Node.name.isnot(None),
+                )
+                .distinct()
             )
-            .where(
-                Analyzer.name.isnot(None),
-                Analyzer._parent_type == "A",
-                Analyzer._index == -1,
-                Node.name.isnot(None),
-            )
-            .distinct()
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # Extract short node name (before first dot)
         short_nodes = {name.split(".")[0] for name in results if name}

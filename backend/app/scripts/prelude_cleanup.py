@@ -14,7 +14,8 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from datetime import timedelta
-from typing import Any, Dict, Iterable, Tuple
+from collections.abc import Iterable
+from typing import Any
 
 import typer
 from sqlalchemy import text
@@ -32,7 +33,7 @@ ALERT_TMP_TABLE = "tmp_alert_ids"
 HEARTBEAT_TMP_TABLE = "tmp_heartbeat_ids"
 
 # Alert child table deletions executed in order each batch
-ALERT_DELETE_STATEMENTS: Tuple[Tuple[str, str], ...] = (
+ALERT_DELETE_STATEMENTS: tuple[tuple[str, str], ...] = (
     (
         "process_args",
         f"DELETE pa FROM Prelude_ProcessArg pa JOIN {ALERT_TMP_TABLE} ta ON pa._message_ident = ta.id WHERE pa._parent_type IN ('A','S','T')",
@@ -175,7 +176,7 @@ ALERT_DELETE_STATEMENTS: Tuple[Tuple[str, str], ...] = (
     ),
 )
 
-HEARTBEAT_DELETE_STATEMENTS: Tuple[Tuple[str, str], ...] = (
+HEARTBEAT_DELETE_STATEMENTS: tuple[tuple[str, str], ...] = (
     (
         "heartbeat_process_args",
         f"DELETE pha FROM Prelude_ProcessArg pha JOIN {HEARTBEAT_TMP_TABLE} ta ON pha._message_ident = ta.id WHERE pha._parent_type = 'H'",
@@ -219,7 +220,7 @@ HEARTBEAT_DELETE_STATEMENTS: Tuple[Tuple[str, str], ...] = (
 )
 
 # Tables to optimize after bulk deletes (ordered by typical size)
-TABLES_TO_OPTIMIZE: Tuple[str, ...] = (
+TABLES_TO_OPTIMIZE: tuple[str, ...] = (
     "Prelude_Address",
     "Prelude_Analyzer",
     "Prelude_AdditionalData",
@@ -242,7 +243,7 @@ TABLES_TO_OPTIMIZE: Tuple[str, ...] = (
     "Prebetter_Pair",
 )
 
-HEARTBEAT_ORPHAN_TASKS: Tuple[Tuple[str, str, str], ...] = (
+HEARTBEAT_ORPHAN_TASKS: tuple[tuple[str, str, str], ...] = (
     (
         "orphan_heartbeat_additional_data",
         "DELETE FROM Prelude_AdditionalData "
@@ -381,12 +382,12 @@ def _delete_batches(
     conn: Connection,
     temp_table: str,
     insert_sql: str,
-    delete_statements: Iterable[Tuple[str, str]],
+    delete_statements: Iterable[tuple[str, str]],
     cutoff,
     batch_size: int,
-) -> Tuple[int, Dict[str, int]]:
+) -> tuple[int, dict[str, int]]:
     total_parents = 0
-    child_counts: Dict[str, int] = defaultdict(int)
+    child_counts: dict[str, int] = defaultdict(int)
     batch_number = 0
 
     while True:
@@ -414,10 +415,10 @@ def _delete_batches(
 
 def _cleanup_orphans(
     conn: Connection,
-    tasks: Iterable[Tuple[str, str, str]],
+    tasks: Iterable[tuple[str, str, str]],
     batch_size: int,
-) -> Dict[str, int]:
-    removed: Dict[str, int] = defaultdict(int)
+) -> dict[str, int]:
+    removed: dict[str, int] = defaultdict(int)
 
     for name, delete_sql, _ in tasks:
         loop = 0
@@ -439,7 +440,7 @@ def _gather_preview(
     alert_cutoff,
     heartbeat_cutoff,
     include_orphans: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Gather preview statistics for cleanup operation.
 
     Args:
@@ -451,7 +452,7 @@ def _gather_preview(
     Returns:
         Dictionary with preview statistics
     """
-    preview: Dict[str, Any] = {}
+    preview: dict[str, Any] = {}
 
     alert_count = conn.scalar(
         text("SELECT COUNT(*) FROM Prelude_DetectTime WHERE time < :cutoff"),
@@ -637,7 +638,7 @@ def run(
                 fg=typer.colors.GREEN,
             )
 
-            orphan_stats: Dict[str, int] = {}
+            orphan_stats: dict[str, int] = {}
             if cleanup_orphans:
                 orphan_stats = _cleanup_orphans(
                     conn, HEARTBEAT_ORPHAN_TASKS, batch_size

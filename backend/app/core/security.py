@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Optional
+
 import jwt
 from passlib.context import CryptContext
 import uuid
@@ -31,7 +31,7 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a short-lived JWT access token."""
     to_encode = data.copy()
     now = get_current_time()

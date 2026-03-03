@@ -5,7 +5,7 @@ These utilities handle the conversion between database result objects and
 API schema models, providing consistent transformation logic across the application.
 """
 
-from typing import Optional, List, Any, Dict, Union
+from typing import Any
 import base64
 from sqlalchemy.engine.row import Row
 
@@ -75,7 +75,7 @@ def alert_result_to_list_item(result: Row) -> AlertListItem:
 
 
 def grouped_alert_to_response(
-    pair: Row, alerts_map: Dict[tuple, List[GroupedAlertDetail]]
+    pair: Row, alerts_map: dict[tuple, list[GroupedAlertDetail]]
 ) -> GroupedAlert:
     """Convert a pair result and its associated alerts to a GroupedAlert schema."""
     key = (pair.source_ipv4, pair.target_ipv4)
@@ -150,11 +150,11 @@ def process_grouped_alerts_details(alerts, max_limit=None):
 
 
 def build_analyzer_info(
-    analyzer_data: Union[Row, Any],
-    node_info: Optional[NodeInfo] = None,
-    process_info: Optional[ProcessInfo] = None,
-    analyzer_time_info: Optional[AnalyzerTimeInfo] = None,
-    chain_index: Optional[int] = None,
+    analyzer_data: Row | Any,
+    node_info: NodeInfo | None = None,
+    process_info: ProcessInfo | None = None,
+    analyzer_time_info: AnalyzerTimeInfo | None = None,
+    chain_index: int | None = None,
 ) -> AnalyzerInfo:
     """Build an AnalyzerInfo schema from analyzer-related fields."""
     # -1 = Primary, Concentrator class = aggregation point, others = secondary
@@ -190,7 +190,7 @@ def build_analyzer_info(
     )
 
 
-def build_node_info(node_data: Union[Row, Any]) -> Optional[NodeInfo]:
+def build_node_info(node_data: Row | Any) -> NodeInfo | None:
     """Build a NodeInfo schema from node-related fields."""
     if not node_data:
         return None
@@ -204,8 +204,8 @@ def build_node_info(node_data: Union[Row, Any]) -> Optional[NodeInfo]:
 
 
 def build_process_info(
-    process_data: Union[Row, Any], process_args=None, process_env=None
-) -> Optional[ProcessInfo]:
+    process_data: Row | Any, process_args=None, process_env=None
+) -> ProcessInfo | None:
     """Build a ProcessInfo schema from process-related fields."""
     if not process_data:
         return None
@@ -227,7 +227,7 @@ def build_process_info(
     )
 
 
-def clean_byte_string(value: Optional[str]) -> Optional[str]:
+def clean_byte_string(value: str | None) -> str | None:
     """Remove b'...' or b"..." representation from a string."""
     if value is None:
         return None

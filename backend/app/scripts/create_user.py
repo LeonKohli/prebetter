@@ -10,7 +10,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import typer
 from sqlalchemy import select
@@ -26,7 +25,7 @@ app = typer.Typer(
 logger = logging.getLogger(__name__)
 
 
-def _validate_username(username: str) -> Optional[str]:
+def _validate_username(username: str) -> str | None:
     """Validate username and return error message if invalid."""
     if len(username) < 3:
         return "Username must be at least 3 characters"
@@ -35,14 +34,14 @@ def _validate_username(username: str) -> Optional[str]:
     return None
 
 
-def _validate_email(email: str) -> Optional[str]:
+def _validate_email(email: str) -> str | None:
     """Validate email and return error message if invalid."""
     if "@" not in email or "." not in email.split("@")[-1]:
         return "Invalid email format"
     return None
 
 
-def _validate_password(password: str) -> Optional[str]:
+def _validate_password(password: str) -> str | None:
     """Validate password and return error message if invalid."""
     if len(password) < 8:
         return "Password must be at least 8 characters"
@@ -123,11 +122,11 @@ def _create_user_in_db(
 
 @app.command()
 def create(
-    username: Optional[str] = typer.Option(
+    username: str | None = typer.Option(
         None, "--username", "-u", help="Username for the new user"
     ),
-    email: Optional[str] = typer.Option(None, "--email", "-e", help="Email address"),
-    password: Optional[str] = typer.Option(
+    email: str | None = typer.Option(None, "--email", "-e", help="Email address"),
+    password: str | None = typer.Option(
         None, "--password", "-p", help="Password (prompted if not provided)"
     ),
     superuser: bool = typer.Option(

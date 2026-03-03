@@ -1,6 +1,6 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from typing import Dict, Any, Optional
+from typing import Any
 from datetime import datetime, timezone
 import time
 import logging
@@ -31,9 +31,9 @@ class HealthResponse(BaseModel):
 
 
 def update_health_state(
-    prelude_available: Optional[bool] = None,
-    prebetter_available: Optional[bool] = None,
-    ready: Optional[bool] = None,
+    prelude_available: bool | None = None,
+    prebetter_available: bool | None = None,
+    ready: bool | None = None,
 ) -> None:
     global _HEALTH_STATE
 
@@ -69,7 +69,7 @@ def get_health_status() -> HealthResponse:
     )
 
 
-def check_database_health(db: Session, db_type: str) -> Dict[str, Any]:
+def check_database_health(db: Session, db_type: str) -> dict[str, Any]:
     try:
         db.execute(text("SELECT 1")).scalar()
 

@@ -1,6 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
-from typing import Optional, List
 from pydantic import ConfigDict
 from app.schemas.prelude import PaginatedResponse
 
@@ -11,7 +10,7 @@ FULL_NAME_MAX_LENGTH = 100
 EMAIL_MAX_LENGTH = 255  # DB limit
 
 
-def _validate_non_empty_string(v: Optional[str]) -> Optional[str]:
+def _validate_non_empty_string(v: str | None) -> str | None:
     """Shared validator for non-empty string fields."""
     if v is not None and not v.strip():
         raise ValueError("Field cannot be empty or whitespace only")
@@ -23,11 +22,11 @@ class UserBase(BaseModel):
     username: str = Field(
         min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH
     )
-    full_name: Optional[str] = Field(default=None, max_length=FULL_NAME_MAX_LENGTH)
+    full_name: str | None = Field(default=None, max_length=FULL_NAME_MAX_LENGTH)
 
     @field_validator("username", "full_name")
     @classmethod
-    def validate_non_empty_string(cls, v: Optional[str]) -> Optional[str]:
+    def validate_non_empty_string(cls, v: str | None) -> str | None:
         return _validate_non_empty_string(v)
 
 
@@ -37,17 +36,17 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = Field(
+    username: str | None = Field(
         default=None, min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH
     )
-    email: Optional[EmailStr] = Field(default=None, max_length=EMAIL_MAX_LENGTH)
-    full_name: Optional[str] = Field(default=None, max_length=FULL_NAME_MAX_LENGTH)
-    password: Optional[str] = None
-    is_superuser: Optional[bool] = None
+    email: EmailStr | None = Field(default=None, max_length=EMAIL_MAX_LENGTH)
+    full_name: str | None = Field(default=None, max_length=FULL_NAME_MAX_LENGTH)
+    password: str | None = None
+    is_superuser: bool | None = None
 
     @field_validator("username", "full_name")
     @classmethod
-    def validate_non_empty_string(cls, v: Optional[str]) -> Optional[str]:
+    def validate_non_empty_string(cls, v: str | None) -> str | None:
         return _validate_non_empty_string(v)
 
 
@@ -63,7 +62,7 @@ class PasswordResetRequest(BaseModel):
 class UserInDBBase(UserBase):
     id: str
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
     is_superuser: bool = False
 
     model_config = ConfigDict(from_attributes=True)
@@ -93,7 +92,7 @@ class TokenData(BaseModel):
 
 
 class PaginatedUserResponse(BaseModel):
-    items: List[User]
+    items: list[User]
     pagination: PaginatedResponse
 
     model_config = ConfigDict(from_attributes=True)

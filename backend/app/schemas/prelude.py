@@ -1,5 +1,4 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, List, Dict
 from datetime import datetime
 from enum import Enum
 from app.core.datetime_utils import ensure_timezone
@@ -10,9 +9,9 @@ class AgentInfo(BaseModel):
     model: str
     version: str
     class_: str = Field(..., alias="class")
-    latest_heartbeat_at: Optional[datetime] = None
+    latest_heartbeat_at: datetime | None = None
     seconds_ago: int = Field(-1, description="Seconds since last heartbeat")
-    heartbeat_interval: Optional[int] = Field(
+    heartbeat_interval: int | None = Field(
         None, description="Configured heartbeat interval in seconds"
     )
     status: str
@@ -63,29 +62,29 @@ class HeartbeatTreeResponse(BaseModel):
     nodes: list[HeartbeatNodeInfo]
     total_nodes: int
     total_agents: int
-    status_summary: Dict[str, int] | None = None
+    status_summary: dict[str, int] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class NodeInfo(BaseModel):
-    name: Optional[str] = None
-    location: Optional[str] = None
-    category: Optional[str] = None
-    ident: Optional[str] = None
-    address: Optional[str] = None
-    os: Optional[str] = None
-    agents_count: Optional[int] = None
+    name: str | None = None
+    location: str | None = None
+    category: str | None = None
+    ident: str | None = None
+    address: str | None = None
+    os: str | None = None
+    agents_count: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ProcessInfo(BaseModel):
-    name: Optional[str] = None
-    pid: Optional[int] = None
-    path: Optional[str] = None
-    args: List[str] = []
-    env: List[str] = []
+    name: str | None = None
+    pid: int | None = None
+    path: str | None = None
+    args: list[str] = []
+    env: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -109,22 +108,20 @@ class AddressCategory(str, Enum):
 
 
 class NetworkInfo(BaseModel):
-    interface: Optional[str] = None
-    category: Optional[str] = None
-    address: Optional[str] = None
-    netmask: Optional[str] = None
-    vlan_name: Optional[str] = None
-    vlan_num: Optional[int] = None
-    ident: Optional[str] = None
-    ip_version: Optional[int] = None
-    ip_hlen: Optional[int] = None
-    protocol: Optional[str] = None
-    protocol_number: Optional[int] = None
-    node: Optional[NodeInfo] = None  # Node information for source/target
-    heartbeat_process: Optional[ProcessInfo] = (
-        None  # Process information from heartbeat
-    )
-    addresses: List[str] = []  # All addresses associated with this source/target
+    interface: str | None = None
+    category: str | None = None
+    address: str | None = None
+    netmask: str | None = None
+    vlan_name: str | None = None
+    vlan_num: int | None = None
+    ident: str | None = None
+    ip_version: int | None = None
+    ip_hlen: int | None = None
+    protocol: str | None = None
+    protocol_number: int | None = None
+    node: NodeInfo | None = None  # Node information for source/target
+    heartbeat_process: ProcessInfo | None = None  # Process information from heartbeat
+    addresses: list[str] = []  # All addresses associated with this source/target
 
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
@@ -154,24 +151,24 @@ class TimeInfo(BaseModel):
 
 
 class ReferenceInfo(BaseModel):
-    origin: Optional[str] = None
-    name: Optional[str] = None
-    url: Optional[str] = None
-    meaning: Optional[str] = None
+    origin: str | None = None
+    name: str | None = None
+    url: str | None = None
+    meaning: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ServiceInfo(BaseModel):
-    port: Optional[int] = None
-    protocol: Optional[str] = None
+    port: int | None = None
+    protocol: str | None = None
     direction: str
-    ip_version: Optional[int] = None
-    name: Optional[str] = None
-    iana_protocol_number: Optional[int] = None
-    iana_protocol_name: Optional[str] = None
-    portlist: Optional[str] = None
-    ident: Optional[str] = None
+    ip_version: int | None = None
+    name: str | None = None
+    iana_protocol_number: int | None = None
+    iana_protocol_name: str | None = None
+    portlist: str | None = None
+    ident: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -190,78 +187,76 @@ class AnalyzerTimeInfo(BaseModel):
 
 class AnalyzerInfo(BaseModel):
     name: str
-    analyzer_id: Optional[str] = None
-    node: Optional[NodeInfo] = None
-    model: Optional[str] = None
-    manufacturer: Optional[str] = None
-    version: Optional[str] = None
-    class_type: Optional[str] = None
-    ostype: Optional[str] = None
-    osversion: Optional[str] = None
-    process: Optional[ProcessInfo] = None
-    analyzer_time: Optional[AnalyzerTimeInfo] = None
-    chain_index: Optional[int] = None  # Position in analyzer chain
-    role: Optional[str] = (
-        None  # Role in analyzer chain (e.g., "Primary", "Concentrator")
-    )
+    analyzer_id: str | None = None
+    node: NodeInfo | None = None
+    model: str | None = None
+    manufacturer: str | None = None
+    version: str | None = None
+    class_type: str | None = None
+    ostype: str | None = None
+    osversion: str | None = None
+    process: ProcessInfo | None = None
+    analyzer_time: AnalyzerTimeInfo | None = None
+    chain_index: int | None = None  # Position in analyzer chain
+    role: str | None = None  # Role in analyzer chain (e.g., "Primary", "Concentrator")
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class WebServiceInfo(BaseModel):
     url: str
-    cgi: Optional[str] = None
-    http_method: Optional[str] = None
+    cgi: str | None = None
+    http_method: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class AlertIdentInfo(BaseModel):
     alertident: str
-    analyzerid: Optional[str] = None
+    analyzerid: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class TCPInfo(BaseModel):
-    seq: Optional[str] = Field(None, alias="tcp_seq")
-    ack: Optional[str] = Field(None, alias="tcp_ack")
-    off: Optional[str] = Field(None, alias="tcp_off")
-    res: Optional[str] = Field(None, alias="tcp_res")
-    flags: Optional[str] = Field(None, alias="tcp_flags")
-    win: Optional[str] = Field(None, alias="tcp_win")
-    sum: Optional[str] = Field(None, alias="tcp_sum")
-    urp: Optional[str] = Field(None, alias="tcp_urp")
+    seq: str | None = Field(None, alias="tcp_seq")
+    ack: str | None = Field(None, alias="tcp_ack")
+    off: str | None = Field(None, alias="tcp_off")
+    res: str | None = Field(None, alias="tcp_res")
+    flags: str | None = Field(None, alias="tcp_flags")
+    win: str | None = Field(None, alias="tcp_win")
+    sum: str | None = Field(None, alias="tcp_sum")
+    urp: str | None = Field(None, alias="tcp_urp")
 
 
 class IPInfo(BaseModel):
-    ver: Optional[str] = Field(None, alias="ip_ver")
-    hlen: Optional[str] = Field(None, alias="ip_hlen")
-    tos: Optional[str] = Field(None, alias="ip_tos")
-    len: Optional[str] = Field(None, alias="ip_len")
-    id: Optional[str] = Field(None, alias="ip_id")
-    off: Optional[str] = Field(None, alias="ip_off")
-    ttl: Optional[str] = Field(None, alias="ip_ttl")
-    proto: Optional[str] = Field(None, alias="ip_proto")
-    sum: Optional[str] = Field(None, alias="ip_sum")
+    ver: str | None = Field(None, alias="ip_ver")
+    hlen: str | None = Field(None, alias="ip_hlen")
+    tos: str | None = Field(None, alias="ip_tos")
+    len: str | None = Field(None, alias="ip_len")
+    id: str | None = Field(None, alias="ip_id")
+    off: str | None = Field(None, alias="ip_off")
+    ttl: str | None = Field(None, alias="ip_ttl")
+    proto: str | None = Field(None, alias="ip_proto")
+    sum: str | None = Field(None, alias="ip_sum")
 
 
 class SnortInfo(BaseModel):
-    rule_sid: Optional[str] = Field(None, alias="snort_rule_sid")
-    rule_rev: Optional[str] = Field(None, alias="snort_rule_rev")
+    rule_sid: str | None = Field(None, alias="snort_rule_sid")
+    rule_rev: str | None = Field(None, alias="snort_rule_rev")
 
 
 class AlertListItem(BaseModel):
     id: str
     message_id: str
-    created_at: Optional[TimeInfo] = None
+    created_at: TimeInfo | None = None
     detected_at: TimeInfo
-    classification_text: Optional[str] = None
-    severity: Optional[str] = None
-    source_ipv4: Optional[str] = None
-    target_ipv4: Optional[str] = None
-    analyzer: Optional[AnalyzerInfo] = None
-    correlation_description: Optional[str] = None
+    classification_text: str | None = None
+    severity: str | None = None
+    source_ipv4: str | None = None
+    target_ipv4: str | None = None
+    analyzer: AnalyzerInfo | None = None
+    correlation_description: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -276,7 +271,7 @@ class PaginatedResponse(BaseModel):
 
 
 class AlertListResponse(BaseModel):
-    items: List[AlertListItem]
+    items: list[AlertListItem]
     pagination: PaginatedResponse
 
     model_config = ConfigDict(from_attributes=True)
@@ -285,28 +280,28 @@ class AlertListResponse(BaseModel):
 class AlertDetail(BaseModel):
     id: str
     message_id: str
-    created_at: Optional[TimeInfo] = None
+    created_at: TimeInfo | None = None
     detected_at: TimeInfo
-    classification_text: Optional[str] = None
-    classification_ident: Optional[str] = None
-    severity: Optional[str] = None
-    description: Optional[str] = None
-    completion: Optional[str] = None
-    impact_type: Optional[str] = None
-    source: Optional[NetworkInfo] = None
-    target: Optional[NetworkInfo] = None
-    analyzers: List[AnalyzerInfo] = []  # Changed from single analyzer to list
-    references: List[ReferenceInfo] = []
-    services: List[ServiceInfo] = []
-    web_services: List[WebServiceInfo] = []
-    alert_idents: List[AlertIdentInfo] = []
+    classification_text: str | None = None
+    classification_ident: str | None = None
+    severity: str | None = None
+    description: str | None = None
+    completion: str | None = None
+    impact_type: str | None = None
+    source: NetworkInfo | None = None
+    target: NetworkInfo | None = None
+    analyzers: list[AnalyzerInfo] = []  # Changed from single analyzer to list
+    references: list[ReferenceInfo] = []
+    services: list[ServiceInfo] = []
+    web_services: list[WebServiceInfo] = []
+    alert_idents: list[AlertIdentInfo] = []
     additional_data: dict = {}
-    correlation_description: Optional[str] = None
+    correlation_description: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
     @property
-    def tcp_info(self) -> Optional[TCPInfo]:
+    def tcp_info(self) -> TCPInfo | None:
         """Extract TCP-related information from additional_data"""
         if not any(k.startswith("tcp_") for k in self.additional_data.keys()):
             return None
@@ -315,7 +310,7 @@ class AlertDetail(BaseModel):
         )
 
     @property
-    def ip_info(self) -> Optional[IPInfo]:
+    def ip_info(self) -> IPInfo | None:
         """Extract IP-related information from additional_data"""
         if not any(k.startswith("ip_") for k in self.additional_data.keys()):
             return None
@@ -324,7 +319,7 @@ class AlertDetail(BaseModel):
         )
 
     @property
-    def snort_info(self) -> Optional[SnortInfo]:
+    def snort_info(self) -> SnortInfo | None:
         """Extract Snort-related information from additional_data"""
         if not any(k.startswith("snort_") for k in self.additional_data.keys()):
             return None
@@ -336,9 +331,9 @@ class AlertDetail(BaseModel):
 class TimelineDataPoint(BaseModel):
     timestamp: datetime
     total: int
-    by_severity: Dict[str, int]
-    by_classification: Dict[str, int]
-    by_analyzer: Dict[str, int]
+    by_severity: dict[str, int]
+    by_classification: dict[str, int]
+    by_analyzer: dict[str, int]
 
     @field_validator("timestamp")
     def ensure_timezone_aware(cls, v):
@@ -351,7 +346,7 @@ class TimelineResponse(BaseModel):
     time_frame: str
     start_date: datetime
     end_date: datetime
-    data: List[TimelineDataPoint]
+    data: list[TimelineDataPoint]
 
     @field_validator("start_date", "end_date")
     def ensure_timezone_aware(cls, v):
@@ -363,20 +358,20 @@ class TimelineResponse(BaseModel):
 class GroupedAlertDetail(BaseModel):
     classification: str
     count: int
-    analyzer: List[str]
-    analyzer_host: List[str]
+    analyzer: list[str]
+    analyzer_host: list[str]
     detected_at: datetime
 
 
 class GroupedAlert(BaseModel):
-    source_ipv4: Optional[str] = None
-    target_ipv4: Optional[str] = None
+    source_ipv4: str | None = None
+    target_ipv4: str | None = None
     total_count: int
-    alerts: List[GroupedAlertDetail]
+    alerts: list[GroupedAlertDetail]
 
 
 class GroupedAlertResponse(BaseModel):
-    groups: List[GroupedAlert] = Field(..., description="List of grouped alerts")
+    groups: list[GroupedAlert] = Field(..., description="List of grouped alerts")
     pagination: PaginatedResponse
     total_alerts: int = Field(
         ...,
@@ -388,11 +383,11 @@ class GroupedAlertResponse(BaseModel):
 
 class StatisticsSummary(BaseModel):
     total_alerts: int
-    alerts_by_severity: Dict[str, int]
-    alerts_by_classification: Dict[str, int]
-    alerts_by_analyzer: Dict[str, int]
-    alerts_by_source_ip: Dict[str, int]
-    alerts_by_target_ip: Dict[str, int]
+    alerts_by_severity: dict[str, int]
+    alerts_by_classification: dict[str, int]
+    alerts_by_analyzer: dict[str, int]
+    alerts_by_source_ip: dict[str, int]
+    alerts_by_target_ip: dict[str, int]
     time_range_hours: int
     start_at: datetime
     end_at: datetime
@@ -407,8 +402,8 @@ class HeartbeatStatus(str, Enum):
 
 class HeartbeatListItem(BaseModel):
     id: int = Field(..., description="Heartbeat ID")
-    message_id: Optional[str] = Field(None, description="Message ID")
-    heartbeat_interval: Optional[int] = Field(
+    message_id: str | None = Field(None, description="Message ID")
+    heartbeat_interval: int | None = Field(
         None, description="Heartbeat interval in seconds"
     )
     analyzer: AnalyzerInfo
@@ -420,7 +415,7 @@ class HeartbeatListItem(BaseModel):
 
 
 class HeartbeatListResponse(BaseModel):
-    items: List[HeartbeatListItem]
+    items: list[HeartbeatListItem]
     total: int
     page: int
     size: int
@@ -440,7 +435,7 @@ class HeartbeatTimelineItem(BaseModel):
 
 
 class PaginatedHeartbeatTimelineResponse(BaseModel):
-    items: List[HeartbeatTimelineItem]
+    items: list[HeartbeatTimelineItem]
     pagination: PaginatedResponse
 
     model_config = ConfigDict(from_attributes=True)
