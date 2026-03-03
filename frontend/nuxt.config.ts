@@ -9,7 +9,6 @@ export default defineNuxtConfig({
     'shadcn-nuxt',
     '@vueuse/nuxt',
     '@nuxtjs/color-mode',
-    '@nuxtjs/seo',
     'nuxt-auth-utils',
     '@nuxt/fonts',
   ],
@@ -26,12 +25,6 @@ export default defineNuxtConfig({
         sameSite: 'lax',
       },
     },
-  },
-  // Basic SEO site configuration
-  site: {
-    name: 'Prebetter IDS Dashboard',
-    description: 'A modern Intrusion Detection System dashboard for Prelude IDS',
-    defaultLocale: 'de',
   },
   css: ['~/assets/css/tailwind.css'],
   shadcn: {
