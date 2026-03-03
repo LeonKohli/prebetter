@@ -7,7 +7,7 @@ transactions that rollback after each test - no real data is ever modified.
 
 import pytest
 import uuid
-from typing import Generator
+from collections.abc import Generator
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -43,6 +43,7 @@ TEST_SUPERUSER = {
 # =============================================================================
 # Database Engines and Connections (session-scoped)
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def prebetter_db_engine():
@@ -82,11 +83,14 @@ def prelude_db_connection(prelude_db_engine):
 # Database Sessions with Transaction Rollback (function-scoped)
 # =============================================================================
 
+
 @pytest.fixture(scope="function")
 def test_db(prebetter_db_connection) -> Generator[Session, None, None]:
     """Prebetter DB session - sets up users, rolls back after test."""
     transaction = prebetter_db_connection.begin()
-    session = Session(bind=prebetter_db_connection, join_transaction_mode="create_savepoint")
+    session = Session(
+        bind=prebetter_db_connection, join_transaction_mode="create_savepoint"
+    )
 
     def override():
         yield session
@@ -131,7 +135,9 @@ def test_db(prebetter_db_connection) -> Generator[Session, None, None]:
 def prelude_test_db(prelude_db_connection) -> Generator[Session, None, None]:
     """Prelude DB session - any operation (including DELETE) rolls back after test."""
     transaction = prelude_db_connection.begin()
-    session = Session(bind=prelude_db_connection, join_transaction_mode="create_savepoint")
+    session = Session(
+        bind=prelude_db_connection, join_transaction_mode="create_savepoint"
+    )
 
     def override():
         yield session
@@ -148,6 +154,7 @@ def prelude_test_db(prelude_db_connection) -> Generator[Session, None, None]:
 # =============================================================================
 # HTTP Client Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def client(prelude_db_engine) -> TestClient:
@@ -189,11 +196,16 @@ def superuser(test_db: Session) -> User:
 
 
 @pytest.fixture
-def superuser_token(client: TestClient, test_db: Session, prelude_test_db: Session, superuser: User) -> str:
+def superuser_token(
+    client: TestClient, test_db: Session, prelude_test_db: Session, superuser: User
+) -> str:
     """JWT token for superuser. Both DBs isolated via fixture deps."""
     response = client.post(
         "/api/v1/auth/token",
-        data={"username": TEST_SUPERUSER["username"], "password": TEST_SUPERUSER["password"]},
+        data={
+            "username": TEST_SUPERUSER["username"],
+            "password": TEST_SUPERUSER["password"],
+        },
     )
     assert response.status_code == 200, f"Token creation failed: {response.text}"
     return response.json()["access_token"]
