@@ -12,10 +12,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from tests.seed_prelude import seed_prelude_data
 
-# Load .env.test BEFORE importing app
+# Load .env.test BEFORE importing app modules (they read env vars at import time)
 env_file = Path(__file__).parent.parent / ".env.test"
 load_dotenv(env_file)
 
+from app.scripts.prelude_pair_accelerator import CREATE_TABLE_SQL
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -82,19 +83,7 @@ def prelude_db_connection(prelude_db_engine):
     connection = prelude_db_engine.connect()
 
     # DDL: ensure Prebetter_Pair table exists (auto-commits in MySQL)
-    connection.execute(
-        text("""
-        CREATE TABLE IF NOT EXISTS Prebetter_Pair (
-            _message_ident BIGINT PRIMARY KEY,
-            source_ip INT UNSIGNED NOT NULL,
-            target_ip INT UNSIGNED NOT NULL,
-            pair_key BIGINT UNSIGNED AS (source_ip * 4294967296 + target_ip) PERSISTENT,
-            KEY idx_pair_key (pair_key),
-            KEY idx_source (source_ip),
-            KEY idx_target (target_ip)
-        ) ENGINE=InnoDB
-    """)
-    )
+    connection.execute(text(CREATE_TABLE_SQL))
     connection.commit()
 
     # Seed test data within a transaction (rolls back after all tests)
