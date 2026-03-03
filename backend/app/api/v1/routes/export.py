@@ -6,7 +6,8 @@ import csv
 from datetime import datetime, timedelta
 from enum import Enum
 from io import StringIO
-from typing import Annotated, Iterator
+from collections.abc import Iterator
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import StreamingResponse

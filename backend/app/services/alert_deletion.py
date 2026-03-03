@@ -15,7 +15,7 @@ Based on analysis in:
 
 import time
 import logging
-from typing import List, Dict
+
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from fastapi import HTTPException, status
@@ -133,7 +133,7 @@ class AlertDeletionService:
         """Initialize the deletion service with a database session."""
         self.db = db
 
-    def delete_single_alert(self, alert_id: int, username: str) -> Dict:
+    def delete_single_alert(self, alert_id: int, username: str) -> dict:
         """
         Delete a single alert with all associated data.
 
@@ -149,7 +149,7 @@ class AlertDeletionService:
         """
         return self._delete_alerts([alert_id], username, "single")
 
-    def delete_bulk_alerts(self, alert_ids: List[int], username: str) -> Dict:
+    def delete_bulk_alerts(self, alert_ids: list[int], username: str) -> dict:
         """
         Delete multiple alerts with all associated data.
 
@@ -170,7 +170,7 @@ class AlertDeletionService:
         source_ip: str,
         target_ip: str,
         username: str,
-    ) -> Dict:
+    ) -> dict:
         """
         Delete all alerts for a specific IP pair (grouped alerts).
 
@@ -212,10 +212,10 @@ class AlertDeletionService:
 
     def _delete_alerts(
         self,
-        alert_ids: List[int],
+        alert_ids: list[int],
         username: str,
         deletion_type: str,
-    ) -> Dict:
+    ) -> dict:
         """
         Internal method to delete alerts with full transaction support.
 
@@ -228,7 +228,7 @@ class AlertDeletionService:
             Dictionary with statistics and audit info
         """
         start_time = time.time()
-        stats: Dict[str, int] = {}
+        stats: dict[str, int] = {}
         total_rows_deleted = 0
 
         try:
@@ -295,7 +295,7 @@ class AlertDeletionService:
                 detail="Alert deletion failed",
             )
 
-    def _verify_alerts_exist(self, alert_ids: List[int]) -> None:
+    def _verify_alerts_exist(self, alert_ids: list[int]) -> None:
         """
         Verify all alert IDs exist before deletion.
 
@@ -325,7 +325,7 @@ class AlertDeletionService:
                 detail=f"Alert(s) not found: {sorted(missing_ids)}",
             )
 
-    def _delete_from_table(self, table: str, alert_ids: List[int]) -> int:
+    def _delete_from_table(self, table: str, alert_ids: list[int]) -> int:
         """
         Delete records from a specific table for given alert IDs.
 
@@ -369,7 +369,7 @@ class AlertDeletionService:
         result = self.db.execute(query, params)
         return result.rowcount
 
-    def _check_for_orphans(self, alert_ids: List[int]) -> Dict:
+    def _check_for_orphans(self, alert_ids: list[int]) -> dict:
         """
         Check if any orphaned records exist after deletion.
 
