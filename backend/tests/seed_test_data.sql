@@ -1,6 +1,8 @@
--- Test seed data for prelude_test database
--- Populates all tables needed for the test suite with realistic IDS data.
--- Timestamps use NOW() so data is always "recent" relative to test execution.
+-- Test seed data for prelude_test database (manual use only).
+-- The test suite uses seed_prelude.py as the source of truth.
+-- This file is for manually seeding a dev database:
+--   mysql -u root prelude_test < seed_test_data.sql
+-- Timestamps use NOW() so data is always "recent" relative to execution.
 
 -- Format table (required by schema)
 INSERT IGNORE INTO _format (name, version) VALUES ('classic', '14.8');
