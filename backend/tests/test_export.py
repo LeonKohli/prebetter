@@ -213,9 +213,9 @@ def test_export_specific_alerts(auth_client):
     exported_ids = {row[0] for row in rows[1:]}  # Alert ID is first column
 
     # Verify all requested alert IDs are present in the export
-    assert all(
-        str(req_id) in exported_ids for req_id in alert_ids_to_export
-    ), f"Not all requested alert IDs ({alert_ids_to_export}) found in export ({exported_ids})"
+    assert all(str(req_id) in exported_ids for req_id in alert_ids_to_export), (
+        f"Not all requested alert IDs ({alert_ids_to_export}) found in export ({exported_ids})"
+    )
 
     # Verify we got exactly the alerts we requested (no extras)
     assert len(rows) - 1 == len(alert_ids_to_export), (

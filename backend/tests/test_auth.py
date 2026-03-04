@@ -175,7 +175,9 @@ def test_access_token_rejected_for_refresh(client, test_db):
         "/api/v1/auth/refresh",
         json={"refresh_token": tokens["access_token"]},
     )
-    assert refresh_response.status_code == 401, "Access token should NOT work for refresh"
+    assert refresh_response.status_code == 401, (
+        "Access token should NOT work for refresh"
+    )
 
 
 def test_invalid_refresh_token(client, test_db):

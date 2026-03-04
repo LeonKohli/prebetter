@@ -1,4 +1,3 @@
-from typing import Optional, List
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
@@ -17,25 +16,25 @@ class UserService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(self, user_id: str) -> Optional[User]:
+    def get_by_id(self, user_id: str) -> User | None:
         """Retrieve a user by their ID."""
         return self.db.execute(
             select(User).where(User.id == user_id)
         ).scalar_one_or_none()
 
-    def get_by_username(self, username: str) -> Optional[User]:
+    def get_by_username(self, username: str) -> User | None:
         """Retrieve a user by their username."""
         return self.db.execute(
             select(User).where(User.username == username)
         ).scalar_one_or_none()
 
-    def get_by_email(self, email: str) -> Optional[User]:
+    def get_by_email(self, email: str) -> User | None:
         """Retrieve a user by their email."""
         return self.db.execute(
             select(User).where(User.email == email)
         ).scalar_one_or_none()
 
-    def list_users(self, skip: int = 0, limit: int = 100) -> List[User]:
+    def list_users(self, skip: int = 0, limit: int = 100) -> list[User]:
         """List users with pagination."""
         return list(self.db.scalars(select(User).offset(skip).limit(limit)).all())
 

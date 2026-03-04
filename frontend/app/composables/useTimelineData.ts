@@ -59,10 +59,12 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     return query
   })
 
+  // server: false — Timeline.client.vue never renders on server,
+  // so shipping this data in the SSR HTML payload is pure waste
   const { data, pending, error, refresh, status } = useFetch<TimelineResponse>('/api/statistics/timeline', {
     key: fetchKey,
     query: fetchQuery,
-    server: true,
+    server: false,
     lazy: false,
     dedupe: 'defer',
   })

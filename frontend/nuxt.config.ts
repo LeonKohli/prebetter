@@ -9,7 +9,6 @@ export default defineNuxtConfig({
     'shadcn-nuxt',
     '@vueuse/nuxt',
     '@nuxtjs/color-mode',
-    '@nuxtjs/seo',
     'nuxt-auth-utils',
     '@nuxt/fonts',
   ],
@@ -27,12 +26,6 @@ export default defineNuxtConfig({
       },
     },
   },
-  // Basic SEO site configuration
-  site: {
-    name: 'Prebetter IDS Dashboard',
-    description: 'A modern Intrusion Detection System dashboard for Prelude IDS',
-    defaultLocale: 'de',
-  },
   css: ['~/assets/css/tailwind.css'],
   shadcn: {
     prefix: '',
@@ -49,7 +42,7 @@ export default defineNuxtConfig({
       {
         name: 'Space Grotesk',
         provider: 'google',
-        weights: [400, 500, 600, 700],
+        weights: [500, 600, 700],
         subsets: ['latin'],
         display: 'swap'
       },
