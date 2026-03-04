@@ -9,9 +9,6 @@ import type {
 import {
   FlexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useVueTable,
 } from '@tanstack/vue-table'
 
@@ -128,9 +125,8 @@ const table = useVueTable({
   get data() { return displayData.value as TableDataItem[] },
   get columns() { return columns.value as ColumnDef<TableDataItem>[] },
   getCoreRowModel: getCoreRowModel(),
-  getPaginationRowModel: getPaginationRowModel(),
-  getSortedRowModel: getSortedRowModel(),
-  getFilteredRowModel: getFilteredRowModel(),
+  // No client-side row models needed — manualPagination/Sorting/Filtering: true
+  // means the server handles all three. These were dead code imports.
   onSortingChange: updaterOrValue => valueUpdater(updaterOrValue, sorting),
   onColumnFiltersChange: updaterOrValue => valueUpdater(updaterOrValue, columnFilters),
   onColumnVisibilityChange: updaterOrValue => valueUpdater(updaterOrValue, columnVisibility),
@@ -147,9 +143,9 @@ const table = useVueTable({
     get rowSelection() { return rowSelection.value },
     get pagination() { return pagination.value },
   },
-  getRowId: (row) => {
-    if (isGrouped.value && 'total_count' in row && 'groupIndex' in row) {
-      return `group-${row.source_ipv4 || 'unknown'}-${row.target_ipv4 || 'unknown'}-${row.groupIndex}`
+  getRowId: (row, index) => {
+    if (isGrouped.value && 'total_count' in row) {
+      return `group-${row.source_ipv4 || 'unknown'}-${row.target_ipv4 || 'unknown'}-${index}`
     } else if ('id' in row) {
       return row.id
     }
