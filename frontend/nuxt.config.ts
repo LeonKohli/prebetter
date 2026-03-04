@@ -42,7 +42,7 @@ export default defineNuxtConfig({
       {
         name: 'Space Grotesk',
         provider: 'google',
-        weights: [400, 500, 600, 700],
+        weights: [500, 600, 700],
         subsets: ['latin'],
         display: 'swap'
       },

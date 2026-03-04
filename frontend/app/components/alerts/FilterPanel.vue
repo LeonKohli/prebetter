@@ -298,9 +298,21 @@ const severityOpen = ref(false)
 const serverOpen = ref(false)
 const classificationOpen = ref(false)
 
-const { data: severitiesData } = useFetch<string[]>('/api/reference/severities', { default: () => [], lazy: true })
-const { data: serversData } = useFetch<string[]>('/api/reference/servers', { default: () => [], lazy: true })
-const { data: classificationsData, status: classificationsStatus } = useFetch<string[]>('/api/reference/classifications', { default: () => [], lazy: true })
+// Defer reference API calls until the filter popover actually opens.
+// Eliminates 3 API requests on every page load when the user doesn't touch filters.
+const { data: severitiesData, execute: fetchSeverities } = useFetch<string[]>('/api/reference/severities', { default: () => [], lazy: true, immediate: false })
+const { data: serversData, execute: fetchServers } = useFetch<string[]>('/api/reference/servers', { default: () => [], lazy: true, immediate: false })
+const { data: classificationsData, status: classificationsStatus, execute: fetchClassifications } = useFetch<string[]>('/api/reference/classifications', { default: () => [], lazy: true, immediate: false })
+
+const referenceDataLoaded = ref(false)
+watch(isOpen, (open) => {
+  if (open && !referenceDataLoaded.value) {
+    referenceDataLoaded.value = true
+    fetchSeverities()
+    fetchServers()
+    fetchClassifications()
+  }
+})
 
 const SEVERITY_COLORS: Record<string, string> = {
   high: 'bg-primary',

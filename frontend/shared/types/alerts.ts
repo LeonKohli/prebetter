@@ -87,9 +87,8 @@ export interface GroupedAlertResponse {
   total_alerts: number
 }
 
-export interface CompactGroupedAlert extends GroupedAlert {
-  groupIndex: number
-}
+// Alias for backwards compatibility — groupIndex was removed (uses TanStack row index now)
+export type CompactGroupedAlert = GroupedAlert
 
 // Additional types for alert details
 export interface WebServiceInfo {
