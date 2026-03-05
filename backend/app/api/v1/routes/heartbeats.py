@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 
 
 HEARTBEAT_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-DEFAULT_ACTIVE_THRESHOLD_SECONDS = 60_000
 
 
 def _parse_last_heartbeat(raw_value: Any) -> datetime | None:

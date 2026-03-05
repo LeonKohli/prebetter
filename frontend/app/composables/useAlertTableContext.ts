@@ -3,7 +3,7 @@ import type { useNavigableUrlState } from './useNavigableUrlState'
 
 export interface AlertTableContext {
   urlState: ReturnType<typeof useNavigableUrlState>
-  table: Table<AlertListItem | CompactGroupedAlert>
+  table: Table<AlertListItem | GroupedAlert>
   isGrouped: ComputedRef<boolean>
   pending: Ref<boolean>
 }

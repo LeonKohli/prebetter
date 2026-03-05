@@ -2,7 +2,7 @@
 Filter schemas for FastAPI endpoints.
 
 These Pydantic models serve as SINGLE SOURCE OF TRUTH for all filter parameters,
-eliminating scattered Optional[str] params across routes.
+eliminating scattered str | None params across routes.
 
 Usage with MULTIPLE Pydantic models as query params:
     from typing import Annotated
@@ -22,7 +22,6 @@ Query() is for a SINGLE model capturing ALL query params.
 import ipaddress
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 from app.core.datetime_utils import ensure_timezone
 
@@ -147,40 +146,40 @@ class AlertFilterParams(BaseModel):
     Supports comma-separated values for: severity, classification, server
     """
 
-    severity: Optional[str] = Field(
+    severity: str | None = Field(
         None,
         description="Filter by severity level(s). Comma-separated for multiple: 'high,medium'",
         examples=["high", "high,medium,low"],
     )
-    classification: Optional[str] = Field(
+    classification: str | None = Field(
         None,
         description="Filter by classification text(s). Comma-separated for multiple",
         examples=["Misc Attack", "Attempted Information Leak,Misc Attack"],
     )
-    start_date: Optional[datetime] = Field(
+    start_date: datetime | None = Field(
         None,
         description="Filter alerts detected on or after this datetime (UTC)",
     )
-    end_date: Optional[datetime] = Field(
+    end_date: datetime | None = Field(
         None,
         description="Filter alerts detected on or before this datetime (UTC)",
     )
-    source_ip: Optional[str] = Field(
+    source_ip: str | None = Field(
         None,
         description="Filter by source IP. Accepts: full IP (192.168.1.100), partial IP (10.128.9), or CIDR (10.0.0.0/8)",
         examples=["192.168.1.100", "10.128.9", "10.0.0.0/8"],
     )
-    target_ip: Optional[str] = Field(
+    target_ip: str | None = Field(
         None,
         description="Filter by target IP. Accepts: full IP (10.0.0.1), partial IP (192.168), or CIDR (192.168.0.0/16)",
         examples=["10.0.0.1", "192.168", "192.168.0.0/16"],
     )
-    server: Optional[str] = Field(
+    server: str | None = Field(
         None,
         description="Filter by server/node name (short name prefix). Comma-separated for multiple",
         examples=["server-001", "server-001,server-002"],
     )
-    analyzer_name: Optional[str] = Field(
+    analyzer_name: str | None = Field(
         None,
         description="Filter by analyzer name",
         examples=["snort"],
@@ -193,7 +192,7 @@ class AlertFilterParams(BaseModel):
 
     @field_validator("start_date", "end_date", mode="before")
     @classmethod
-    def ensure_tz(cls, v: Optional[datetime]) -> Optional[datetime]:
+    def ensure_tz(cls, v: datetime | None) -> datetime | None:
         """Ensure timezone-aware datetimes."""
         if v is None:
             return None
@@ -201,20 +200,20 @@ class AlertFilterParams(BaseModel):
 
     @field_validator("source_ip", "target_ip", mode="after")
     @classmethod
-    def validate_ip_filter(cls, v: Optional[str]) -> Optional[str]:
+    def validate_ip_filter(cls, v: str | None) -> str | None:
         """Validate IP filter is a valid IPv4 address or CIDR notation."""
         if v is None:
             return None
         parse_ip_filter(v)
         return v
 
-    def source_ip_range(self) -> Optional[IPRange]:
+    def source_ip_range(self) -> IPRange | None:
         """Parse source_ip into IPRange for query building."""
         if not self.source_ip:
             return None
         return parse_ip_filter(self.source_ip)
 
-    def target_ip_range(self) -> Optional[IPRange]:
+    def target_ip_range(self) -> IPRange | None:
         """Parse target_ip into IPRange for query building."""
         if not self.target_ip:
             return None

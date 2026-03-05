@@ -23,7 +23,6 @@ from app.database.config import (
     PrebetterSessionLocal,
 )
 from app.database.query_builders import (
-    build_alert_base_query,
     build_alert_detail_query,
 )
 from app.repositories.alerts import (
@@ -179,20 +178,11 @@ async def stream_alerts(
         # Acquire fresh session for EACH poll - releases immediately after
         # This is critical: SSE connections can live for hours/days
         with PreludeSessionLocal() as db:
-            query, models = build_alert_base_query(db)
-            source_addr = models["source_addr"]
-            target_addr = models["target_addr"]
-
-            query = query.where(Alert._ident > current_last_id)
-
-            if require_ips:
-                query = query.where(
-                    source_addr.address.is_not(None),
-                    target_addr.address.is_not(None),
-                )
-
-            query = query.order_by(Alert._ident.asc()).limit(50)
-
+            repo = AlertRepository(db)
+            query = repo.build_new_alerts_query(
+                last_id=current_last_id,
+                require_ips=require_ips,
+            )
             results = db.execute(query).all()
 
             if results:
@@ -317,8 +307,6 @@ async def get_alert_detail(
             if analyzer[3]:
                 analyzer_time_info = AnalyzerTimeInfo(
                     timestamp=analyzer[3].time,
-                    usec=analyzer[3].usec,
-                    gmtoff=analyzer[3].gmtoff,
                 )
 
             analyzer_info = build_analyzer_info(
@@ -424,14 +412,12 @@ async def get_alert_detail(
             id=str(alert[0]._ident) if alert and alert[0] else "",
             message_id=alert[0].messageid if alert and alert[0] else "",
             created_at=TimeInfo(
-                timestamp=alert[1].time, usec=alert[1].usec, gmtoff=alert[1].gmtoff
+                timestamp=alert[1].time,
             )
             if alert and alert[1]
             else None,
             detected_at=TimeInfo(
                 timestamp=alert[2].time if alert and alert[2] else get_current_time(),
-                usec=alert[2].usec if alert and alert[2] else 0,
-                gmtoff=alert[2].gmtoff if alert and alert[2] else 0,
             ),
             classification_text=alert[3].text if alert and alert[3] else None,
             classification_ident=alert[3].ident if alert and alert[3] else None,

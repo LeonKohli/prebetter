@@ -387,6 +387,26 @@ class AlertRepository(BaseRepository[Alert]):
 
         return self.execute_all(query)
 
+    def build_new_alerts_query(
+        self, last_id: int, require_ips: bool = True, limit: int = 50
+    ):
+        """
+        Build a query for new alerts since last_id (used by SSE polling).
+
+        Returns the query and aliased address models for optional IP filtering.
+        """
+        query = self._build_base_select()
+        query = self._build_base_joins(query, require_ips=False)
+        query = query.where(Alert._ident > last_id)
+
+        if require_ips:
+            query = query.where(
+                self._source_addr.address.is_not(None),
+                self._target_addr.address.is_not(None),
+            )
+
+        return query.order_by(Alert._ident.asc()).limit(limit)
+
     def get_export_stream(
         self,
         filters: AlertFilterParams,

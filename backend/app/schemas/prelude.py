@@ -89,24 +89,6 @@ class ProcessInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class AddressCategory(str, Enum):
-    UNKNOWN = "unknown"
-    ATM = "atm"
-    EMAIL = "e-mail"
-    LOTUS_NOTES = "lotus-notes"
-    MAC = "mac"
-    SNA = "sna"
-    VM = "vm"
-    IPV4_ADDR = "ipv4-addr"
-    IPV4_ADDR_HEX = "ipv4-addr-hex"
-    IPV4_NET = "ipv4-net"
-    IPV4_NET_MASK = "ipv4-net-mask"
-    IPV6_ADDR = "ipv6-addr"
-    IPV6_ADDR_HEX = "ipv6-addr-hex"
-    IPV6_NET = "ipv6-net"
-    IPV6_NET_MASK = "ipv6-net-mask"
-
-
 class NetworkInfo(BaseModel):
     interface: str | None = None
     category: str | None = None
@@ -179,6 +161,7 @@ class AnalyzerTimeInfo(BaseModel):
     timestamp: datetime
 
     @field_validator("timestamp")
+    @classmethod
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 
@@ -216,34 +199,6 @@ class AlertIdentInfo(BaseModel):
     analyzerid: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class TCPInfo(BaseModel):
-    seq: str | None = Field(None, alias="tcp_seq")
-    ack: str | None = Field(None, alias="tcp_ack")
-    off: str | None = Field(None, alias="tcp_off")
-    res: str | None = Field(None, alias="tcp_res")
-    flags: str | None = Field(None, alias="tcp_flags")
-    win: str | None = Field(None, alias="tcp_win")
-    sum: str | None = Field(None, alias="tcp_sum")
-    urp: str | None = Field(None, alias="tcp_urp")
-
-
-class IPInfo(BaseModel):
-    ver: str | None = Field(None, alias="ip_ver")
-    hlen: str | None = Field(None, alias="ip_hlen")
-    tos: str | None = Field(None, alias="ip_tos")
-    len: str | None = Field(None, alias="ip_len")
-    id: str | None = Field(None, alias="ip_id")
-    off: str | None = Field(None, alias="ip_off")
-    ttl: str | None = Field(None, alias="ip_ttl")
-    proto: str | None = Field(None, alias="ip_proto")
-    sum: str | None = Field(None, alias="ip_sum")
-
-
-class SnortInfo(BaseModel):
-    rule_sid: str | None = Field(None, alias="snort_rule_sid")
-    rule_rev: str | None = Field(None, alias="snort_rule_rev")
 
 
 class AlertListItem(BaseModel):
@@ -300,33 +255,6 @@ class AlertDetail(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @property
-    def tcp_info(self) -> TCPInfo | None:
-        """Extract TCP-related information from additional_data"""
-        if not any(k.startswith("tcp_") for k in self.additional_data.keys()):
-            return None
-        return TCPInfo(
-            **{k: v for k, v in self.additional_data.items() if k.startswith("tcp_")}
-        )
-
-    @property
-    def ip_info(self) -> IPInfo | None:
-        """Extract IP-related information from additional_data"""
-        if not any(k.startswith("ip_") for k in self.additional_data.keys()):
-            return None
-        return IPInfo(
-            **{k: v for k, v in self.additional_data.items() if k.startswith("ip_")}
-        )
-
-    @property
-    def snort_info(self) -> SnortInfo | None:
-        """Extract Snort-related information from additional_data"""
-        if not any(k.startswith("snort_") for k in self.additional_data.keys()):
-            return None
-        return SnortInfo(
-            **{k: v for k, v in self.additional_data.items() if k.startswith("snort_")}
-        )
-
 
 class TimelineDataPoint(BaseModel):
     timestamp: datetime
@@ -336,6 +264,7 @@ class TimelineDataPoint(BaseModel):
     by_analyzer: dict[str, int]
 
     @field_validator("timestamp")
+    @classmethod
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 
@@ -349,6 +278,7 @@ class TimelineResponse(BaseModel):
     data: list[TimelineDataPoint]
 
     @field_validator("start_date", "end_date")
+    @classmethod
     def ensure_timezone_aware(cls, v):
         return ensure_timezone(v)
 

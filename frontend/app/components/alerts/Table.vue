@@ -118,7 +118,7 @@ const pagination = computed({
 })
 
 // Table data type
-type TableDataItem = CompactGroupedAlert | AlertListItem
+type TableDataItem = GroupedAlert | AlertListItem
 
 // Table instance
 const table = useVueTable({
@@ -160,7 +160,7 @@ const table = useVueTable({
     onRequestDeleteSingle: (alert: AlertListItem) => {
       openDeleteDialog({ mode: 'single', alert })
     },
-    onRequestDeleteGroup: (group: CompactGroupedAlert) => {
+    onRequestDeleteGroup: (group: GroupedAlert) => {
       openDeleteDialog({
         mode: 'grouped',
         sourceIp: group.source_ipv4 || '',
@@ -182,7 +182,7 @@ watch(status, (newStatus) => {
 // Provide context for child components
 provideAlertTableContext({
   urlState,
-  table: table as Table<AlertListItem | CompactGroupedAlert>,
+  table: table as Table<AlertListItem | GroupedAlert>,
   isGrouped,
   pending,
 })
