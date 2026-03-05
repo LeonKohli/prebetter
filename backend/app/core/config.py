@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -17,7 +18,7 @@ class Settings(BaseSettings):
     MYSQL_PREBETTER_DB: str
 
     # Security - all required, no defaults
-    SECRET_KEY: str
+    SECRET_KEY: str = Field(min_length=32)
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     REFRESH_TOKEN_EXPIRE_DAYS: int

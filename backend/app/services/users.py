@@ -85,6 +85,22 @@ class UserService:
             )
 
         update_data = user_update.model_dump(exclude_unset=True)
+
+        # Prevent demoting the last superuser (administrative lockout)
+        if "is_superuser" in update_data and update_data["is_superuser"] is False:
+            if db_user.is_superuser is True:
+                superuser_count = (
+                    self.db.scalar(
+                        select(func.count(User.id)).where(User.is_superuser == True)  # noqa: E712
+                    )
+                    or 0
+                )
+                if superuser_count <= 1:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Cannot demote the last superuser",
+                    )
+
         if "password" in update_data:
             update_data["hashed_password"] = get_password_hash(
                 update_data.pop("password")
