@@ -1,6 +1,7 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
@@ -30,12 +31,26 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: list[str]
 
     @property
-    def PRELUDE_DATABASE_URL(self) -> str:
-        return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_PRELUDE_DB}"
+    def PRELUDE_DATABASE_URL(self) -> URL:
+        return URL.create(
+            drivername="mysql+pymysql",
+            username=self.MYSQL_USER,
+            password=self.MYSQL_PASSWORD,
+            host=self.MYSQL_HOST,
+            port=int(self.MYSQL_PORT),
+            database=self.MYSQL_PRELUDE_DB,
+        )
 
     @property
-    def PREBETTER_DATABASE_URL(self) -> str:
-        return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_PREBETTER_DB}"
+    def PREBETTER_DATABASE_URL(self) -> URL:
+        return URL.create(
+            drivername="mysql+pymysql",
+            username=self.MYSQL_USER,
+            password=self.MYSQL_PASSWORD,
+            host=self.MYSQL_HOST,
+            port=int(self.MYSQL_PORT),
+            database=self.MYSQL_PREBETTER_DB,
+        )
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
