@@ -135,6 +135,7 @@ async def export_alerts(
         source_ip=source_ip,
         target_ip=target_ip,
         server=server,
+        require_ips=require_ips,
     )
 
     # Parse alert_ids if provided (already int from Query, but validate)
