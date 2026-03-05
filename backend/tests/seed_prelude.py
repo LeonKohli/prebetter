@@ -267,7 +267,9 @@ def cleanup_stale_seed_data(connection: Connection) -> None:
 
     # Children: everything that isn't a parent table or skip-cleanup table
     children = [
-        t for t in reversed(tables) if t not in _PARENT_ID_RANGES and t not in _SKIP_CLEANUP
+        t
+        for t in reversed(tables)
+        if t not in _PARENT_ID_RANGES and t not in _SKIP_CLEANUP
     ]
     for table in children:
         connection.execute(
