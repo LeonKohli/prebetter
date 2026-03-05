@@ -10,7 +10,6 @@ const props = defineProps<{
 // Use injected context instead of creating new instance
 const { urlState } = useAlertTableContext()
 const route = useRoute()
-const router = useRouter()
 
 function copyId() {
   let id = ''
@@ -52,7 +51,7 @@ async function viewAllForPair() {
   const currentFilters = urlState.filters.value
   const { classification_text, ...rest } = currentFilters
 
-  await router.push({
+  await urlState.navigateTo({
     query: {
       ...route.query,
       view: 'ungrouped',

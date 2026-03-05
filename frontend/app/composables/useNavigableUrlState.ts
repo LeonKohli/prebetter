@@ -257,10 +257,15 @@ export function useNavigableUrlState(options: {
     updateUrl({ view: newView }, isUserAction)
   }
 
+  // Safe navigation wrapper — clears pending debounced updates before pushing
+  // MUST be used instead of raw router.push() to prevent stale flushes from corrupting URL
+  const navigateTo = async (to: Parameters<typeof router.push>[0]) => {
+    clearPendingUpdates()
+    await router.push(to)
+  }
+
   // Navigate to alert details (always a user action)
   const navigateToDetails = async (details: { sourceIp: string; targetIp: string; classification: string; expectedCount?: number }) => {
-    clearPendingUpdates()
-    
     // Set skeleton hint if we know expected row count
     if (details.expectedCount) {
       const { setHint } = useSkeletonHint()
@@ -269,7 +274,7 @@ export function useNavigableUrlState(options: {
 
     const currentFilters = filters.value
 
-    await router.push({
+    await navigateTo({
       query: {
         ...route.query,
         view: 'ungrouped',
@@ -312,6 +317,7 @@ export function useNavigableUrlState(options: {
     
     updateFilters,
     updateView,
+    navigateTo,
     navigateToDetails,
     resetToDefaults
   }

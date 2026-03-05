@@ -102,10 +102,10 @@ function getSeverityPillClass(severity?: string): string {
 async function viewAllFromPair() {
   if (!alertData.value?.source?.address || !alertData.value?.target?.address) return
 
-  const router = useRouter()
+  const { urlState } = useAlertTableContext()
   const route = useRoute()
 
-  await router.push({
+  await urlState.navigateTo({
     query: {
       ...route.query,
       view: 'ungrouped',
