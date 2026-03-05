@@ -203,7 +203,7 @@ function handleToggleView() {
     newQuery.filter = Object.keys(currentFilters).length > 0 ? JSON.stringify(currentFilters) : undefined
   }
 
-  router.push({ query: newQuery })
+  urlState.navigateTo({ query: newQuery })
 }
 
 function openDeleteDialog(state: DeleteState) {
