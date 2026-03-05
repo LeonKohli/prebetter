@@ -8,6 +8,7 @@ USERNAME_MIN_LENGTH = 3
 USERNAME_MAX_LENGTH = 50
 FULL_NAME_MAX_LENGTH = 100
 EMAIL_MAX_LENGTH = 255  # DB limit
+PASSWORD_MIN_LENGTH = 8
 
 
 def _validate_non_empty_string(v: str | None) -> str | None:
@@ -31,7 +32,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH)
     is_superuser: bool = False
 
 
@@ -41,7 +42,7 @@ class UserUpdate(BaseModel):
     )
     email: EmailStr | None = Field(default=None, max_length=EMAIL_MAX_LENGTH)
     full_name: str | None = Field(default=None, max_length=FULL_NAME_MAX_LENGTH)
-    password: str | None = None
+    password: str | None = Field(default=None, min_length=PASSWORD_MIN_LENGTH)
     is_superuser: bool | None = None
 
     @field_validator("username", "full_name")
@@ -52,11 +53,11 @@ class UserUpdate(BaseModel):
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
-    new_password: str
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH)
 
 
 class PasswordResetRequest(BaseModel):
-    new_password: str
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH)
 
 
 class UserInDBBase(UserBase):
