@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Annotated, Optional
+from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -37,7 +37,7 @@ def get_user_service(db: Annotated[Session, Depends(get_prebetter_db)]) -> UserS
 
 def authenticate_user(
     user_service: UserService, username: str, password: str
-) -> Optional[User]:
+) -> User | None:
     """Authenticate a user given username and password."""
     user = user_service.get_by_username(username)
     if not user:

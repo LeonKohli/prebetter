@@ -1,10 +1,10 @@
 <script setup lang="ts">
 const props = defineProps<{
-  alert: AlertListItem | CompactGroupedAlert
+  alert: AlertListItem | GroupedAlert
   isGrouped: boolean
   onViewDetails?: (alertId: string) => void
   onRequestDeleteSingle?: (alert: AlertListItem) => void
-  onRequestDeleteGroup?: (alert: CompactGroupedAlert) => void
+  onRequestDeleteGroup?: (alert: GroupedAlert) => void
 }>()
 
 // Use injected context instead of creating new instance
@@ -39,7 +39,7 @@ function handleDelete() {
   if ('id' in props.alert && props.onRequestDeleteSingle) {
     props.onRequestDeleteSingle(props.alert)
   } else if (props.onRequestDeleteGroup) {
-    props.onRequestDeleteGroup(props.alert as CompactGroupedAlert)
+    props.onRequestDeleteGroup(props.alert as GroupedAlert)
   }
 }
 

@@ -210,13 +210,9 @@ def build_process_info(
     if not process_data:
         return None
 
-    args = []
-    if process_args:
-        args = [arg[0] for arg in process_args]
+    args = list(process_args) if process_args else []
 
-    env = []
-    if process_env:
-        env = [env_var[0] for env_var in process_env]
+    env = list(process_env) if process_env else []
 
     return ProcessInfo(
         name=process_data.name,
@@ -319,9 +315,8 @@ def process_additional_data(add_data_rows):
 
             additional_data[meaning] = current_value
 
-        except Exception as e:
-            additional_data[meaning] = f"Error processing data: {str(e)}"
-            # TODO: Add logging when logger is available
+        except Exception:
+            additional_data[meaning] = "Error processing data"
 
     return additional_data
 

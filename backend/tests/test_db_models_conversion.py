@@ -430,8 +430,9 @@ def test_build_node_info_none():
 
 def test_build_process_info_full():
     process_data = MockRow(name="app.exe", pid=5678, path="C:\\Apps")
-    process_args = [("-config",), ("file.conf",)]
-    process_env = [("PATH=/usr/bin",), ("TEMP=/tmp",)]
+    # Runtime: query unpacking produces plain strings, not tuples
+    process_args = ["-config", "file.conf"]
+    process_env = ["PATH=/usr/bin", "TEMP=/tmp"]
 
     result = build_process_info(process_data, process_args, process_env)
     assert isinstance(result, ProcessInfo)

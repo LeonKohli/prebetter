@@ -5,11 +5,10 @@ These functions build reusable SQLAlchemy queries that can be used throughout
 the application to reduce code duplication and maintain consistent query patterns.
 """
 
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 from sqlalchemy import (
     select,
     and_,
-    literal_column,
     text,
 )
 from datetime import datetime
@@ -37,82 +36,9 @@ from ..models.prelude import (
     ProcessEnv,
     CorrelationAlert,
 )
-from .config import (
-    get_analyzer_join_conditions,
-    get_node_join_conditions,
-)
 
 
-def build_alert_base_query(db: Session):
-    """Build a base query for alerts with essential joins."""
-    source_addr = aliased(Address)
-    target_addr = aliased(Address)
-
-    query = (
-        select(
-            Alert._ident,
-            Alert.messageid,
-            # Return UTC timestamps directly (gmtoff stored for reference but not applied)
-            DetectTime.time.label("detect_time"),
-            CreateTime.time.label("create_time"),
-            Classification.text.label("classification_text"),
-            Impact.severity,
-            source_addr.address.label("source_ipv4"),
-            target_addr.address.label("target_ipv4"),
-            Analyzer.name.label("analyzer_name"),
-            Node.name.label("analyzer_host"),
-            Analyzer.model.label("analyzer_model"),
-            Analyzer.manufacturer.label("analyzer_manufacturer"),
-            Analyzer.version.label("analyzer_version"),
-            literal_column("Prelude_Analyzer.class").label("analyzer_class"),
-            Analyzer.ostype.label("analyzer_ostype"),
-            Analyzer.osversion.label("analyzer_osversion"),
-            Node.location.label("node_location"),
-            Node.category.label("node_category"),
-            CorrelationAlert.name.label("correlation_description"),
-        )
-        .distinct()
-        .select_from(Alert)
-        .outerjoin(DetectTime, Alert._ident == DetectTime._message_ident)
-        # parent_type="A" ensures we only get alert creation times
-        .outerjoin(
-            CreateTime,
-            and_(
-                CreateTime._message_ident == Alert._ident,
-                CreateTime._parent_type == "A",
-            ),
-        )
-        .outerjoin(Classification, Classification._message_ident == Alert._ident)
-        .outerjoin(Impact, Impact._message_ident == Alert._ident)
-        .outerjoin(CorrelationAlert, CorrelationAlert._message_ident == Alert._ident)
-        .outerjoin(
-            source_addr,
-            and_(
-                source_addr._message_ident == Alert._ident,
-                source_addr._parent_type == "S",
-                source_addr.category == "ipv4-addr",
-            ),
-        )
-        .outerjoin(
-            target_addr,
-            and_(
-                target_addr._message_ident == Alert._ident,
-                target_addr._parent_type == "T",
-                target_addr.category == "ipv4-addr",
-            ),
-        )
-        .outerjoin(
-            Analyzer,
-            get_analyzer_join_conditions(Alert._ident),
-        )
-        .outerjoin(
-            Node,
-            get_node_join_conditions(Alert._ident),
-        )
-    )
-
-    return query, {"source_addr": source_addr, "target_addr": target_addr, "Node": Node}
-
+# NOTE: build_alert_base_query removed - consolidated into AlertRepository.build_new_alerts_query()
 
 # NOTE: Grouped alert query builders removed - replaced by GroupedAlertRepository:
 # - _apply_grouped_filters

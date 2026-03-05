@@ -52,9 +52,8 @@ app/
 - Request tracking via `X-Request-ID` header
 
 **Known Limitations:**
-- No token revocation/blacklist mechanism
+- No token revocation/blacklist mechanism (server-side sessions provide this benefit)
 - No logout endpoint (tokens valid until expiration)
-- No refresh token support
 
 ## Common Commands
 
@@ -142,19 +141,11 @@ ruff format .
 
 When creating new endpoints that query the database:
 
-1. Use query builders from `database/query_builders.py` (e.g., `build_alert_base_query`)
-2. Apply filters using `apply_standard_alert_filters`
-3. Apply sorting using `apply_sorting` helper
-4. Convert results using `database/models.py` converters (e.g., `alert_result_to_list_item`)
+1. Use `AlertRepository` for alert queries (consolidates all query building)
+2. Apply filters using `AlertFilterParams` dependency injection
+3. Convert results using `database/models.py` converters (e.g., `alert_result_to_list_item`)
 
 See `api/v1/routes/alerts.py` for reference implementations.
-
-### Creating New Query Builders
-
-Pattern for `database/query_builders.py`:
-- Return tuple: `(query, model_dict)` where model_dict contains aliases
-- Document all parameters and return values
-- Use `outerjoin` for optional relationships
 
 ### Adding Model Converters
 
@@ -170,8 +161,6 @@ Pattern for `database/models.py`:
 The application uses common join conditions for various tables. These are centralized in `database/config.py`:
 
 - `get_analyzer_join_conditions`: For Analyzer table joins
-- `get_source_address_join_conditions`: For source Address table joins
-- `get_target_address_join_conditions`: For target Address table joins
 - `get_node_join_conditions`: For Node table joins
 
 ### Query Helpers
@@ -179,7 +168,6 @@ The application uses common join conditions for various tables. These are centra
 The application provides helper functions for common query operations:
 
 - `apply_standard_alert_filters`: Apply standard filters to a query
-- `apply_sorting`: Apply sorting to a query based on sort field and order
 
 ### Processing Large Result Sets
 
@@ -250,9 +238,11 @@ Use `Depends(get_current_user)` dependency - see `api/v1/routes/*.py` for exampl
 
 ### Creating a Query with Filters
 ```python
-query, models = build_alert_base_query(db)
-query = apply_standard_alert_filters(query=query, severity="high", **models)
-results = query.limit(100).all()
+repo = AlertRepository(db)
+alerts = repo.get_list(
+    filters=AlertFilterParams(severity="high"),
+    pagination=PaginationParams(page=1, size=100),
+)
 ```
 
 ### Adding a New User

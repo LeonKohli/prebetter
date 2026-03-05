@@ -121,34 +121,6 @@ def get_analyzer_join_conditions(message_ident_field, parent_type="A", index=-1)
     )
 
 
-def get_source_address_join_conditions(
-    message_ident_field, parent_index=-1, category="ipv4-addr"
-):
-    """Get standard source address join conditions"""
-    from ..models.prelude import Address
-
-    return and_(
-        Address._message_ident == message_ident_field,
-        Address._parent_type == "S",
-        Address._parent0_index == parent_index,
-        Address.category == category,
-    )
-
-
-def get_target_address_join_conditions(
-    message_ident_field, parent_index=-1, category="ipv4-addr"
-):
-    """Get standard target address join conditions"""
-    from ..models.prelude import Address
-
-    return and_(
-        Address._message_ident == message_ident_field,
-        Address._parent_type == "T",
-        Address._parent0_index == parent_index,
-        Address.category == category,
-    )
-
-
 def get_node_join_conditions(message_ident_field, parent_type="A", parent0_index=-1):
     """Get standard node join conditions"""
     from ..models.prelude import Node
@@ -158,43 +130,3 @@ def get_node_join_conditions(message_ident_field, parent_type="A", parent0_index
         Node._parent_type == parent_type,
         Node._parent0_index == parent0_index,
     )
-
-
-def apply_sorting(query, sort_by, sort_order, sort_options, default_column=None):
-    """
-    Apply sorting to a query based on the field and order.
-
-    Args:
-        query: The SQLAlchemy query to sort
-        sort_by: The field to sort by (string or enum value)
-        sort_order: The order to sort ("asc"/"desc" or ASC/DESC enum value)
-        sort_options: Dict mapping field names to column objects
-        default_column: Default column to sort by if sort_by not in options
-
-    Returns:
-        Sorted SQLAlchemy query
-    """
-    # Convert sort_by to string if it's an enum
-    sort_key = sort_by
-    if hasattr(sort_by, "value"):
-        sort_key = sort_by.value
-
-    # Get the sort column from options, or use default
-    sort_column = sort_options.get(sort_key)
-    if not sort_column and default_column:
-        sort_column = default_column
-
-    if not sort_column:
-        return query
-
-    # Apply sorting direction
-    if hasattr(sort_order, "value"):
-        # Handle enum values
-        sort_order = sort_order.value
-
-    if str(sort_order).lower() == "asc":
-        query = query.order_by(sort_column.asc())
-    else:
-        query = query.order_by(sort_column.desc())
-
-    return query

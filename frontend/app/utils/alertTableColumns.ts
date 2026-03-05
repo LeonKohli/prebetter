@@ -12,13 +12,13 @@ declare module "@tanstack/vue-table" {
   interface TableMeta<TData extends RowData> {
     onViewDetails?: (alertId: string) => void;
     onRequestDeleteSingle?: (alert: AlertListItem) => void;
-    onRequestDeleteGroup?: (group: CompactGroupedAlert) => void;
+    onRequestDeleteGroup?: (group: GroupedAlert) => void;
   }
 }
 
 export const useAlertTableColumns = () => {
   // New compact grouped columns - one group per row
-  const compactGroupedColumns: ColumnDef<CompactGroupedAlert>[] = [
+  const compactGroupedColumns: ColumnDef<GroupedAlert>[] = [
     {
       accessorKey: "total_count",
       header: ({ column }) =>
