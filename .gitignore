@@ -102,3 +102,7 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
+
+# MCP config (local dev tooling)
+.mcp.json
+
