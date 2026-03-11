@@ -10,12 +10,12 @@
 
       <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
-          <FormField v-slot="{ field }" name="newPassword">
+          <FormField v-slot="{ componentField }" name="newPassword">
             <FormItem>
               <FormLabel>New Password</FormLabel>
               <FormControl>
                 <div class="flex gap-2">
-                  <Input type="text" v-bind="field" placeholder="Enter new password" />
+                  <PasswordInput v-bind="componentField" placeholder="Enter new password" class="flex-1" />
                   <Button type="button" size="sm" variant="outline" @click="generatePassword">
                     <Icon name="lucide:dice-3" class="size-4" />
                   </Button>

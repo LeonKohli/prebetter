@@ -16,31 +16,31 @@
 
       <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
-          <FormField v-slot="{ field }" name="username">
+          <FormField v-slot="{ componentField }" name="username">
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input v-bind="field" placeholder="Enter username" />
+                <Input v-bind="componentField" placeholder="Enter username" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ field }" name="email">
+          <FormField v-slot="{ componentField }" name="email">
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" v-bind="field" placeholder="Enter email" />
+                <Input type="email" v-bind="componentField" placeholder="Enter email" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ field }" name="fullName">
+          <FormField v-slot="{ componentField }" name="fullName">
             <FormItem>
               <FormLabel>Full Name <span class="text-muted-foreground text-sm">(optional)</span></FormLabel>
               <FormControl>
-                <Input v-bind="field" placeholder="Enter your full name" />
+                <Input v-bind="componentField" placeholder="Enter your full name" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -65,6 +65,7 @@
 
 <script setup lang="ts">
 import { toFormValidator } from '@vee-validate/zod'
+import type { FetchError } from 'ofetch'
 import { useForm } from 'vee-validate'
 import type { User } from '#auth-utils'
 
@@ -138,7 +139,7 @@ const onSubmit = form.handleSubmit(async (values) => {
   } catch (error) {
     console.error('Profile update error:', error)
 
-    const fetchError = error as { data?: { detail?: string | Array<{ loc: string[]; msg: string }> } }
+    const fetchError = error as FetchError<FastAPIErrorData>
     const detail = fetchError.data?.detail
     if (!detail) return
 
@@ -153,11 +154,7 @@ const onSubmit = form.handleSubmit(async (values) => {
       return
     }
 
-    const fieldMap: Record<string, string> = { username: 'username', email: 'email', full_name: 'fullName' }
-    for (const err of detail) {
-      const backendField = err.loc[err.loc.length - 1]
-      setFieldError(fieldMap[backendField] || backendField, err.msg)
-    }
+    mapValidationErrorsToForm(detail, { username: 'username', email: 'email', full_name: 'fullName' }, setFieldError)
   }
 })
 </script>
