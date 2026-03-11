@@ -1,18 +1,6 @@
 <script setup lang="ts">
 import type { NuxtError } from '#app'
 
-// FastAPI validation error format
-interface ValidationError {
-  loc: (string | number)[]
-  msg: string
-  type: string
-}
-
-// FastAPI error data format
-interface FastAPIErrorData {
-  detail?: string | ValidationError[]
-}
-
 const props = defineProps<{
   error?: NuxtError<FastAPIErrorData> | null
 }>()

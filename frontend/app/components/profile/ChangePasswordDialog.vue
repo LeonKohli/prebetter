@@ -16,31 +16,31 @@
 
       <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
-          <FormField v-slot="{ field }" name="currentPassword">
+          <FormField v-slot="{ componentField }" name="currentPassword">
             <FormItem>
               <FormLabel>Current Password</FormLabel>
               <FormControl>
-                <Input type="password" v-bind="field" />
+                <PasswordInput v-bind="componentField" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ field }" name="newPassword">
+          <FormField v-slot="{ componentField }" name="newPassword">
             <FormItem>
               <FormLabel>New Password</FormLabel>
               <FormControl>
-                <Input type="password" v-bind="field" />
+                <PasswordInput v-bind="componentField" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ field }" name="confirmPassword">
+          <FormField v-slot="{ componentField }" name="confirmPassword">
             <FormItem>
               <FormLabel>Confirm New Password</FormLabel>
               <FormControl>
-                <Input type="password" v-bind="field" />
+                <PasswordInput v-bind="componentField" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -65,6 +65,7 @@
 
 <script setup lang="ts">
 import { toFormValidator } from '@vee-validate/zod'
+import type { FetchError } from 'ofetch'
 import { useForm } from 'vee-validate'
 
 // Emits
@@ -106,7 +107,7 @@ const onSubmit = form.handleSubmit(async (values) => {
   } catch (error) {
     console.error('Password change error:', error)
 
-    const fetchError = error as { data?: { detail?: string | Array<{ loc: string[]; msg: string }> } }
+    const fetchError = error as FetchError<FastAPIErrorData>
     const detail = fetchError.data?.detail
     if (!detail) return
 
@@ -119,11 +120,7 @@ const onSubmit = form.handleSubmit(async (values) => {
       return
     }
 
-    const fieldMap: Record<string, string> = { current_password: 'currentPassword', new_password: 'newPassword' }
-    for (const err of detail) {
-      const backendField = err.loc[err.loc.length - 1]
-      setFieldError(fieldMap[backendField] || backendField, err.msg)
-    }
+    mapValidationErrorsToForm(detail, { current_password: 'currentPassword', new_password: 'newPassword' }, setFieldError)
   }
 })
 </script>

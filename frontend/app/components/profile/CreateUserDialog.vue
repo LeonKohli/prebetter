@@ -16,41 +16,41 @@
 
       <form @submit="onSubmit">
         <div class="grid gap-4 py-4">
-          <FormField v-slot="{ field }" name="username">
+          <FormField v-slot="{ componentField }" name="username">
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input v-bind="field" placeholder="Enter username" />
+                <Input v-bind="componentField" placeholder="Enter username" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ field }" name="email">
+          <FormField v-slot="{ componentField }" name="email">
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" v-bind="field" placeholder="Enter email" />
+                <Input type="email" v-bind="componentField" placeholder="Enter email" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ field }" name="fullName">
+          <FormField v-slot="{ componentField }" name="fullName">
             <FormItem>
               <FormLabel>Full Name</FormLabel>
               <FormControl>
-                <Input v-bind="field" placeholder="Enter full name (optional)" />
+                <Input v-bind="componentField" placeholder="Enter full name (optional)" />
               </FormControl>
               <FormMessage />
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ field }" name="password">
+          <FormField v-slot="{ componentField }" name="password">
             <FormItem>
               <FormLabel>Password</FormLabel>
               <FormControl>
-                <Input type="text" v-bind="field" placeholder="Enter password" />
+                <PasswordInput v-bind="componentField" placeholder="Enter password" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -89,6 +89,7 @@
 
 <script setup lang="ts">
 import { toFormValidator } from '@vee-validate/zod'
+import type { FetchError } from 'ofetch'
 import { useForm } from 'vee-validate'
 import type { User } from '#auth-utils'
 
@@ -140,7 +141,7 @@ const onSubmit = form.handleSubmit(async (values) => {
   } catch (error) {
     console.error('Create user error:', error)
 
-    const fetchError = error as { data?: { detail?: string | Array<{ loc: string[]; msg: string }> } }
+    const fetchError = error as FetchError<FastAPIErrorData>
     const detail = fetchError.data?.detail
     if (!detail) return
 
@@ -157,18 +158,13 @@ const onSubmit = form.handleSubmit(async (values) => {
     }
 
     // Array detail from Pydantic validation — map backend fields to form fields
-    const fieldMap: Record<string, string> = {
+    mapValidationErrorsToForm(detail, {
       username: 'username',
       email: 'email',
       full_name: 'fullName',
       password: 'password',
       is_superuser: 'isSuperuser',
-    }
-    for (const err of detail) {
-      const backendField = err.loc[err.loc.length - 1]
-      const formField = fieldMap[backendField] || backendField
-      setFieldError(formField, err.msg)
-    }
+    }, setFieldError)
   }
 })
 </script>

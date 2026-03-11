@@ -23,12 +23,12 @@
                 </AlertDescription>
               </Alert>
 
-              <FormField v-slot="{ field }" name="username">
+              <FormField v-slot="{ componentField }" name="username">
                 <FormItem>
                   <FormLabel>Username</FormLabel>
                   <FormControl>
                     <Input
-                      v-bind="field"
+                      v-bind="componentField"
                       placeholder="Username"
                       autocomplete="username"
                       autofocus
@@ -39,35 +39,16 @@
                 </FormItem>
               </FormField>
 
-              <FormField v-slot="{ field }" name="password">
+              <FormField v-slot="{ componentField }" name="password">
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <div class="relative">
-                      <Input
-                        v-bind="field"
-                        :type="showPassword ? 'text' : 'password'"
-                        placeholder="••••••••"
-                        autocomplete="current-password"
-                        :disabled="isSubmitting"
-                        class="pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        class="absolute inset-y-0 right-0 my-auto mr-1 h-8 w-8 text-muted-foreground"
-                        @click="togglePasswordVisibility"
-                        :aria-pressed="showPassword"
-                        :disabled="isSubmitting"
-                      >
-                        <EyeOff v-if="showPassword" class="h-4 w-4" aria-hidden="true" />
-                        <Eye v-else class="h-4 w-4" aria-hidden="true" />
-                        <span class="sr-only">
-                          {{ showPassword ? 'Hide password' : 'Show password' }}
-                        </span>
-                      </Button>
-                    </div>
+                    <PasswordInput
+                      v-bind="componentField"
+                      placeholder="••••••••"
+                      autocomplete="current-password"
+                      :disabled="isSubmitting"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -86,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertTriangle, Eye, EyeOff } from 'lucide-vue-next'
+import { AlertTriangle } from 'lucide-vue-next'
 import { toFormValidator } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
@@ -103,11 +84,6 @@ const session = useUserSession()
 const route = useRoute()
 
 const authError = ref('')
-const showPassword = ref(false)
-
-const togglePasswordVisibility = () => {
-  showPassword.value = !showPassword.value
-}
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
