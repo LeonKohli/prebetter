@@ -146,10 +146,9 @@ export default defineEventHandler(async (event: H3Event) => {
       })
     }
 
-    throw createError({
-      statusCode: fetchError.statusCode || 502,
-      statusMessage: fetchError.statusMessage || 'Bad Gateway',
-      data: fetchError.data,
-    })
+    // Pass backend errors through transparently — avoid Nuxt's createError
+    // wrapping which nests data inside data (error.data.data.detail)
+    setResponseStatus(event, fetchError.statusCode || 502, fetchError.statusMessage || 'Bad Gateway')
+    return fetchError.data
   }
 })

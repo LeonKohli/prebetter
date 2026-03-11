@@ -140,10 +140,12 @@ const onSubmit = form.handleSubmit(async (values) => {
   } catch (error) {
     console.error('Create user error:', error)
 
-    // Handle specific errors
-    const fetchError = error as { data?: { detail?: string } }
-    if (fetchError.data?.detail) {
-      const detail = fetchError.data.detail
+    const fetchError = error as { data?: { detail?: string | Array<{ loc: string[]; msg: string }> } }
+    const detail = fetchError.data?.detail
+    if (!detail) return
+
+    // String detail from custom HTTPException (e.g. duplicate username/email)
+    if (typeof detail === 'string') {
       if (detail.includes('Username already')) {
         setFieldError('username', 'Username is already taken')
       } else if (detail.includes('Email already')) {
@@ -151,6 +153,21 @@ const onSubmit = form.handleSubmit(async (values) => {
       } else {
         setFieldError('username', detail)
       }
+      return
+    }
+
+    // Array detail from Pydantic validation — map backend fields to form fields
+    const fieldMap: Record<string, string> = {
+      username: 'username',
+      email: 'email',
+      full_name: 'fullName',
+      password: 'password',
+      is_superuser: 'isSuperuser',
+    }
+    for (const err of detail) {
+      const backendField = err.loc[err.loc.length - 1]
+      const formField = fieldMap[backendField] || backendField
+      setFieldError(formField, err.msg)
     }
   }
 })
