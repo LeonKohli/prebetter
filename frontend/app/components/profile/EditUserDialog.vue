@@ -153,15 +153,23 @@ const onSubmit = form.handleSubmit(async (values) => {
   } catch (error) {
     console.error('Update user error:', error)
 
-    // Handle specific errors
-    const fetchError = error as { data?: { detail?: string } }
-    if (fetchError.data?.detail) {
-      const detail = fetchError.data.detail
+    const fetchError = error as { data?: { detail?: string | Array<{ loc: string[]; msg: string }> } }
+    const detail = fetchError.data?.detail
+    if (!detail) return
+
+    if (typeof detail === 'string') {
       if (detail.includes('Email already')) {
         setFieldError('email', 'Email is already in use')
       } else {
         setFieldError('email', detail)
       }
+      return
+    }
+
+    const fieldMap: Record<string, string> = { username: 'username', email: 'email', full_name: 'fullName', password: 'password' }
+    for (const err of detail) {
+      const backendField = err.loc[err.loc.length - 1]
+      setFieldError(fieldMap[backendField] || backendField, err.msg)
     }
   }
 })

@@ -106,15 +106,23 @@ const onSubmit = form.handleSubmit(async (values) => {
   } catch (error) {
     console.error('Password change error:', error)
 
-    // Handle specific errors
-    const fetchError = error as { data?: { detail?: string } }
-    if (fetchError.data?.detail) {
-      const detail = fetchError.data.detail
+    const fetchError = error as { data?: { detail?: string | Array<{ loc: string[]; msg: string }> } }
+    const detail = fetchError.data?.detail
+    if (!detail) return
+
+    if (typeof detail === 'string') {
       if (detail.includes('Incorrect current password')) {
         setFieldError('currentPassword', 'Current password is incorrect')
       } else {
         setFieldError('currentPassword', detail)
       }
+      return
+    }
+
+    const fieldMap: Record<string, string> = { current_password: 'currentPassword', new_password: 'newPassword' }
+    for (const err of detail) {
+      const backendField = err.loc[err.loc.length - 1]
+      setFieldError(fieldMap[backendField] || backendField, err.msg)
     }
   }
 })
