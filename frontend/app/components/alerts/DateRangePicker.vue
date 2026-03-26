@@ -10,7 +10,7 @@
           <template v-if="displayText">
             <span class="font-medium">{{ displayLabel }}</span>
             <span class="text-muted-foreground">•</span>
-            <span class="text-muted-foreground" data-allow-mismatch>{{ displayText }}</span>
+            <span class="text-muted-foreground" data-allow-mismatch="">{{ displayText }}</span>
           </template>
           <template v-else>
             <span class="text-muted-foreground">Select date range</span>

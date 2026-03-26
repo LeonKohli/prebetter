@@ -13,5 +13,5 @@ const timeAgo = useTimeAgo(() => props.time, {
 </script>
 
 <template>
-  <span data-allow-mismatch>{{ timeAgo }}</span>
+  <span data-allow-mismatch="">{{ timeAgo }}</span>
 </template>
