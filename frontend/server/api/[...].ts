@@ -4,16 +4,15 @@ import type { FetchError } from 'ofetch'
 
 const REFRESH_BUFFER_MS = 2 * 60 * 1000 // Refresh 2 min before expiry
 
-// In-memory token cache: the refresh winner writes here, waiters read from here.
-// This solves the cookie-session limitation where concurrent requests can't observe
-// each other's Set-Cookie headers. The cache is the shared source of truth for the
-// duration of a refresh cycle.
-let refreshPromise: Promise<void> | null = null
-let cachedTokens: {
+type RefreshedTokens = {
   apiToken: string
   refreshToken: string
   expiresAt: number
-} | null = null
+}
+
+// Deduplicate only identical refresh attempts. Different user sessions must never
+// share refreshed tokens, even within the same server process.
+const inFlightRefreshes = new Map<string, Promise<RefreshedTokens>>()
 
 // Auth endpoints must not be forwarded through the proxy — they expose JWT tokens.
 const BLOCKED_PATHS = ['auth/token', 'auth/refresh']
@@ -37,72 +36,57 @@ export default defineEventHandler(async (event: H3Event) => {
     const needsRefresh = Date.now() + REFRESH_BUFFER_MS >= session.tokenExpiresAt
 
     if (needsRefresh) {
-      // Check in-memory cache first — a concurrent request may have already refreshed
-      if (cachedTokens && cachedTokens.expiresAt > Date.now() + REFRESH_BUFFER_MS) {
-        session = {
-          ...session,
-          secure: { apiToken: cachedTokens.apiToken, refreshToken: cachedTokens.refreshToken },
-          tokenExpiresAt: cachedTokens.expiresAt,
-        }
-      } else if (refreshPromise) {
-        // Another request is actively refreshing — wait for it, then read from cache
-        await refreshPromise
-        if (cachedTokens) {
-          session = {
-            ...session,
-            secure: { apiToken: cachedTokens.apiToken, refreshToken: cachedTokens.refreshToken },
-            tokenExpiresAt: cachedTokens.expiresAt,
-          }
-        }
-      } else {
-        // This request wins the refresh race
-        refreshPromise = (async () => {
-          try {
-            const tokens = await $fetch<{
-              access_token: string
-              refresh_token: string
-              expires_in: number
-            }>(`${useRuntimeConfig().apiBase}/api/v1/auth/refresh`, {
-              method: 'POST',
-              body: { refresh_token: session.secure!.refreshToken },
-            })
+      const currentRefreshToken = session.secure.refreshToken
 
-            const expiresAt = Date.now() + tokens.expires_in * 1000
+      let refreshPromise = inFlightRefreshes.get(currentRefreshToken)
+      if (!refreshPromise) {
+        refreshPromise = (async (): Promise<RefreshedTokens> => {
+          const tokens = await $fetch<{
+            access_token: string
+            refresh_token: string
+            expires_in: number
+          }>(`${useRuntimeConfig().apiBase}/api/v1/auth/refresh`, {
+            method: 'POST',
+            body: { refresh_token: currentRefreshToken },
+          })
 
-            // Write to in-memory cache so concurrent waiters get fresh tokens
-            cachedTokens = {
-              apiToken: tokens.access_token,
-              refreshToken: tokens.refresh_token,
-              expiresAt,
-            }
-
-            // Persist to session cookie for the winning request's response
-            await setUserSession(event, {
-              ...session,
-              secure: {
-                apiToken: tokens.access_token,
-                refreshToken: tokens.refresh_token,
-              },
-              tokenExpiresAt: expiresAt,
-            })
-
-            // Update local session for this request
-            session = {
-              ...session,
-              secure: { apiToken: tokens.access_token, refreshToken: tokens.refresh_token },
-              tokenExpiresAt: expiresAt,
-            }
-          } catch {
-            // Refresh failed — invalidate cache and session
-            cachedTokens = null
-            await clearUserSession(event)
-            throw createError({ statusCode: 401, statusMessage: 'Session expired' })
-          } finally {
-            refreshPromise = null
+          return {
+            apiToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+            expiresAt: Date.now() + tokens.expires_in * 1000,
           }
         })()
 
-        await refreshPromise
+        inFlightRefreshes.set(currentRefreshToken, refreshPromise)
+      }
+
+      try {
+        const refreshed = await refreshPromise
+
+        await setUserSession(event, {
+          ...session,
+          secure: {
+            apiToken: refreshed.apiToken,
+            refreshToken: refreshed.refreshToken,
+          },
+          tokenExpiresAt: refreshed.expiresAt,
+        })
+
+        session = {
+          ...session,
+          secure: {
+            apiToken: refreshed.apiToken,
+            refreshToken: refreshed.refreshToken,
+          },
+          tokenExpiresAt: refreshed.expiresAt,
+        }
+      } catch {
+        await clearUserSession(event)
+        throw createError({ statusCode: 401, statusMessage: 'Session expired' })
+      } finally {
+        if (inFlightRefreshes.get(currentRefreshToken) === refreshPromise) {
+          inFlightRefreshes.delete(currentRefreshToken)
+        }
       }
     }
   }

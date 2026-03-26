@@ -269,7 +269,7 @@ function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPoint
   switch (timeFrame.value) {
     case 'hour':
       start = timestamp
-      end = new Date(timestamp.getTime() + HOUR)
+      end = new Date(timestamp.getTime() + HOUR - 1)
       break
     case 'day': {
       const dayStart = new Date(timestamp)
@@ -282,7 +282,7 @@ function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPoint
     }
     case 'week':
       start = timestamp
-      end = new Date(timestamp.getTime() + WEEK)
+      end = new Date(timestamp.getTime() + WEEK - 1)
       break
     case 'month':
       start = new Date(timestamp.getFullYear(), timestamp.getMonth(), 1)
