@@ -27,7 +27,7 @@ function handleInputGroupAddonClick(e: MouseEvent) {
   <div
     role="group"
     data-slot="input-group-addon"
-    :data-align="props.align"
+    :data-align="props.align ?? undefined"
     :class="cn(inputGroupAddonVariants({ align: props.align }), props.class)"
     @click="handleInputGroupAddonClick"
   >

@@ -53,7 +53,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           class="text-xs h-8 pr-6 pl-2 text-transparent relative"
           @change="(e: Event) => {
             placeholder = placeholder.set({
-              month: Number((e?.target as any)?.value),
+              month: Number((e.target as HTMLSelectElement | null)?.value),
             })
           }"
         >
@@ -75,7 +75,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           class="text-xs h-8 pr-6 pl-2 text-transparent relative"
           @change="(e: Event) => {
             placeholder = placeholder.set({
-              year: Number((e?.target as any)?.value),
+              year: Number((e.target as HTMLSelectElement | null)?.value),
             })
           }"
         >
