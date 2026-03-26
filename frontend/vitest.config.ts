@@ -1,20 +1,27 @@
-import { defineConfig } from 'vitest/config'
-import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { fileURLToPath } from 'node:url'
+import { defineVitestConfig } from '@nuxt/test-utils/config'
 
-export default defineConfig({
-  plugins: [vue()],
+export default defineVitestConfig({
   test: {
-    environment: 'happy-dom',
+    environment: 'nuxt',
     globals: true,
     setupFiles: ['./test/setup.ts'],
     include: ['test/**/*.test.ts'],
     exclude: ['test/e2e/**'],
-  },
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './app'),
-      '~': resolve(__dirname, './app'),
+    environmentOptions: {
+      nuxt: {
+        rootDir: fileURLToPath(new URL('./', import.meta.url)),
+        domEnvironment: 'happy-dom',
+        overrides: {
+          runtimeConfig: {
+            apiBase: 'http://backend.test',
+          },
+        },
+        mock: {
+          intersectionObserver: true,
+          indexedDb: true,
+        },
+      },
     },
   },
 })
