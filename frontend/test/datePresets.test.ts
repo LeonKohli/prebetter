@@ -20,7 +20,7 @@ describe('datePresets', () => {
   it('produces inclusive full-day window for relative day presets', () => {
     const now = new Date('2024-03-15T15:30:00.000Z')
     const range = datePresets.getPresetRange('last-7-days', now)
-    expect(iso(range.from)).toBe('2024-03-08T00:00:00.000Z')
+    expect(iso(range.from)).toBe('2024-03-09T00:00:00.000Z')
     expect(iso(range.to)).toBe('2024-03-15T23:59:59.999Z')
     expect(datePresets.isRelativePreset('last-7-days')).toBe(true)
   })
