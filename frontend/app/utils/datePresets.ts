@@ -71,7 +71,7 @@ const dayWindowPreset = (days: number, label: string, id: DatePresetId): DatePre
   relative: true,
   computeRange: (now = new Date()) => {
     const { calendarDate } = getReferenceDate(now)
-    const startCalendar = calendarDate.subtract({ days })
+    const startCalendar = calendarDate.subtract({ days: Math.max(days - 1, 0) })
     const endCalendar = calendarDate
     return {
       from: toJsDate(toCalendarDateTime(startCalendar)),

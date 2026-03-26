@@ -39,6 +39,10 @@ const {
   dateRange,
 } = useTimelineData(urlState)
 
+const rangeDurationHours = computed(() =>
+  (dateRange.value.end.getTime() - dateRange.value.start.getTime()) / (1000 * 60 * 60)
+)
+
 const hasCustomDateRange = computed(() => {
   const filters = urlState.filters.value
   return !!(filters.start_date && filters.end_date && !getActivePresetId(filters))
@@ -132,6 +136,36 @@ const dynamicTickAmount = computed(() => {
   return Math.min(Math.floor(chartWidth / 80), 12)
 })
 
+const xAxisLabelFormat = computed<string>(() => {
+  switch (timeFrame.value) {
+    case 'hour':
+      return rangeDurationHours.value > 24 ? 'dd MMM HH:mm' : 'HH:mm'
+    case 'day':
+      return 'dd MMM'
+    case 'week':
+      return 'dd MMM'
+    case 'month':
+      return 'MMM yy'
+    default:
+      return 'HH:mm'
+  }
+})
+
+const tooltipDateFormat = computed<string>(() => {
+  switch (timeFrame.value) {
+    case 'hour':
+      return 'dd MMM HH:mm'
+    case 'day':
+      return 'dd MMM yyyy'
+    case 'week':
+      return 'dd MMM yyyy'
+    case 'month':
+      return 'MMM yyyy'
+    default:
+      return 'dd MMM HH:mm'
+  }
+})
+
 // Chart color from design system (--chart-1 changes between light/dark)
 const chartColor = ref(getChartColor(1))
 
@@ -143,7 +177,7 @@ watch(() => colorMode.value, () => {
 })
 
 // Only override what's unique to this chart - rest comes from window.Apex
-const chartOptions = computed<ApexOptions>(() => ({
+const chartOptions = computed(() => ({
   chart: {
     id: 'alerts-timeline',
     background: 'transparent',
@@ -176,7 +210,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     tickAmount: dynamicTickAmount.value,
     labels: {
       datetimeUTC: false,
-      format: 'HH:mm',
+      format: xAxisLabelFormat.value,
       rotate: -45,
       rotateAlways: false,
       hideOverlappingLabels: true,
@@ -198,11 +232,11 @@ const chartOptions = computed<ApexOptions>(() => ({
     theme: colorMode.value,
     shared: true,
     intersect: false,
-    x: { format: 'dd MMM HH:mm' },
+    x: { format: tooltipDateFormat.value },
     y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
   },
   colors: [chartColor.value],
-}))
+}) as ApexOptions)
 
 /** Update URL filters with new date range, clearing any preset */
 function setDateRange(start: Date, end: Date) {
