@@ -1,3 +1,5 @@
+import type { FetchError } from 'ofetch'
+
 export default defineEventHandler(async (event) => {
   const { username, password } = await readBody(event)
 
@@ -56,10 +58,26 @@ export default defineEventHandler(async (event) => {
 
     return { success: true }
   } catch (error: unknown) {
+    const fetchError = error as FetchError
     console.error('[Login Error]', error)
+
+    if (fetchError.statusCode === 401) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Invalid username or password',
+      })
+    }
+
+    if (fetchError.cause && String(fetchError.cause).includes('ECONNREFUSED')) {
+      throw createError({
+        statusCode: 503,
+        statusMessage: 'Authentication service unavailable',
+      })
+    }
+
     throw createError({
-      statusCode: 401,
-      statusMessage: 'Invalid username or password',
+      statusCode: fetchError.statusCode || 502,
+      statusMessage: fetchError.statusMessage || 'Authentication failed',
     })
   }
 })
