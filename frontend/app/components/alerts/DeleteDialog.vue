@@ -7,7 +7,6 @@ type DeleteState =
   | { mode: 'grouped'; sourceIp: string; targetIp: string; totalCount: number }
 
 interface DeleteResponse {
-  success: boolean
   deleted: number
   rows: number
 }
