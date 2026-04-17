@@ -12,8 +12,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "python-multipart>=0.0.22",
     "pymysql>=1.1.2",
-    "passlib[bcrypt]>=1.7.4",
-    "bcrypt>=4.2.0,<5.0.0",  # Pin <5.0 until passlib supports bcrypt 5.0's 72-byte limit enforcement
+    "bcrypt>=4.2.0",
     "pyjwt>=2.10.1",
 ]
 

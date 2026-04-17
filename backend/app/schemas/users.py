@@ -9,12 +9,25 @@ USERNAME_MAX_LENGTH = 50
 FULL_NAME_MAX_LENGTH = 100
 EMAIL_MAX_LENGTH = 255  # DB limit
 PASSWORD_MIN_LENGTH = 8
+# bcrypt silently truncates at 72 bytes (<=4.x) or raises ValueError (>=5.x).
+# Enforce the limit at the API boundary so behavior is stable across versions
+# and multibyte passwords (e.g. emoji) get a clean 422 instead of a 500.
+PASSWORD_MAX_BYTES = 72
 
 
 def _validate_non_empty_string(v: str | None) -> str | None:
     """Shared validator for non-empty string fields."""
     if v is not None and not v.strip():
         raise ValueError("Field cannot be empty or whitespace only")
+    return v
+
+
+def _validate_password_bytes(v: str | None) -> str | None:
+    """Reject passwords exceeding bcrypt's 72-byte limit (UTF-8 encoded)."""
+    if v is not None and len(v.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        raise ValueError(
+            f"Password must be at most {PASSWORD_MAX_BYTES} bytes when UTF-8 encoded"
+        )
     return v
 
 
@@ -35,6 +48,11 @@ class UserCreate(UserBase):
     password: str = Field(min_length=PASSWORD_MIN_LENGTH)
     is_superuser: bool = False
 
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return _validate_password_bytes(v)  # type: ignore[return-value]
+
 
 class UserUpdate(BaseModel):
     username: str | None = Field(
@@ -50,14 +68,29 @@ class UserUpdate(BaseModel):
     def validate_non_empty_string(cls, v: str | None) -> str | None:
         return _validate_non_empty_string(v)
 
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str | None) -> str | None:
+        return _validate_password_bytes(v)
+
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=PASSWORD_MIN_LENGTH)
 
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return _validate_password_bytes(v)  # type: ignore[return-value]
+
 
 class PasswordResetRequest(BaseModel):
     new_password: str = Field(min_length=PASSWORD_MIN_LENGTH)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return _validate_password_bytes(v)  # type: ignore[return-value]
 
 
 class UserInDBBase(UserBase):
