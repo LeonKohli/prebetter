@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.v1.routes.auth import get_current_user
+from app.api.deps import get_current_user
 from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
 from app.database.config import PreludeSessionLocal, get_prelude_db
 from app.database.models import determine_heartbeat_status
@@ -29,7 +29,7 @@ from app.schemas.prelude import (
     PaginatedHeartbeatTimelineResponse,
 )
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
+router = APIRouter(dependencies=[Depends(get_current_user, scope="function")])
 logger = logging.getLogger(__name__)
 
 
@@ -89,10 +89,10 @@ def _derive_heartbeat_metadata(
 @router.get("/stream", response_class=EventSourceResponse)
 async def stream_heartbeats(
     request: Request,
-    _: Annotated[Any, Depends(get_current_user)],  # Auth only - no DB session held
-    last_timestamp: str | None = Query(
-        None, description="Last known heartbeat timestamp (ISO format)"
-    ),
+    last_timestamp: Annotated[
+        str | None,
+        Query(description="Last known heartbeat timestamp (ISO format)"),
+    ] = None,
 ) -> AsyncIterable[ServerSentEvent]:
     """
     Server-Sent Events endpoint for real-time heartbeat updates.
@@ -165,9 +165,11 @@ async def stream_heartbeats(
 
 
 @router.get("/status", response_model=HeartbeatTreeResponse)
-async def heartbeat_status(
+def heartbeat_status(
     db: Annotated[Session, Depends(get_prelude_db)],
-    days: int = Query(1, ge=1, le=30, description="Days of history to look back"),
+    days: Annotated[
+        int, Query(ge=1, le=30, description="Days of history to look back")
+    ] = 1,
 ):
     query = build_efficient_heartbeats_query(db, days)
     results = db.execute(query).all()
@@ -242,11 +244,13 @@ async def heartbeat_status(
 
 
 @router.get("/timeline", response_model=PaginatedHeartbeatTimelineResponse)
-async def timeline_heartbeats(
+def timeline_heartbeats(
     db: Annotated[Session, Depends(get_prelude_db)],
-    hours: int = Query(24, ge=1, le=168, description="Hours of history to show"),
-    page: int = Query(1, ge=1),
-    size: int = Query(100, ge=1, le=1000),
+    hours: Annotated[
+        int, Query(ge=1, le=168, description="Hours of history to show")
+    ] = 24,
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=1000)] = 100,
 ):
     """Heartbeat timeline with larger page size (up to 1000) for history views."""
     start_time, _ = get_time_range(hours)

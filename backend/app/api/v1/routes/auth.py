@@ -1,11 +1,12 @@
 from datetime import timedelta
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+
 import jwt
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from jwt import PyJWTError
 
+from app.api.deps import CurrentUser, UserServiceDep
 from app.core.security import (
     verify_password,
     create_access_token,
@@ -14,11 +15,9 @@ from app.core.security import (
     ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
-from app.database.config import get_prebetter_db
 from app.models.users import User
 from app.schemas.users import (
     Token,
-    TokenData,
     RefreshRequest,
     User as UserSchema,
     UserUpdate,
@@ -26,13 +25,6 @@ from app.schemas.users import (
 from app.services.users import UserService
 
 router = APIRouter()
-
-# OAuth2 configuration for Swagger UI "Authorize" button
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
-
-
-def get_user_service(db: Annotated[Session, Depends(get_prebetter_db)]) -> UserService:
-    return UserService(db)
 
 
 def authenticate_user(
@@ -47,47 +39,10 @@ def authenticate_user(
     return user
 
 
-def validate_access_token(token: str, user_service: UserService) -> User:
-    """Validate an access token and return the associated user."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-
-        # CRITICAL: Reject refresh tokens used as access tokens
-        # Refresh tokens have 7-day lifetime, access tokens have 15-min
-        # Without this check, refresh tokens bypass the short access window
-        if payload.get("type") != "access":
-            raise credentials_exception
-
-        user_id: str = payload.get("sub")
-        if not user_id:
-            raise credentials_exception
-        token_data = TokenData(user_id=user_id)
-    except PyJWTError:
-        raise credentials_exception
-
-    user = user_service.get_by_id(token_data.user_id)
-    if not user:
-        raise credentials_exception
-    return user
-
-
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
-) -> User:
-    """Retrieve the current user based on JWT token."""
-    return validate_access_token(token, user_service)
-
-
 @router.post("/token", response_model=Token)
-async def login_for_access_token(
+def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    user_service: UserServiceDep,
 ) -> Token:
     """Authenticate user and return access + refresh token pair."""
     user = authenticate_user(user_service, form_data.username, form_data.password)
@@ -111,9 +66,9 @@ async def login_for_access_token(
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh_access_token(
+def refresh_access_token(
     refresh_data: RefreshRequest,
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    user_service: UserServiceDep,
 ) -> Token:
     """Exchange valid refresh token for new access token."""
     credentials_exception = HTTPException(
@@ -155,18 +110,16 @@ async def refresh_access_token(
 
 
 @router.get("/users/me", response_model=UserSchema)
-async def read_users_me(
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> User:
+def read_users_me(current_user: CurrentUser) -> User:
     """Retrieve authenticated user profile."""
     return current_user
 
 
 @router.put("/users/me", response_model=UserSchema)
-async def update_profile(
+def update_profile(
     profile_update: UserUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    current_user: CurrentUser,
+    user_service: UserServiceDep,
 ) -> User:
     """Update authenticated user profile (excluding password and privileges)."""
     # Prevent privilege escalation

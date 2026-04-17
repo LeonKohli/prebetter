@@ -311,6 +311,11 @@ class GroupedAlertResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AlertDeletionResponse(BaseModel):
+    deleted: int = Field(description="Number of alerts deleted")
+    rows: int = Field(description="Total number of database rows deleted")
+
+
 class StatisticsSummary(BaseModel):
     total_alerts: int
     alerts_by_severity: dict[str, int]

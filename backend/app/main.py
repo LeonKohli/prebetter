@@ -114,7 +114,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["status"])
-async def root(request: Request):
+def root(request: Request) -> dict[str, str]:
     """
     Root endpoint providing API status and documentation links.
 
@@ -134,7 +134,7 @@ async def root(request: Request):
 
 
 @app.get("/health", tags=["health"], response_model=HealthResponse)
-async def health_check():
+def health_check() -> HealthResponse:
     """
     Health check endpoint for infrastructure monitoring.
 
