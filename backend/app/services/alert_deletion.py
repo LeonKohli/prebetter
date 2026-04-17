@@ -15,6 +15,7 @@ Based on analysis in:
 
 import time
 import logging
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -22,6 +23,17 @@ from fastapi import HTTPException, status
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class AlertDeletionResult:
+    alert_ids_deleted: list[int]
+    total_alerts_deleted: int
+    total_rows_deleted: int
+    table_stats: dict[str, int]
+    duration_seconds: float
+    deletion_type: str
+    deleted_by: str
 
 
 class AlertDeletionService:
@@ -133,7 +145,7 @@ class AlertDeletionService:
         """Initialize the deletion service with a database session."""
         self.db = db
 
-    def delete_single_alert(self, alert_id: int, username: str) -> dict:
+    def delete_single_alert(self, alert_id: int, username: str) -> AlertDeletionResult:
         """
         Delete a single alert with all associated data.
 
@@ -142,14 +154,16 @@ class AlertDeletionService:
             username: Username performing the deletion (for audit)
 
         Returns:
-            Dictionary with deletion statistics and audit info
+            Deletion statistics and audit info
 
         Raises:
             HTTPException: If alert not found or deletion fails
         """
         return self._delete_alerts([alert_id], username, "single")
 
-    def delete_bulk_alerts(self, alert_ids: list[int], username: str) -> dict:
+    def delete_bulk_alerts(
+        self, alert_ids: list[int], username: str
+    ) -> AlertDeletionResult:
         """
         Delete multiple alerts with all associated data.
 
@@ -158,7 +172,7 @@ class AlertDeletionService:
             username: Username performing the deletion (for audit)
 
         Returns:
-            Dictionary with deletion statistics and audit info
+            Deletion statistics and audit info
 
         Raises:
             HTTPException: If any alert not found or deletion fails
@@ -170,7 +184,7 @@ class AlertDeletionService:
         source_ip: str,
         target_ip: str,
         username: str,
-    ) -> dict:
+    ) -> AlertDeletionResult:
         """
         Delete all alerts for a specific IP pair (grouped alerts).
 
@@ -180,7 +194,7 @@ class AlertDeletionService:
             username: Username performing the deletion (for audit)
 
         Returns:
-            Dictionary with deletion statistics and audit info
+            Deletion statistics and audit info
 
         Raises:
             HTTPException: If no alerts found for IP pair or deletion fails
@@ -215,7 +229,7 @@ class AlertDeletionService:
         alert_ids: list[int],
         username: str,
         deletion_type: str,
-    ) -> dict:
+    ) -> AlertDeletionResult:
         """
         Internal method to delete alerts with full transaction support.
 
@@ -225,7 +239,7 @@ class AlertDeletionService:
             deletion_type: Type of deletion (single/bulk/grouped)
 
         Returns:
-            Dictionary with statistics and audit info
+            Deletion statistics and audit info
         """
         start_time = time.time()
         stats: dict[str, int] = {}
@@ -265,16 +279,15 @@ class AlertDeletionService:
                 f"({total_rows_deleted} total rows) in {duration:.2f}s"
             )
 
-            return {
-                "success": True,
-                "alert_ids_deleted": alert_ids,
-                "total_alerts_deleted": len(alert_ids),
-                "total_rows_deleted": total_rows_deleted,
-                "table_stats": stats,
-                "duration_seconds": duration,
-                "deletion_type": deletion_type,
-                "deleted_by": username,
-            }
+            return AlertDeletionResult(
+                alert_ids_deleted=list(alert_ids),
+                total_alerts_deleted=len(alert_ids),
+                total_rows_deleted=total_rows_deleted,
+                table_stats=stats.copy(),
+                duration_seconds=duration,
+                deletion_type=deletion_type,
+                deleted_by=username,
+            )
 
         except HTTPException:
             # Re-raise HTTP exceptions (like 404)

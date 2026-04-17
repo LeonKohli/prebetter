@@ -12,12 +12,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import StreamingResponse
 
+from app.api.deps import get_current_user
 from app.core.datetime_utils import ensure_timezone, get_current_time
 from app.repositories.alerts import AlertRepository, get_alert_repository
 from app.schemas.filters import AlertFilterParams
-from ..routes.auth import get_current_user
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
+router = APIRouter(dependencies=[Depends(get_current_user, scope="function")])
 
 
 class ExportFormat(str, Enum):
@@ -88,27 +88,39 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
 
 
 @router.get("/alerts/{format}")
-async def export_alerts(
+def export_alerts(
     repo: Annotated[AlertRepository, Depends(get_alert_repository)],
-    format: ExportFormat = Path(..., description="Export format (csv)"),
-    alert_ids: list[int] | None = Query(None, description="Specific alert IDs"),
-    start_date: datetime | None = Query(None, description="Start date (UTC)"),
-    end_date: datetime | None = Query(None, description="End date (UTC)"),
-    severity: str | None = Query(None, description="Filter by severity"),
-    classification: str | None = Query(None, description="Filter by classification"),
-    source_ip: str | None = Query(
-        None, description="Filter by source IP or CIDR (e.g., 192.168.0.0/16)"
-    ),
-    target_ip: str | None = Query(
-        None, description="Filter by target IP or CIDR (e.g., 10.0.0.0/8)"
-    ),
-    server: str | None = Query(None, description="Filter by server"),
-    hours_back: int | None = Query(None, description="Past N hours (overrides dates)"),
-    require_ips: bool = Query(
-        True,
-        description="Only include alerts with both source AND target IPs. "
-        "Set to false to include all alerts.",
-    ),
+    format: Annotated[ExportFormat, Path(description="Export format (csv)")],
+    alert_ids: Annotated[
+        list[int] | None, Query(description="Specific alert IDs")
+    ] = None,
+    start_date: Annotated[
+        datetime | None, Query(description="Start date (UTC)")
+    ] = None,
+    end_date: Annotated[datetime | None, Query(description="End date (UTC)")] = None,
+    severity: Annotated[str | None, Query(description="Filter by severity")] = None,
+    classification: Annotated[
+        str | None, Query(description="Filter by classification")
+    ] = None,
+    source_ip: Annotated[
+        str | None,
+        Query(description="Filter by source IP or CIDR (e.g., 192.168.0.0/16)"),
+    ] = None,
+    target_ip: Annotated[
+        str | None,
+        Query(description="Filter by target IP or CIDR (e.g., 10.0.0.0/8)"),
+    ] = None,
+    server: Annotated[str | None, Query(description="Filter by server")] = None,
+    hours_back: Annotated[
+        int | None, Query(description="Past N hours (overrides dates)")
+    ] = None,
+    require_ips: Annotated[
+        bool,
+        Query(
+            description="Only include alerts with both source AND target IPs. "
+            "Set to false to include all alerts.",
+        ),
+    ] = True,
 ) -> StreamingResponse:
     """
     Export alerts in the specified format.

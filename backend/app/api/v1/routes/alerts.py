@@ -20,7 +20,6 @@ from sqlalchemy import select, func
 from app.database.config import (
     get_prelude_db,
     PreludeSessionLocal,
-    PrebetterSessionLocal,
 )
 from app.database.query_builders import (
     build_alert_detail_query,
@@ -45,6 +44,7 @@ from app.models.prelude import (
     Alert,
 )
 from app.schemas.prelude import (
+    AlertDeletionResponse,
     AlertListResponse,
     AlertDetail,
     TimeInfo,
@@ -59,16 +59,13 @@ from app.schemas.prelude import (
     PaginatedResponse,
 )
 from app.core.datetime_utils import get_current_time
-from app.api.v1.routes.auth import (
+from app.api.deps import (
+    CurrentUser,
     get_current_user,
-    validate_access_token,
-    oauth2_scheme,
 )
-from app.models.users import User
-from app.services.users import UserService
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user, scope="function")])
 
 
 class SortField(str, Enum):
@@ -90,17 +87,18 @@ class SortOrder(str, Enum):
 
 @router.get("", response_model=AlertListResponse)
 @router.get("/", response_model=AlertListResponse)
-async def list_alerts(
-    # Dependencies first (no defaults in Annotated)
+def list_alerts(
     repo: Annotated[AlertRepository, Depends(get_alert_repository)],
-    _: Annotated[User, Depends(get_current_user)],
     # Multiple Pydantic models as query params: use Depends() (NOT Query())
     # Query() is for ONE model capturing ALL params; Depends() allows MULTIPLE models
     filters: Annotated[AlertFilterParams, Depends()],
     pagination: Annotated[PaginationParams, Depends()],
-    # Sorting params with defaults must come last
-    sort_by: SortField = Query(SortField.DETECT_TIME, description="Field to sort by"),
-    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
+    sort_by: Annotated[
+        SortField, Query(description="Field to sort by")
+    ] = SortField.DETECT_TIME,
+    sort_order: Annotated[
+        SortOrder, Query(description="Sort order (asc/desc)")
+    ] = SortOrder.DESC,
 ) -> AlertListResponse:
     """Retrieve a paginated list of alerts with filtering and sorting."""
 
@@ -129,11 +127,11 @@ async def list_alerts(
 @router.get("/stream", response_class=EventSourceResponse)
 async def stream_alerts(
     request: Request,
-    token: Annotated[str, Depends(oauth2_scheme)],
-    last_id: int | None = Query(None, description="Last known alert ID"),
-    require_ips: bool = Query(
-        True, description="Only notify for alerts with both source AND target IPs"
-    ),
+    last_id: Annotated[int | None, Query(description="Last known alert ID")] = None,
+    require_ips: Annotated[
+        bool,
+        Query(description="Only notify for alerts with both source AND target IPs"),
+    ] = True,
 ) -> AsyncIterable[ServerSentEvent]:
     """
     Server-Sent Events endpoint for real-time alert updates.
@@ -144,11 +142,6 @@ async def stream_alerts(
     IMPORTANT: This endpoint does NOT hold a database connection for the stream lifetime.
     Each poll acquires and releases a fresh session to avoid exhausting the pool.
     """
-
-    # Authenticate once and immediately release the Prebetter DB session
-    with PrebetterSessionLocal() as user_db:
-        user_service = UserService(user_db)
-        validate_access_token(token, user_service)
 
     current_last_id = last_id
 
@@ -201,13 +194,14 @@ async def stream_alerts(
 
 
 @router.get("/groups", response_model=GroupedAlertResponse)
-async def get_grouped_alerts(
+def get_grouped_alerts(
     repo: Annotated[GroupedAlertRepository, Depends(get_grouped_alert_repository)],
-    _: Annotated[User, Depends(get_current_user)],
     filters: Annotated[AlertFilterParams, Depends()],
     pagination: Annotated[PaginationParams, Depends()],
-    sort_by: SortField = Query(SortField.TOTAL_COUNT, description="Field to sort by"),
-    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order"),
+    sort_by: Annotated[
+        SortField, Query(description="Field to sort by")
+    ] = SortField.TOTAL_COUNT,
+    sort_order: Annotated[SortOrder, Query(description="Sort order")] = SortOrder.DESC,
 ) -> GroupedAlertResponse:
     """Retrieve alerts grouped by source and target IP addresses."""
     try:
@@ -242,10 +236,9 @@ async def get_grouped_alerts(
 
 
 @router.get("/{alert_id}", response_model=AlertDetail)
-async def get_alert_detail(
+def get_alert_detail(
     alert_id: int,
     db: Annotated[Session, Depends(get_prelude_db)],
-    _: Annotated[User, Depends(get_current_user)],
 ) -> AlertDetail:
     """Get detailed information about a specific alert."""
     try:
@@ -476,15 +469,17 @@ async def get_alert_detail(
 # Alert Deletion Endpoint
 
 
-@router.delete("")
-@router.delete("/")
-async def delete_alerts(
+@router.delete("", response_model=AlertDeletionResponse)
+@router.delete("/", response_model=AlertDeletionResponse)
+def delete_alerts(
     db: Annotated[Session, Depends(get_prelude_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
-    ids: str | None = Query(None, description="Alert ID(s) - '123' or '1,2,3'"),
-    source_ip: str | None = Query(None, description="Filter by source IP"),
-    target_ip: str | None = Query(None, description="Filter by target IP"),
-):
+    current_user: CurrentUser,
+    ids: Annotated[
+        str | None, Query(description="Alert ID(s) - '123' or '1,2,3'")
+    ] = None,
+    source_ip: Annotated[str | None, Query(description="Filter by source IP")] = None,
+    target_ip: Annotated[str | None, Query(description="Filter by target IP")] = None,
+) -> AlertDeletionResponse:
     """
     Delete alerts by IDs or by IP pair filter.
 
@@ -527,8 +522,7 @@ async def delete_alerts(
             status_code=422, detail="Provide either 'ids' or 'source_ip'+'target_ip'"
         )
 
-    return {
-        "success": True,
-        "deleted": result["total_alerts_deleted"],
-        "rows": result["total_rows_deleted"],
-    }
+    return AlertDeletionResponse(
+        deleted=result.total_alerts_deleted,
+        rows=result.total_rows_deleted,
+    )

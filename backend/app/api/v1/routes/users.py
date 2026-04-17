@@ -1,10 +1,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 
-from app.api.v1.routes.auth import get_current_user
-from app.database.config import get_prebetter_db
+from app.api.deps import CurrentSuperuser, CurrentUser, UserServiceDep
 from app.models.users import User
 from app.schemas.filters import PaginationParams
 from app.schemas.prelude import PaginatedResponse
@@ -16,34 +14,15 @@ from app.schemas.users import (
     UserCreate,
     UserUpdate,
 )
-from app.services.users import UserService
 
 router = APIRouter()
 
 
-def get_user_service(db: Annotated[Session, Depends(get_prebetter_db)]) -> UserService:
-    """Dependency to get a UserService instance."""
-    return UserService(db)
-
-
-async def get_current_superuser(
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> User:
-    """
-    Ensure the current user is a superuser.
-    """
-    if current_user.is_superuser is not True:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges"
-        )
-    return current_user
-
-
 @router.post("/", response_model=UserSchema)
-async def create_user(
+def create_user(
     user: UserCreate,
-    current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    current_user: CurrentSuperuser,
+    user_service: UserServiceDep,
 ) -> User:
     """
     Create a new user (accessible by superusers only).
@@ -52,9 +31,9 @@ async def create_user(
 
 
 @router.get("/", response_model=PaginatedUserResponse)
-async def list_users(
-    current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+def list_users(
+    current_user: CurrentSuperuser,
+    user_service: UserServiceDep,
     pagination: Annotated[PaginationParams, Depends()],
 ) -> PaginatedUserResponse:
     """
@@ -76,10 +55,10 @@ async def list_users(
 
 
 @router.get("/{user_id}", response_model=UserSchema)
-async def get_user(
+def get_user(
     user_id: str,
-    current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    current_user: CurrentSuperuser,
+    user_service: UserServiceDep,
 ) -> User:
     """
     Retrieve details for a specific user by user_id (superusers only).
@@ -93,11 +72,11 @@ async def get_user(
 
 
 @router.put("/{user_id}", response_model=UserSchema)
-async def update_user(
+def update_user(
     user_id: str,
     user_update: UserUpdate,
-    current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    current_user: CurrentSuperuser,
+    user_service: UserServiceDep,
 ) -> User:
     """
     Update a user's details (superusers only).
@@ -106,10 +85,10 @@ async def update_user(
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(
+def delete_user(
     user_id: str,
-    current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    current_user: CurrentSuperuser,
+    user_service: UserServiceDep,
 ) -> None:
     """
     Delete a user by user_id (superusers only).
@@ -118,10 +97,10 @@ async def delete_user(
 
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
-async def change_password(
+def change_password(
     payload: PasswordChangeRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    current_user: CurrentUser,
+    user_service: UserServiceDep,
 ) -> None:
     """
     Allow any authenticated user to change their own password.
@@ -130,11 +109,11 @@ async def change_password(
 
 
 @router.post("/{user_id}/reset-password", response_model=UserSchema)
-async def reset_user_password(
+def reset_user_password(
     user_id: str,
     payload: PasswordResetRequest,
-    current_user: Annotated[User, Depends(get_current_superuser)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
+    current_user: CurrentSuperuser,
+    user_service: UserServiceDep,
 ) -> User:
     """
     Reset a user's password (accessible by superusers only).

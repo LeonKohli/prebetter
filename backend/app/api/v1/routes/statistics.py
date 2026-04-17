@@ -12,6 +12,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.api.deps import get_current_user
 from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
 from app.repositories.alerts import (
     AlertRepository,
@@ -21,10 +22,9 @@ from app.repositories.alerts import (
 )
 from app.schemas.filters import AlertFilterParams
 from app.schemas.prelude import StatisticsSummary, TimelineDataPoint, TimelineResponse
-from ..routes.auth import get_current_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter(dependencies=[Depends(get_current_user)])
+router = APIRouter(dependencies=[Depends(get_current_user, scope="function")])
 
 
 class TimeFrame(str, Enum):
@@ -110,23 +110,36 @@ def _aggregate_timeline_results(
 
 
 @router.get("/timeline", response_model=TimelineResponse)
-async def get_timeline(
+def get_timeline(
     repo: Annotated[AlertRepository, Depends(get_alert_repository)],
-    time_frame: TimeFrame = Query(TimeFrame.HOUR, description="Grouping interval"),
-    start_date: datetime | None = Query(None, description="Start of date range (UTC)"),
-    end_date: datetime | None = Query(None, description="End of date range (UTC)"),
-    severity: str | None = Query(None, description="Filter by severity"),
-    classification: str | None = Query(None, description="Filter by classification"),
-    analyzer_name: str | None = Query(None, description="Filter by analyzer name"),
-    source_ip: str | None = Query(
-        None, description="Filter by source IP or CIDR (e.g., 192.168.0.0/16)"
-    ),
-    target_ip: str | None = Query(
-        None, description="Filter by target IP or CIDR (e.g., 10.0.0.0/8)"
-    ),
-    require_ips: bool = Query(
-        True, description="Only include alerts with both source AND target IPs"
-    ),
+    time_frame: Annotated[
+        TimeFrame, Query(description="Grouping interval")
+    ] = TimeFrame.HOUR,
+    start_date: Annotated[
+        datetime | None, Query(description="Start of date range (UTC)")
+    ] = None,
+    end_date: Annotated[
+        datetime | None, Query(description="End of date range (UTC)")
+    ] = None,
+    severity: Annotated[str | None, Query(description="Filter by severity")] = None,
+    classification: Annotated[
+        str | None, Query(description="Filter by classification")
+    ] = None,
+    analyzer_name: Annotated[
+        str | None, Query(description="Filter by analyzer name")
+    ] = None,
+    source_ip: Annotated[
+        str | None,
+        Query(description="Filter by source IP or CIDR (e.g., 192.168.0.0/16)"),
+    ] = None,
+    target_ip: Annotated[
+        str | None,
+        Query(description="Filter by target IP or CIDR (e.g., 10.0.0.0/8)"),
+    ] = None,
+    require_ips: Annotated[
+        bool,
+        Query(description="Only include alerts with both source AND target IPs"),
+    ] = True,
 ) -> TimelineResponse:
     """Get timeline data for alerts chart."""
     try:
@@ -161,9 +174,11 @@ async def get_timeline(
 
 
 @router.get("/summary", response_model=StatisticsSummary)
-async def get_statistics_summary(
+def get_statistics_summary(
     repo: Annotated[StatisticsRepository, Depends(get_statistics_repository)],
-    time_range: int = Query(24, ge=1, le=720, description="Time range in hours"),
+    time_range: Annotated[
+        int, Query(ge=1, le=720, description="Time range in hours")
+    ] = 24,
 ) -> StatisticsSummary:
     """Get summary statistics for alerts."""
     start_date, end_date = get_time_range(time_range)
