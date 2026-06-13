@@ -73,43 +73,9 @@ class AlertRepository(BaseRepository[Alert]):
     No magic **kwargs, no leaky abstractions.
     """
 
-    def __init__(self, db: Session):
-        super().__init__(db)
-        # Create aliased tables once for reuse
-        self._source_addr = aliased(Address)
-        self._target_addr = aliased(Address)
-
     # =========================================================================
     # PRIVATE: Query Building
     # =========================================================================
-
-    def _build_base_select(self):
-        """
-        Build base SELECT columns for alert list queries.
-
-        Returns columns needed for AlertListItem response.
-        """
-        return select(
-            Alert._ident,
-            Alert.messageid,
-            DetectTime.time.label("detect_time"),
-            CreateTime.time.label("create_time"),
-            Classification.text.label("classification_text"),
-            Impact.severity,
-            self._source_addr.address.label("source_ipv4"),
-            self._target_addr.address.label("target_ipv4"),
-            Analyzer.name.label("analyzer_name"),
-            Node.name.label("analyzer_host"),
-            Analyzer.model.label("analyzer_model"),
-            Analyzer.manufacturer.label("analyzer_manufacturer"),
-            Analyzer.version.label("analyzer_version"),
-            literal_column("Prelude_Analyzer.class").label("analyzer_class"),
-            Analyzer.ostype.label("analyzer_ostype"),
-            Analyzer.osversion.label("analyzer_osversion"),
-            Node.location.label("node_location"),
-            Node.category.label("node_category"),
-            CorrelationAlert.name.label("correlation_description"),
-        ).distinct()
 
     def _ip_scalar(self, parent_type: str):
         """
@@ -186,63 +152,6 @@ class AlertRepository(BaseRepository[Alert]):
             .outerjoin(Node, get_node_join_conditions(Alert._ident))
         )
 
-    def _build_base_joins(self, query, require_ips: bool = True):
-        """
-        Apply standard JOINs for alert queries.
-
-        All join conditions are defined HERE - single source of truth.
-
-        Args:
-            query: SQLAlchemy query to add joins to
-            require_ips: If True (default), use INNER JOINs to only include
-                alerts with both source AND target IPv4 addresses.
-                If False, use LEFT OUTER JOINs to include all alerts.
-        """
-        query = (
-            query.select_from(Alert)
-            .outerjoin(DetectTime, Alert._ident == DetectTime._message_ident)
-            .outerjoin(
-                CreateTime,
-                and_(
-                    CreateTime._message_ident == Alert._ident,
-                    CreateTime._parent_type == "A",
-                ),
-            )
-            .outerjoin(Classification, Classification._message_ident == Alert._ident)
-            .outerjoin(Impact, Impact._message_ident == Alert._ident)
-            .outerjoin(
-                CorrelationAlert, CorrelationAlert._message_ident == Alert._ident
-            )
-        )
-
-        # Source address join - INNER if require_ips, else LEFT OUTER
-        source_join_condition = and_(
-            self._source_addr._message_ident == Alert._ident,
-            self._source_addr._parent_type == "S",
-            self._source_addr.category == "ipv4-addr",
-        )
-        if require_ips:
-            query = query.join(self._source_addr, source_join_condition)
-        else:
-            query = query.outerjoin(self._source_addr, source_join_condition)
-
-        # Target address join - INNER if require_ips, else LEFT OUTER
-        target_join_condition = and_(
-            self._target_addr._message_ident == Alert._ident,
-            self._target_addr._parent_type == "T",
-            self._target_addr.category == "ipv4-addr",
-        )
-        if require_ips:
-            query = query.join(self._target_addr, target_join_condition)
-        else:
-            query = query.outerjoin(self._target_addr, target_join_condition)
-
-        query = query.outerjoin(
-            Analyzer, get_analyzer_join_conditions(Alert._ident)
-        ).outerjoin(Node, get_node_join_conditions(Alert._ident))
-
-        return query
-
     def _ip_presence_conditions(
         self, filters: AlertFilterParams, ident_col=Alert._ident
     ) -> list:
@@ -290,31 +199,20 @@ class AlertRepository(BaseRepository[Alert]):
         self,
         query,
         filters: AlertFilterParams,
-        source_addr=None,
-        target_addr=None,
         include_server_filter: bool = True,
-        include_ip_filter: bool = True,
     ):
         """
-        Apply all filters to query.
+        Apply non-IP filters to query (date, severity, classification, server,
+        analyzer).
 
-        SINGLE SOURCE OF TRUTH for filter logic.
-        No magic kwargs, explicit parameters only.
+        Source/target IP presence and filtering are handled separately via
+        _ip_presence_conditions (EXISTS), so this method never touches Address.
 
         Args:
             query: SQLAlchemy query to filter
             filters: Filter parameters
-            source_addr: Address alias for source (defaults to self._source_addr)
-            target_addr: Address alias for target (defaults to self._target_addr)
             include_server_filter: Whether to apply server filter (requires Node join)
-            include_ip_filter: Whether to apply source/target IP filters against the
-                Address aliases. Set False when IP presence/filtering is handled via
-                _ip_presence_conditions (EXISTS) instead of joined aliases.
         """
-        # Use provided aliases or fall back to instance aliases
-        source_addr = source_addr or self._source_addr
-        target_addr = target_addr or self._target_addr
-
         # Date range filters
         if filters.start_date:
             # Future date check - return empty results
@@ -324,33 +222,6 @@ class AlertRepository(BaseRepository[Alert]):
 
         if filters.end_date:
             query = query.where(DetectTime.time <= filters.end_date)
-
-        if include_ip_filter:
-            source_range = filters.source_ip_range()
-            if source_range:
-                if source_range.is_cidr:
-                    ip_as_int = func.inet_aton(source_addr.address)
-                    query = query.where(
-                        and_(
-                            ip_as_int >= source_range.network_int,
-                            ip_as_int <= source_range.broadcast_int,
-                        )
-                    )
-                else:
-                    query = query.where(source_addr.address == source_range.original)
-
-            target_range = filters.target_ip_range()
-            if target_range:
-                if target_range.is_cidr:
-                    ip_as_int = func.inet_aton(target_addr.address)
-                    query = query.where(
-                        and_(
-                            ip_as_int >= target_range.network_int,
-                            ip_as_int <= target_range.broadcast_int,
-                        )
-                    )
-                else:
-                    query = query.where(target_addr.address == target_range.original)
 
         # Severity filter (supports comma-separated)
         severity_list = filters.severity_list()
@@ -420,7 +291,7 @@ class AlertRepository(BaseRepository[Alert]):
         ip_conditions = self._ip_presence_conditions(filters)
         if ip_conditions:
             query = query.where(*ip_conditions)
-        query = self._apply_filters(query, filters, include_ip_filter=False)
+        query = self._apply_filters(query, filters)
 
         sort_column = self._get_sort_column(sort_by)
         if sort_column is not None:
@@ -462,7 +333,7 @@ class AlertRepository(BaseRepository[Alert]):
         ip_conditions = self._ip_presence_conditions(filters, ident_col=ident)
         if ip_conditions:
             query = query.where(*ip_conditions)
-        query = self._apply_filters(query, filters, include_ip_filter=False)
+        query = self._apply_filters(query, filters)
 
         # Tie-break in the same direction as the time sort so the order matches
         # the (time, _message_ident) index read direction - no filesort, the
@@ -519,7 +390,7 @@ class AlertRepository(BaseRepository[Alert]):
         ip_conditions = self._ip_presence_conditions(filters)
         if ip_conditions:
             query = query.where(*ip_conditions)
-        query = self._apply_filters(query, filters, include_ip_filter=False)
+        query = self._apply_filters(query, filters)
 
         return self._execute_no_materialization(query).scalar() or 0
 
@@ -608,7 +479,6 @@ class AlertRepository(BaseRepository[Alert]):
             query,
             filters,
             include_server_filter=False,  # Timeline query doesn't join Node
-            include_ip_filter=False,  # IP presence/filtering handled via EXISTS above
         )
 
         # Group and order
@@ -683,7 +553,7 @@ class AlertRepository(BaseRepository[Alert]):
             ip_conditions = self._ip_presence_conditions(filters)
             if ip_conditions:
                 query = query.where(*ip_conditions)
-            query = self._apply_filters(query, filters, include_ip_filter=False)
+            query = self._apply_filters(query, filters)
 
         # Order by ID descending and limit
         query = query.order_by(Alert._ident.desc()).limit(limit)
@@ -758,16 +628,6 @@ class StatisticsRepository(BaseRepository):
 
     Encapsulates all statistics aggregation logic.
     """
-
-    def _base_alert_query(self, start_date, end_date):
-        """Build base query with date filter applied. DRY helper."""
-        return (
-            select(Alert)
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
-        )
 
     def _aggregation_query(self, select_cols, start_date, end_date):
         """Build aggregation query with date filter. DRY helper."""

@@ -54,10 +54,6 @@ class BaseRepository(Generic[T]):
         """Execute query and return first result or None."""
         return self.db.execute(query).first()
 
-    def execute_all(self, query: Select) -> list:
-        """Execute query and return all results."""
-        return self.db.execute(query).all()
-
     def scalar(self, query: Select):
         """Execute query and return scalar value."""
         return self.db.scalar(query)
