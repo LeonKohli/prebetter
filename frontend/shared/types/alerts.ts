@@ -135,6 +135,13 @@ export interface NetworkInfo {
   addresses: string[]
 }
 
+// Real client attribution recovered from proxied request headers (X-Forwarded-For)
+export interface ForwardedInfo {
+  true_source?: string
+  forwarded_for: string[]
+  via_proxy?: string
+}
+
 // Comprehensive alert detail from backend
 export interface AlertDetail {
   id: string
@@ -155,5 +162,6 @@ export interface AlertDetail {
   web_services: WebServiceInfo[]
   alert_idents: AlertIdentInfo[]
   additional_data: Record<string, any>
+  forwarded?: ForwardedInfo
   correlation_description?: string
 }

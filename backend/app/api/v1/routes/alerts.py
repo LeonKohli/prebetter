@@ -39,6 +39,7 @@ from app.database.models import (
     build_node_info,
     build_process_info,
     process_additional_data,
+    extract_forwarded_info,
 )
 from app.models.prelude import (
     Alert,
@@ -291,6 +292,9 @@ def get_alert_detail(
         # Always return full, non-truncated data in multiple formats
         additional_data = process_additional_data(add_data_rows)
 
+        # Recover the real client IP from proxied request headers (X-Forwarded-For)
+        forwarded_info = extract_forwarded_info(add_data_rows)
+
         analyzers_info = []
         for analyzer in analyzers_query:
             # Use pre-loaded data from dictionaries instead of executing N queries
@@ -466,6 +470,7 @@ def get_alert_detail(
                 for ai in alert_idents
             ],
             additional_data=additional_data,
+            forwarded=forwarded_info,
             correlation_description=alert[5].name if alert and alert[5] else None,
         )
     except HTTPException:

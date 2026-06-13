@@ -7,6 +7,8 @@ API schema models, providing consistent transformation logic across the applicat
 
 from typing import Any
 import base64
+import ipaddress
+import re
 from sqlalchemy.engine.row import Row
 
 from ..schemas.prelude import (
@@ -14,6 +16,7 @@ from ..schemas.prelude import (
     TimeInfo,
     AnalyzerInfo,
     NodeInfo,
+    ForwardedInfo,
     GroupedAlert,
     GroupedAlertDetail,
     ProcessInfo,
@@ -319,6 +322,81 @@ def process_additional_data(add_data_rows):
             additional_data[meaning] = "Error processing data"
 
     return additional_data
+
+
+# Match only the IP chain / value, stopping at a real or backslash-escaped line
+# break — Prelude delivers payloads both as raw bytes and as b'...'-repr strings.
+_XFF_RE = re.compile(
+    r"X-Forwarded-For:[ \t]*([0-9A-Fa-f.:]+(?:[ \t]*,[ \t]*[0-9A-Fa-f.:]+)*)",
+    re.IGNORECASE,
+)
+_VIA_RE = re.compile(r"(?:[\r\n]|\\[rn])[ \t]*Via:[ \t]*([^\r\n\\]+)", re.IGNORECASE)
+
+
+def _row_text(row) -> str:
+    """Decode an AdditionalData row's payload into searchable text."""
+    raw = getattr(row, "data", None)
+    if isinstance(raw, bytes):
+        return raw.decode("utf-8", errors="replace")
+    if isinstance(raw, str):
+        return clean_byte_string(raw) or ""
+    return ""
+
+
+def _parse_ip(token: str) -> str | None:
+    """Validate an X-Forwarded-For token, stripping a trailing :port if present."""
+    token = token.strip().strip('"')
+    try:
+        return str(ipaddress.ip_address(token))
+    except ValueError:
+        if ":" in token:  # tolerate IPv4:port forms
+            host = token.rsplit(":", 1)[0]
+            try:
+                return str(ipaddress.ip_address(host))
+            except ValueError:
+                return None
+    return None
+
+
+def extract_forwarded_info(add_data_rows) -> ForwardedInfo | None:
+    """Recover the real client IP from proxied request headers in the payload.
+
+    Behind a proxy the IDMEF source/target are internal hops; the originating
+    client only survives in the HTTP payload's ``X-Forwarded-For``. Attribution
+    scans the chain right -> left and takes the first globally-routable address,
+    i.e. the IP the trusted edge proxy actually observed — robust against an
+    attacker prepending a spoofed value. Header-derived, so treat as advisory.
+    """
+    if not add_data_rows:
+        return None
+
+    chain: list[str] = []
+    via: str | None = None
+    for row in add_data_rows:
+        text = _row_text(row)
+        if not text:
+            continue
+        if not chain:
+            m = _XFF_RE.search(text)
+            if m:
+                chain = [
+                    ip for ip in (_parse_ip(t) for t in m.group(1).split(",")) if ip
+                ]
+        if via is None:
+            v = _VIA_RE.search(text)
+            if v:
+                via = v.group(1).strip()
+        if chain and via is not None:
+            break
+
+    if not chain:
+        return None
+
+    true_source = next(
+        (ip for ip in reversed(chain) if ipaddress.ip_address(ip).is_global),
+        chain[-1],
+    )
+    return ForwardedInfo(true_source=true_source, forwarded_for=chain, via_proxy=via)
 
 
 def format_relative_time(last_hb_time, current_time):

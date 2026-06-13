@@ -108,6 +108,21 @@ class NetworkInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
 
+class ForwardedInfo(BaseModel):
+    """Real client attribution recovered from proxied HTTP request headers.
+
+    When traffic reaches the sensor through a reverse/forward proxy, the L3
+    source/target addresses are the proxy's internal hops. The original client
+    only survives inside the HTTP payload's ``X-Forwarded-For`` header.
+    """
+
+    true_source: str | None = None  # best-guess real client IP (header-derived)
+    forwarded_for: list[str] = []  # full X-Forwarded-For chain, left -> right
+    via_proxy: str | None = None  # raw Via header value, if present
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TimeInfo(BaseModel):
     """Simplified time info without IDMEF overhead."""
 
@@ -251,6 +266,7 @@ class AlertDetail(BaseModel):
     web_services: list[WebServiceInfo] = []
     alert_idents: list[AlertIdentInfo] = []
     additional_data: dict = {}
+    forwarded: ForwardedInfo | None = None
     correlation_description: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

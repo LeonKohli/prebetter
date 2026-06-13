@@ -10,6 +10,10 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
 
+// Injected context must be resolved during setup, not inside event handlers
+const { urlState } = useAlertTableContext()
+const route = useRoute()
+
 // Reactive state
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -102,9 +106,6 @@ function getSeverityPillClass(severity?: string): string {
 async function viewAllFromPair() {
   if (!alertData.value?.source?.address || !alertData.value?.target?.address) return
 
-  const { urlState } = useAlertTableContext()
-  const route = useRoute()
-
   await urlState.navigateTo({
     query: {
       ...route.query,
@@ -185,7 +186,21 @@ function formatHttpLikePayload(raw: string): string {
                 {{ alertData.target?.address || 'Unknown' }}
               </span>
             </div>
-            
+
+            <div
+              v-if="alertData.forwarded?.true_source"
+              class="flex items-center gap-2 min-w-0"
+            >
+              <Icon name="lucide:fingerprint" class="h-4 w-4 text-primary shrink-0" />
+              <span class="text-xs text-muted-foreground">True source</span>
+              <span
+                class="font-mono text-sm truncate text-primary"
+                :title="`Real client from X-Forwarded-For (via ${alertData.forwarded.via_proxy || 'proxy'}). Header-supplied — verify before acting.`"
+              >
+                {{ alertData.forwarded.true_source }}
+              </span>
+            </div>
+
             <div class="flex items-center gap-2 min-w-0 sm:col-span-2 lg:col-span-3">
               <span class="text-xs text-muted-foreground">Classification</span>
               <span class="text-sm font-medium truncate" :title="alertData.classification_text || 'N/A'">
@@ -342,6 +357,40 @@ function formatHttpLikePayload(raw: string): string {
                             <Icon v-else name="lucide:copy" class="h-3 w-3" />
                           </Button>
                         </span>
+
+                        <template v-if="alertData.forwarded?.true_source">
+                          <span class="text-muted-foreground flex items-center gap-1">
+                            <Icon name="lucide:fingerprint" class="h-3.5 w-3.5 text-primary" />
+                            True Source
+                          </span>
+                          <span class="flex items-center gap-1 min-w-0">
+                            <span class="font-mono break-all text-primary">{{ alertData.forwarded.true_source }}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              class="h-6 w-6 p-0 shrink-0"
+                              aria-label="Copy true source IP"
+                              @click="copyWithFeedback('true-src', alertData.forwarded.true_source)"
+                            >
+                              <Icon v-if="copied['true-src']" name="lucide:check" class="h-3 w-3 text-primary" />
+                              <Icon v-else name="lucide:copy" class="h-3 w-3" />
+                            </Button>
+                            <span
+                              class="ml-0.5 inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                              title="Recovered from the X-Forwarded-For header. Header-supplied, so treat as advisory — verify before acting."
+                            >via proxy</span>
+                          </span>
+                        </template>
+
+                        <template v-if="(alertData.forwarded?.forwarded_for?.length || 0) > 1">
+                          <span class="text-muted-foreground">Forwarded chain</span>
+                          <span class="font-mono text-xs break-all">{{ alertData.forwarded?.forwarded_for.join(' → ') }}</span>
+                        </template>
+
+                        <template v-if="alertData.forwarded?.via_proxy">
+                          <span class="text-muted-foreground">Via proxy</span>
+                          <span class="text-xs break-all">{{ alertData.forwarded.via_proxy }}</span>
+                        </template>
 
                         <template v-if="alertData.source.interface">
                           <span class="text-muted-foreground">Interface</span>
