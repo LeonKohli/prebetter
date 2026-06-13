@@ -242,7 +242,9 @@ class AlertRepository(BaseRepository[Alert]):
 
         return query
 
-    def _ip_presence_conditions(self, filters: AlertFilterParams) -> list:
+    def _ip_presence_conditions(
+        self, filters: AlertFilterParams, ident_col=Alert._ident
+    ) -> list:
         """
         Build EXISTS semi-join conditions for source/target IPv4 presence + filters.
 
@@ -250,11 +252,14 @@ class AlertRepository(BaseRepository[Alert]):
         Address rows per side, so joining both sides fans every alert out ~16x
         and forces a DISTINCT/temp-table pass before LIMIT. Correlated EXISTS
         checks presence without generating those rows.
+
+        ident_col is the outer column to correlate against (Alert._ident, or
+        DetectTime._message_ident when driving from the detect-time index).
         """
 
         def addr_exists(parent_type: str, ip_range):
             clause = exists().where(
-                Address._message_ident == Alert._ident,
+                Address._message_ident == ident_col,
                 Address._parent_type == parent_type,
                 Address.category == "ipv4-addr",
             )
@@ -398,8 +403,17 @@ class AlertRepository(BaseRepository[Alert]):
         Returns:
             Tuple of (results, total_count)
         """
-        # Build query - scalar IP subqueries replace the address joins, so the
-        # query stays one row per alert (no DISTINCT, no fan-out before LIMIT)
+        # Get total count before pagination (EXISTS-based, avoids fan-out)
+        total = self._count_list(filters)
+
+        # Default sort: select the page of idents off the detect-time index
+        # first, then hydrate. Avoids sorting/scanning the whole filtered set.
+        if sort_by == "detect_time":
+            idents = self._page_idents_by_time(filters, pagination, sort_order)
+            return self._hydrate_idents(idents), total
+
+        # Other sorts: single-query path. Scalar IP subqueries replace the
+        # address joins, so the query stays one row per alert (no DISTINCT).
         query = self._build_list_select()
         query = self._build_list_joins(query)
         ip_conditions = self._ip_presence_conditions(filters)
@@ -407,10 +421,6 @@ class AlertRepository(BaseRepository[Alert]):
             query = query.where(*ip_conditions)
         query = self._apply_filters(query, filters, include_ip_filter=False)
 
-        # Get total count before pagination (EXISTS-based, avoids fan-out)
-        total = self._count_list(filters)
-
-        # Apply sorting
         sort_column = self._get_sort_column(sort_by)
         if sort_column is not None:
             query = query.order_by(
@@ -422,6 +432,59 @@ class AlertRepository(BaseRepository[Alert]):
         results = self.paginate(query, pagination.offset, pagination.size)
 
         return results, total
+
+    def _page_idents_by_time(
+        self, filters: AlertFilterParams, pagination: PaginationParams, sort_order: str
+    ) -> list[int]:
+        """
+        Select one page of alert idents ordered by detect time.
+
+        Roots on DetectTime (1:1 with Alert) so the time index drives ORDER BY
+        + LIMIT, and forces correlated EXISTS via STRAIGHT_JOIN so require_ips
+        is a per-row index probe rather than a materialized semi-join. Joins
+        only the tables an active filter references.
+        """
+        ident = DetectTime._message_ident
+        query = select(ident).select_from(DetectTime)
+
+        if filters.severity_list():
+            query = query.outerjoin(Impact, Impact._message_ident == ident)
+        if filters.classification_list():
+            query = query.outerjoin(
+                Classification, Classification._message_ident == ident
+            )
+        if filters.analyzer_name or filters.server_list():
+            query = query.outerjoin(Analyzer, get_analyzer_join_conditions(ident))
+        if filters.server_list():
+            query = query.outerjoin(Node, get_node_join_conditions(ident))
+
+        ip_conditions = self._ip_presence_conditions(filters, ident_col=ident)
+        if ip_conditions:
+            query = query.where(*ip_conditions)
+        query = self._apply_filters(query, filters, include_ip_filter=False)
+
+        # Tie-break in the same direction as the time sort so the order matches
+        # the (time, _message_ident) index read direction - no filesort, the
+        # LIMIT stops the scan at `size` rows. (MariaDB 10.5 has no descending
+        # indexes, so a time-DESC / ident-ASC order could not avoid the sort.)
+        if sort_order == "desc":
+            query = query.order_by(DetectTime.time.desc(), ident.desc())
+        else:
+            query = query.order_by(DetectTime.time.asc(), ident.asc())
+        query = query.prefix_with("STRAIGHT_JOIN")
+        query = query.offset(pagination.offset).limit(pagination.size)
+
+        return [row[0] for row in self.db.execute(query).all()]
+
+    def _hydrate_idents(self, idents: list[int]) -> list:
+        """Fetch full list rows for the given idents, preserving their order."""
+        if not idents:
+            return []
+        query = self._build_list_select()
+        query = self._build_list_joins(query)
+        query = query.where(Alert._ident.in_(idents))
+        rows_by_ident = {row._ident: row for row in self.db.execute(query).all()}
+        return [rows_by_ident[i] for i in idents if i in rows_by_ident]
 
     def _count_list(self, filters: AlertFilterParams) -> int:
         """
