@@ -793,12 +793,13 @@ class StatisticsRepository(BaseRepository):
         source_addr = aliased(Address)
         target_addr = aliased(Address)
 
-        # Total alerts count
-        base_subquery = (
-            self._base_alert_query(start_date, end_date).distinct().subquery()
-        )
+        # Total alerts in range. Alert:DetectTime is 1:1, so no DISTINCT/subquery
+        # is needed - COUNT(*) over the join is the count.
         total_alerts = (
-            self.db.scalar(select(func.count()).select_from(base_subquery)) or 0
+            self.db.scalar(
+                self._aggregation_query([func.count()], start_date, end_date)
+            )
+            or 0
         )
 
         # Severity distribution
