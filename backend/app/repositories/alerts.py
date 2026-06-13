@@ -167,6 +167,44 @@ class AlertRepository(BaseRepository[Alert]):
 
         return query
 
+    def _ip_presence_conditions(self, filters: AlertFilterParams) -> list:
+        """
+        Build EXISTS semi-join conditions for source/target IPv4 presence + filters.
+
+        Used instead of Address INNER joins. Each alert carries ~4 duplicate
+        Address rows per side, so joining both sides fans every alert out ~16x
+        and forces a DISTINCT/temp-table pass before LIMIT. Correlated EXISTS
+        checks presence without generating those rows.
+        """
+
+        def addr_exists(parent_type: str, ip_range):
+            clause = exists().where(
+                Address._message_ident == Alert._ident,
+                Address._parent_type == parent_type,
+                Address.category == "ipv4-addr",
+            )
+            if ip_range:
+                if ip_range.is_cidr:
+                    ip_as_int = func.inet_aton(Address.address)
+                    clause = clause.where(
+                        and_(
+                            ip_as_int >= ip_range.network_int,
+                            ip_as_int <= ip_range.broadcast_int,
+                        )
+                    )
+                else:
+                    clause = clause.where(Address.address == ip_range.original)
+            return clause
+
+        conditions = []
+        source_range = filters.source_ip_range()
+        if source_range or filters.require_ips:
+            conditions.append(addr_exists("S", source_range))
+        target_range = filters.target_ip_range()
+        if target_range or filters.require_ips:
+            conditions.append(addr_exists("T", target_range))
+        return conditions
+
     def _apply_filters(
         self,
         query,
@@ -174,6 +212,7 @@ class AlertRepository(BaseRepository[Alert]):
         source_addr=None,
         target_addr=None,
         include_server_filter: bool = True,
+        include_ip_filter: bool = True,
     ):
         """
         Apply all filters to query.
@@ -187,6 +226,9 @@ class AlertRepository(BaseRepository[Alert]):
             source_addr: Address alias for source (defaults to self._source_addr)
             target_addr: Address alias for target (defaults to self._target_addr)
             include_server_filter: Whether to apply server filter (requires Node join)
+            include_ip_filter: Whether to apply source/target IP filters against the
+                Address aliases. Set False when IP presence/filtering is handled via
+                _ip_presence_conditions (EXISTS) instead of joined aliases.
         """
         # Use provided aliases or fall back to instance aliases
         source_addr = source_addr or self._source_addr
@@ -202,31 +244,32 @@ class AlertRepository(BaseRepository[Alert]):
         if filters.end_date:
             query = query.where(DetectTime.time <= filters.end_date)
 
-        source_range = filters.source_ip_range()
-        if source_range:
-            if source_range.is_cidr:
-                ip_as_int = func.inet_aton(source_addr.address)
-                query = query.where(
-                    and_(
-                        ip_as_int >= source_range.network_int,
-                        ip_as_int <= source_range.broadcast_int,
+        if include_ip_filter:
+            source_range = filters.source_ip_range()
+            if source_range:
+                if source_range.is_cidr:
+                    ip_as_int = func.inet_aton(source_addr.address)
+                    query = query.where(
+                        and_(
+                            ip_as_int >= source_range.network_int,
+                            ip_as_int <= source_range.broadcast_int,
+                        )
                     )
-                )
-            else:
-                query = query.where(source_addr.address == source_range.original)
+                else:
+                    query = query.where(source_addr.address == source_range.original)
 
-        target_range = filters.target_ip_range()
-        if target_range:
-            if target_range.is_cidr:
-                ip_as_int = func.inet_aton(target_addr.address)
-                query = query.where(
-                    and_(
-                        ip_as_int >= target_range.network_int,
-                        ip_as_int <= target_range.broadcast_int,
+            target_range = filters.target_ip_range()
+            if target_range:
+                if target_range.is_cidr:
+                    ip_as_int = func.inet_aton(target_addr.address)
+                    query = query.where(
+                        and_(
+                            ip_as_int >= target_range.network_int,
+                            ip_as_int <= target_range.broadcast_int,
+                        )
                     )
-                )
-            else:
-                query = query.where(target_addr.address == target_range.original)
+                else:
+                    query = query.where(target_addr.address == target_range.original)
 
         # Severity filter (supports comma-separated)
         severity_list = filters.severity_list()
@@ -334,9 +377,6 @@ class AlertRepository(BaseRepository[Alert]):
             When require_ips is True (default), only counts alerts with BOTH
             source AND target IPv4 addresses.
         """
-        source_addr = aliased(Address)
-        target_addr = aliased(Address)
-
         # Build base query
         query = (
             select(
@@ -353,32 +393,17 @@ class AlertRepository(BaseRepository[Alert]):
             .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
         )
 
-        # Address joins - INNER if require_ips, else LEFT OUTER
-        source_join_condition = and_(
-            source_addr._message_ident == Alert._ident,
-            source_addr._parent_type == "S",
-            source_addr.category == "ipv4-addr",
-        )
-        target_join_condition = and_(
-            target_addr._message_ident == Alert._ident,
-            target_addr._parent_type == "T",
-            target_addr.category == "ipv4-addr",
-        )
+        # Source/target IP presence + filters via EXISTS (avoids ~16x address fan-out)
+        ip_conditions = self._ip_presence_conditions(filters)
+        if ip_conditions:
+            query = query.where(*ip_conditions)
 
-        if filters.require_ips:
-            query = query.join(source_addr, source_join_condition)
-            query = query.join(target_addr, target_join_condition)
-        else:
-            query = query.outerjoin(source_addr, source_join_condition)
-            query = query.outerjoin(target_addr, target_join_condition)
-
-        # Apply shared filter logic - pass local aliases, skip server filter (no Node join)
+        # Apply shared filter logic - IP handled above via EXISTS, skip server filter
         query = self._apply_filters(
             query,
             filters,
-            source_addr=source_addr,
-            target_addr=target_addr,
             include_server_filter=False,  # Timeline query doesn't join Node
+            include_ip_filter=False,  # IP presence/filtering handled via EXISTS above
         )
 
         # Group and order
