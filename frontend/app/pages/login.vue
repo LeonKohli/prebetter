@@ -67,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertTriangle } from 'lucide-vue-next'
+import { AlertTriangle } from '@lucide/vue'
 import { toFormValidator } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
