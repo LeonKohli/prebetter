@@ -73,6 +73,9 @@ coverage.xml
 *.sqlite
 *.db
 
+# Local DB dumps (benchmarking against real data)
+.dbdump/
+
 # Environments
 .env
 .env.*
