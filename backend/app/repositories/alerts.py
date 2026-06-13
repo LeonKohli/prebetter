@@ -28,6 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.engine import Engine
+from sqlalchemy.dialects import mysql
 
 from .base import BaseRepository
 from app.schemas.filters import AlertFilterParams, PaginationParams
@@ -520,32 +521,33 @@ class AlertRepository(BaseRepository[Alert]):
             query = query.where(*ip_conditions)
         query = self._apply_filters(query, filters, include_ip_filter=False)
 
-        return self._scalar_no_materialization(query)
+        return self._execute_no_materialization(query).scalar() or 0
 
-    def _scalar_no_materialization(self, stmt) -> int:
+    def _execute_no_materialization(self, stmt):
         """
-        Run a scalar count with semi-join materialization disabled for this
-        one statement.
+        Execute a statement with semi-join materialization disabled for this one
+        statement, returning a Result with normal Row access.
 
         The require_ips EXISTS checks otherwise get materialized into ~350k-row
-        temp tables (one per side) before the count runs. Disabling only
+        temp tables (one per side) before the query runs. Disabling only
         materialization - semijoin optimization stays on, so the planner can
         still drive from a selective filter and eliminate rows early - turns
-        them into correlated index probes. Measured 3.4x faster unfiltered with
-        no regression on any filter combination.
+        them into correlated index probes. Measured ~3x faster on unfiltered/
+        broad queries with no regression on any filter combination.
 
         SET STATEMENT scopes the hint to this query alone (no session state
-        change); render_postcompile expands IN-lists so values stay bound.
+        change). Compiling with paramstyle "named" + render_postcompile keeps
+        every value a bound parameter (IN-lists expanded), so the rendered SQL
+        wraps safely in text() with no literal interpolation.
         """
         compiled = stmt.compile(
-            dialect=self.db.get_bind().dialect,
+            dialect=mysql.dialect(paramstyle="named"),
             compile_kwargs={"render_postcompile": True},
         )
-        sql = "SET STATEMENT optimizer_switch='materialization=off' FOR " + str(
-            compiled
+        hinted = text(
+            "SET STATEMENT optimizer_switch='materialization=off' FOR " + str(compiled)
         )
-        row = self.db.connection().exec_driver_sql(sql, compiled.params).fetchone()
-        return row[0] if row and row[0] is not None else 0
+        return self.db.execute(hinted, compiled.params)
 
     def _get_sort_column(self, sort_by: str):
         """Map sort field name to SQLAlchemy column."""
@@ -614,7 +616,7 @@ class AlertRepository(BaseRepository[Alert]):
             text("time_bucket"), Impact.severity, Classification.text, Analyzer.name
         ).order_by(text("time_bucket"))
 
-        return self.execute_all(query)
+        return self._execute_no_materialization(query).all()
 
     def build_new_alerts_query(
         self, last_id: int, require_ips: bool = True, limit: int = 50
