@@ -212,8 +212,15 @@ def build_alert_detail_query(db: Session, alert_id: int):
         select(Reference).where(Reference._message_ident == alert_id).distinct()
     )
 
+    # _parent_type leads the only usable index on Service and Alertident, so
+    # filtering by _message_ident alone forces a full scan (Alertident ~1.7M
+    # rows -> ~475ms per alert view). Constraining _parent_type lets the lookup
+    # use the PRIMARY index. Services are always source/target; alertidents
+    # always live under a correlation alert.
     services_query = (
-        select(Service).where(Service._message_ident == alert_id).distinct()
+        select(Service)
+        .where(Service._parent_type.in_(("S", "T")), Service._message_ident == alert_id)
+        .distinct()
     )
 
     web_services_query = (
@@ -221,7 +228,12 @@ def build_alert_detail_query(db: Session, alert_id: int):
     )
 
     alert_idents_query = (
-        select(Alertident).where(Alertident._message_ident == alert_id).distinct()
+        select(Alertident)
+        .where(
+            Alertident._parent_type == "C",
+            Alertident._message_ident == alert_id,
+        )
+        .distinct()
     )
 
     additional_data_query = select(AdditionalData).where(
