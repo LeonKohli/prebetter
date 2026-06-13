@@ -110,6 +110,81 @@ class AlertRepository(BaseRepository[Alert]):
             CorrelationAlert.name.label("correlation_description"),
         ).distinct()
 
+    def _ip_scalar(self, parent_type: str):
+        """
+        Correlated scalar for an alert's single source/target IPv4.
+
+        Each alert has exactly one distinct ipv4 per side, stored as ~4
+        duplicate Address rows; MIN collapses them without a join fan-out.
+        """
+        return (
+            select(func.min(Address.address))
+            .where(
+                Address._message_ident == Alert._ident,
+                Address._parent_type == parent_type,
+                Address.category == "ipv4-addr",
+            )
+            .scalar_subquery()
+        )
+
+    def _build_list_select(self):
+        """
+        SELECT columns for the alert list, with source/target IPv4 as
+        correlated scalar subqueries instead of address joins.
+
+        Avoids the ~16x fan-out of joining both address sides, so the query
+        needs no DISTINCT and ORDER BY ... LIMIT is not gated on materializing
+        every joined row first.
+        """
+        return select(
+            Alert._ident,
+            Alert.messageid,
+            DetectTime.time.label("detect_time"),
+            CreateTime.time.label("create_time"),
+            Classification.text.label("classification_text"),
+            Impact.severity,
+            self._ip_scalar("S").label("source_ipv4"),
+            self._ip_scalar("T").label("target_ipv4"),
+            Analyzer.name.label("analyzer_name"),
+            Node.name.label("analyzer_host"),
+            Analyzer.model.label("analyzer_model"),
+            Analyzer.manufacturer.label("analyzer_manufacturer"),
+            Analyzer.version.label("analyzer_version"),
+            literal_column("Prelude_Analyzer.class").label("analyzer_class"),
+            Analyzer.ostype.label("analyzer_ostype"),
+            Analyzer.osversion.label("analyzer_osversion"),
+            Node.location.label("node_location"),
+            Node.category.label("node_category"),
+            CorrelationAlert.name.label("correlation_description"),
+        )
+
+    def _build_list_joins(self, query):
+        """
+        Apply the non-address LEFT joins for the list query.
+
+        All joined tables are 1:1 with the alert (CreateTime/Classification/
+        Impact/CorrelationAlert by message ident; Analyzer/Node pinned to the
+        primary index -1). Source/target presence is enforced via EXISTS.
+        """
+        return (
+            query.select_from(Alert)
+            .outerjoin(DetectTime, Alert._ident == DetectTime._message_ident)
+            .outerjoin(
+                CreateTime,
+                and_(
+                    CreateTime._message_ident == Alert._ident,
+                    CreateTime._parent_type == "A",
+                ),
+            )
+            .outerjoin(Classification, Classification._message_ident == Alert._ident)
+            .outerjoin(Impact, Impact._message_ident == Alert._ident)
+            .outerjoin(
+                CorrelationAlert, CorrelationAlert._message_ident == Alert._ident
+            )
+            .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
+            .outerjoin(Node, get_node_join_conditions(Alert._ident))
+        )
+
     def _build_base_joins(self, query, require_ips: bool = True):
         """
         Apply standard JOINs for alert queries.
@@ -323,10 +398,14 @@ class AlertRepository(BaseRepository[Alert]):
         Returns:
             Tuple of (results, total_count)
         """
-        # Build query
-        query = self._build_base_select()
-        query = self._build_base_joins(query, require_ips=filters.require_ips)
-        query = self._apply_filters(query, filters)
+        # Build query - scalar IP subqueries replace the address joins, so the
+        # query stays one row per alert (no DISTINCT, no fan-out before LIMIT)
+        query = self._build_list_select()
+        query = self._build_list_joins(query)
+        ip_conditions = self._ip_presence_conditions(filters)
+        if ip_conditions:
+            query = query.where(*ip_conditions)
+        query = self._apply_filters(query, filters, include_ip_filter=False)
 
         # Get total count before pagination (EXISTS-based, avoids fan-out)
         total = self._count_list(filters)
@@ -340,7 +419,7 @@ class AlertRepository(BaseRepository[Alert]):
 
         # Add stable secondary sort and apply pagination
         query = query.order_by(Alert._ident)
-        results = self.paginate(query.distinct(), pagination.offset, pagination.size)
+        results = self.paginate(query, pagination.offset, pagination.size)
 
         return results, total
 
@@ -387,8 +466,8 @@ class AlertRepository(BaseRepository[Alert]):
             "create_time": CreateTime.time,
             "severity": Impact.severity,
             "classification": Classification.text,
-            "source_ip": self._source_addr.address,
-            "target_ip": self._target_addr.address,
+            "source_ip": literal_column("source_ipv4"),
+            "target_ip": literal_column("target_ipv4"),
             "analyzer": Analyzer.name,
             "alert_id": Alert._ident,
         }
