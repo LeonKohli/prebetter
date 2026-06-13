@@ -84,6 +84,30 @@ def _derive_heartbeat_metadata(
     return last_heartbeat, seconds_ago, status, interval
 
 
+def _fetch_max_heartbeat_ts() -> datetime | None:
+    """Blocking: latest heartbeat timestamp. Offloaded via asyncio.to_thread in SSE."""
+    with PreludeSessionLocal() as db:
+        max_ts = db.scalar(
+            select(func.max(AnalyzerTime.time)).where(AnalyzerTime._parent_type == "H")
+        )
+    return ensure_timezone(max_ts) if max_ts else None
+
+
+def _poll_new_heartbeats(last_ts: datetime | None) -> tuple[datetime, int] | None:
+    """Blocking: (latest_ts, new_count) for heartbeats after last_ts, else None."""
+    with PreludeSessionLocal() as db:
+        query = select(
+            func.max(AnalyzerTime.time).label("latest_ts"),
+            func.count(AnalyzerTime.time).label("new_count"),
+        ).where(AnalyzerTime._parent_type == "H")
+        if last_ts:
+            query = query.where(AnalyzerTime.time > last_ts)
+        result = db.execute(query).first()
+    if result and result.latest_ts and result.new_count > 0:
+        return ensure_timezone(result.latest_ts), result.new_count
+    return None
+
+
 # SSE endpoint for real-time heartbeat updates
 # IMPORTANT: Must be defined BEFORE any path-parameter routes
 @router.get("/stream", response_class=EventSourceResponse)
@@ -115,16 +139,10 @@ async def stream_heartbeats(
         except ValueError:
             pass  # Invalid format, start fresh
 
-    # If no timestamp provided, get current max to avoid sending all historical data
+    # If no timestamp provided, get current max to avoid sending all historical data.
+    # Offloaded so the blocking query does not stall the event loop (async endpoint).
     if current_last_ts is None:
-        with PreludeSessionLocal() as db:
-            max_ts = db.scalar(
-                select(func.max(AnalyzerTime.time)).where(
-                    AnalyzerTime._parent_type == "H"
-                )
-            )
-            if max_ts:
-                current_last_ts = ensure_timezone(max_ts)
+        current_last_ts = await asyncio.to_thread(_fetch_max_heartbeat_ts)
 
     # Send immediate comment to establish connection
     # This transitions EventSource from CONNECTING to OPEN instantly
@@ -134,33 +152,22 @@ async def stream_heartbeats(
         if await request.is_disconnected():
             break
 
-        # Acquire fresh session for EACH poll - releases immediately after
-        # This is critical: SSE connections can live for hours/days
-        with PreludeSessionLocal() as db:
-            query = select(
-                func.max(AnalyzerTime.time).label("latest_ts"),
-                func.count(AnalyzerTime.time).label("new_count"),
-            ).where(AnalyzerTime._parent_type == "H")
+        # Poll in a worker thread: the query is synchronous (pymysql) and would
+        # otherwise block the event loop for every other client. The helper
+        # acquires and releases a fresh session per poll.
+        update = await asyncio.to_thread(_poll_new_heartbeats, current_last_ts)
 
-            if current_last_ts:
-                query = query.where(AnalyzerTime.time > current_last_ts)
+        if update is not None:
+            latest_ts, new_count = update
+            yield ServerSentEvent(
+                data={
+                    "latest_timestamp": latest_ts.isoformat(),
+                    "new_count": new_count,
+                },
+                event="heartbeat_update",
+            )
+            current_last_ts = latest_ts
 
-            result = db.execute(query).first()
-
-            if result and result.latest_ts and result.new_count > 0:
-                latest_ts = ensure_timezone(result.latest_ts)
-
-                yield ServerSentEvent(
-                    data={
-                        "latest_timestamp": latest_ts.isoformat(),
-                        "new_count": result.new_count,
-                    },
-                    event="heartbeat_update",
-                )
-
-                current_last_ts = latest_ts
-
-        # Session is now CLOSED - connection returned to pool
         await asyncio.sleep(5)
 
 

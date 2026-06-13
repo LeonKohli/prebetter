@@ -122,6 +122,20 @@ def list_alerts(
     )
 
 
+def _fetch_max_alert_id() -> int:
+    """Blocking: current max Alert._ident. Offloaded via asyncio.to_thread in SSE."""
+    with PreludeSessionLocal() as db:
+        return db.scalar(select(func.max(Alert._ident))) or 0
+
+
+def _poll_new_alerts(last_id: int, require_ips: bool) -> list:
+    """Blocking: new alerts since last_id. Offloaded via asyncio.to_thread in SSE."""
+    with PreludeSessionLocal() as db:
+        repo = AlertRepository(db)
+        query = repo.build_new_alerts_query(last_id=last_id, require_ips=require_ips)
+        return db.execute(query).all()
+
+
 # SSE endpoint for real-time alert streaming
 # IMPORTANT: Must be defined BEFORE /{alert_id} route to avoid path parameter matching
 @router.get("/stream", response_class=EventSourceResponse)
@@ -154,11 +168,10 @@ async def stream_alerts(
         except ValueError:
             pass
 
-    # Get initial max ID if not provided - use short-lived session
+    # Get initial max ID if not provided - offloaded so the blocking query
+    # does not stall the event loop (this endpoint is async).
     if current_last_id is None:
-        with PreludeSessionLocal() as db:
-            max_id = db.scalar(select(func.max(Alert._ident)))
-            current_last_id = max_id or 0
+        current_last_id = await asyncio.to_thread(_fetch_max_alert_id)
 
     # Send immediate comment to establish connection
     # This transitions EventSource from CONNECTING to OPEN instantly
@@ -168,28 +181,24 @@ async def stream_alerts(
         if await request.is_disconnected():
             break
 
-        # Acquire fresh session for EACH poll - releases immediately after
-        # This is critical: SSE connections can live for hours/days
-        with PreludeSessionLocal() as db:
-            repo = AlertRepository(db)
-            query = repo.build_new_alerts_query(
-                last_id=current_last_id,
-                require_ips=require_ips,
+        # Poll in a worker thread: the query is synchronous (pymysql) and would
+        # otherwise block the event loop for every other client. The helper
+        # acquires and releases a fresh session per poll.
+        results = await asyncio.to_thread(
+            _poll_new_alerts, current_last_id, require_ips
+        )
+
+        if results:
+            # Send minimal notification - just alert count and latest ID
+            # Frontend uses this to trigger targeted refetch, not display
+            latest_id = int(results[-1][0])  # Alert._ident is first column
+            yield ServerSentEvent(
+                data={"count": len(results), "latest_id": latest_id},
+                event="alerts",
+                id=str(latest_id),
             )
-            results = db.execute(query).all()
+            current_last_id = latest_id
 
-            if results:
-                # Send minimal notification - just alert count and latest ID
-                # Frontend uses this to trigger targeted refetch, not display
-                latest_id = int(results[-1][0])  # Alert._ident is first column
-                yield ServerSentEvent(
-                    data={"count": len(results), "latest_id": latest_id},
-                    event="alerts",
-                    id=str(latest_id),
-                )
-                current_last_id = latest_id
-
-        # Session is now CLOSED - connection returned to pool
         await asyncio.sleep(5)
 
 
