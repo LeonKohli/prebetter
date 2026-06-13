@@ -18,6 +18,7 @@ from sqlalchemy import (
     select,
     func,
     and_,
+    exists,
     literal_column,
     literal,
     or_,
@@ -391,18 +392,27 @@ class AlertRepository(BaseRepository[Alert]):
         self, last_id: int, require_ips: bool = True, limit: int = 50
     ):
         """
-        Build a query for new alerts since last_id (used by SSE polling).
+        Build a lightweight query for new alerts since last_id (SSE polling).
 
-        Returns the query and aliased address models for optional IP filtering.
+        Selects only Alert._ident — the stream endpoint uses just the count and
+        latest id. IP presence is checked with EXISTS semi-joins instead of the
+        full list query's joins + DISTINCT, which builds a temp table over 19
+        discarded columns. ~17-6000x cheaper on real data (see complexity report).
         """
-        query = self._build_base_select()
-        query = self._build_base_joins(query, require_ips=False)
-        query = query.where(Alert._ident > last_id)
+        query = select(Alert._ident).where(Alert._ident > last_id)
 
         if require_ips:
             query = query.where(
-                self._source_addr.address.is_not(None),
-                self._target_addr.address.is_not(None),
+                exists().where(
+                    Address._message_ident == Alert._ident,
+                    Address._parent_type == "S",
+                    Address.category == "ipv4-addr",
+                ),
+                exists().where(
+                    Address._message_ident == Alert._ident,
+                    Address._parent_type == "T",
+                    Address.category == "ipv4-addr",
+                ),
             )
 
         return query.order_by(Alert._ident.asc()).limit(limit)
