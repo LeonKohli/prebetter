@@ -664,15 +664,26 @@ class AlertRepository(BaseRepository[Alert]):
         Returns:
             SQLAlchemy Result object configured for streaming (yield_per)
         """
-        query = self._build_base_select()
-        query = self._build_base_joins(query, require_ips=filters.require_ips)
+        # Scalar IP subqueries + EXISTS instead of the address joins: the prior
+        # builder fanned every alert out ~16x and a 50k export materialized a
+        # ~800k-row temp table (DISTINCT), ~17x slower than this one row/alert.
+        query = self._build_list_select()
+        query = self._build_list_joins(query)
 
-        # If specific alert IDs provided, filter by those only
         if alert_ids:
+            # Explicit ids select the rows; honor require_ips presence only
+            # (prior code used INNER address joins here), not the free filters.
+            if filters.require_ips:
+                presence = self._ip_presence_conditions(
+                    AlertFilterParams(require_ips=True)
+                )
+                query = query.where(*presence)
             query = query.where(Alert._ident.in_(alert_ids))
         else:
-            # Apply standard filters
-            query = self._apply_filters(query, filters)
+            ip_conditions = self._ip_presence_conditions(filters)
+            if ip_conditions:
+                query = query.where(*ip_conditions)
+            query = self._apply_filters(query, filters, include_ip_filter=False)
 
         # Order by ID descending and limit
         query = query.order_by(Alert._ident.desc()).limit(limit)
