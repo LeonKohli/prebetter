@@ -232,6 +232,8 @@ const chartOptions = computed(() => ({
     theme: colorMode.value,
     shared: true,
     intersect: false,
+    // apexcharts 5.13+ defaults tooltip.arrow to true; keep the prior flush look
+    arrow: false,
     x: { format: tooltipDateFormat.value },
     y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
   },
