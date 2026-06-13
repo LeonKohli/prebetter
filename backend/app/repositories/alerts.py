@@ -520,7 +520,32 @@ class AlertRepository(BaseRepository[Alert]):
             query = query.where(*ip_conditions)
         query = self._apply_filters(query, filters, include_ip_filter=False)
 
-        return self.db.scalar(query) or 0
+        return self._scalar_no_materialization(query)
+
+    def _scalar_no_materialization(self, stmt) -> int:
+        """
+        Run a scalar count with semi-join materialization disabled for this
+        one statement.
+
+        The require_ips EXISTS checks otherwise get materialized into ~350k-row
+        temp tables (one per side) before the count runs. Disabling only
+        materialization - semijoin optimization stays on, so the planner can
+        still drive from a selective filter and eliminate rows early - turns
+        them into correlated index probes. Measured 3.4x faster unfiltered with
+        no regression on any filter combination.
+
+        SET STATEMENT scopes the hint to this query alone (no session state
+        change); render_postcompile expands IN-lists so values stay bound.
+        """
+        compiled = stmt.compile(
+            dialect=self.db.get_bind().dialect,
+            compile_kwargs={"render_postcompile": True},
+        )
+        sql = "SET STATEMENT optimizer_switch='materialization=off' FOR " + str(
+            compiled
+        )
+        row = self.db.connection().exec_driver_sql(sql, compiled.params).fetchone()
+        return row[0] if row and row[0] is not None else 0
 
     def _get_sort_column(self, sort_by: str):
         """Map sort field name to SQLAlchemy column."""
