@@ -24,6 +24,12 @@ class ExportFormat(str, Enum):
     CSV = "csv"
 
 
+# Rows buffered per streamed chunk. Yielding per-row makes StreamingResponse emit
+# one ASGI http.response.body frame per row (~50k for a full export); batching
+# cuts that ~500x with byte-identical output.
+CSV_FLUSH_ROWS = 500
+
+
 def format_iso_datetime(dt):
     """
     Format a datetime object to ISO 8601 format.
@@ -42,23 +48,18 @@ def format_iso_datetime(dt):
 
 def generate_csv(results: Iterator, header: list) -> Iterator[str]:
     """
-    A generator that yields CSV lines.
+    A generator that streams CSV in batches of CSV_FLUSH_ROWS rows.
     Properly closes the result set to avoid unbuffered result warnings.
     """
     output = StringIO()
     writer = csv.writer(output)
 
     try:
-        # Write header row and yield it
         writer.writerow(header)
-        yield output.getvalue()
-        output.seek(0)
-        output.truncate(0)
 
-        # Write data rows one by one
-        for row in results:
-            # In SQLAlchemy 2.0 with labeled columns, we can access by attribute name
-            # The labels we set in the query: detect_time, create_time, classification_text, etc.
+        for i, row in enumerate(results, start=1):
+            # SQLAlchemy 2.0 labeled columns are accessed by the query's labels
+            # (detect_time, create_time, classification_text, ...).
             detect_time_str = format_iso_datetime(getattr(row, "detect_time", None))
             create_time_str = format_iso_datetime(getattr(row, "create_time", None))
 
@@ -77,9 +78,15 @@ def generate_csv(results: Iterator, header: list) -> Iterator[str]:
                     getattr(row, "analyzer_model", "") or "",
                 ]
             )
+
+            if i % CSV_FLUSH_ROWS == 0:
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+        # Flush the tail (and the header alone when results is empty).
+        if output.tell():
             yield output.getvalue()
-            output.seek(0)
-            output.truncate(0)
     finally:
         # Ensure the result set is properly closed
         # This prevents "unbuffered result was left incomplete" warnings
