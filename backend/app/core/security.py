@@ -17,8 +17,11 @@ BCRYPT_ROUNDS = settings.BCRYPT_ROUNDS
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against its bcrypt hash."""
+    # bcrypt 4.x silently truncated at 72 bytes; 5.x raises instead. Truncate
+    # here so hashes created under 4.x still verify (and the login path, which
+    # has no 72-byte guard, never 500s on an over-length password).
     return bcrypt.checkpw(
-        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+        plain_password.encode("utf-8")[:72], hashed_password.encode("utf-8")
     )
 
 
