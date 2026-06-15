@@ -48,6 +48,24 @@ REQUIRED_INDEXES: tuple[RequiredIndex, ...] = (
             "ON Prelude_DetectTime(time, _message_ident, gmtoff)"
         ),
     ),
+    # Both tables are looked up by _message_ident alone (the alert-detail view,
+    # and every alert deletion + orphan check), but their only index leads with
+    # _parent_type, forcing full scans (Alertident ~1.7M rows -> ~310ms, run
+    # twice per deletion). A _message_ident-leading index turns these into ref
+    # lookups with no query or behavior change. Verified scan->ref on a 300k-row
+    # replica: 15ms -> 0.2ms.
+    RequiredIndex(
+        table="Prelude_Alertident",
+        name="idx_alertident_msg",
+        create_sql=(
+            "CREATE INDEX idx_alertident_msg ON Prelude_Alertident(_message_ident)"
+        ),
+    ),
+    RequiredIndex(
+        table="Prelude_Service",
+        name="idx_service_msg",
+        create_sql="CREATE INDEX idx_service_msg ON Prelude_Service(_message_ident)",
+    ),
 )
 
 
