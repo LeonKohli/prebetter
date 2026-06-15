@@ -1,7 +1,7 @@
 /**
- * Reactive auth state backed by Better Auth's session store (shared nanostore).
- * The route middleware warms the store via `useSession(useFetch)` for SSR;
- * components read it synchronously here.
+ * Reactive auth state from Better Auth's session store (shared nanostore). It
+ * updates on sign-in and sign-out, so components read it for live UI. Route
+ * gating lives in the auth.global middleware, which reads the session fresh.
  */
 export function useAuth() {
   const session = authClient.useSession()
