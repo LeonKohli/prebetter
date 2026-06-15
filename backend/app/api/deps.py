@@ -42,6 +42,7 @@ def get_current_user(credentials: BearerDep) -> AuthUser:
             algorithms=[settings.JWT_ALGORITHM],
             issuer=settings.BETTER_AUTH_URL,
             audience=settings.BETTER_AUTH_URL,
+            leeway=15,  # tolerate small clock skew between Nuxt and the API
         )
     except PyJWTError:
         raise credentials_exception

@@ -18,6 +18,9 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    // Admin-managed users only: no public self-registration. Accounts are
+    // created via the admin plugin (auth.api.createUser), which bypasses sign-up.
+    disableSignUp: true,
     // Bridge to the existing bcrypt hashes so migrated users keep their passwords.
     password: {
       hash: (password) => bcrypt.hash(password, 12),
