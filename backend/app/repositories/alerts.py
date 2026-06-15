@@ -689,10 +689,11 @@ class StatisticsRepository(BaseRepository):
             or 0
         )
 
-        # Severity distribution
+        # Severity/classification/analyzer are each <=1 row per alert, so
+        # COUNT(*) equals COUNT(DISTINCT Alert._ident) without the dedup pass.
         severity_query = (
             self._aggregation_query(
-                [Impact.severity, func.count(Alert._ident.distinct())],
+                [Impact.severity, func.count()],
                 start_date,
                 end_date,
             )
@@ -704,7 +705,7 @@ class StatisticsRepository(BaseRepository):
         # Classification distribution
         classification_query = (
             self._aggregation_query(
-                [Classification.text, func.count(Alert._ident.distinct())],
+                [Classification.text, func.count()],
                 start_date,
                 end_date,
             )
@@ -718,7 +719,7 @@ class StatisticsRepository(BaseRepository):
         # Analyzer distribution
         analyzer_query = (
             self._aggregation_query(
-                [Analyzer.name, func.count(Alert._ident.distinct())],
+                [Analyzer.name, func.count()],
                 start_date,
                 end_date,
             )
