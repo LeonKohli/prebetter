@@ -266,17 +266,19 @@ def build_alert_detail_query(db: Session, alert_id: int):
 
 def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
     """Build a query for the timeline of heartbeats."""
+    # DISTINCT collapses heartbeats that share an identical (time, analyzer,
+    # host, model, version, class) tuple. The joins are strictly 1:1 (verified
+    # against prod: joined rows == AnalyzerTime rows), so they never fan out.
     timeline_query = (
         select(
             AnalyzerTime.time.label("timestamp"),
             Analyzer.name.label("analyzer_name"),
             Node.name.label("host_name"),
-            Address.address.label("node_address"),
             Analyzer.model.label("model"),
             Analyzer.version.label("version"),
             getattr(Analyzer, "class").label("class_"),
         )
-        .distinct()  # Add DISTINCT to prevent duplicates
+        .distinct()
         .select_from(AnalyzerTime)
         .join(
             Heartbeat,
@@ -299,15 +301,6 @@ def build_heartbeats_timeline_query(db: Session, cutoff_time: datetime):
                 Node._message_ident == Heartbeat._ident,
                 Node._parent_type == "H",
                 Node._parent0_index == -1,  # Match the analyzer index
-            ),
-        )
-        .outerjoin(
-            Address,
-            and_(
-                Address._message_ident == Node._message_ident,
-                Address._parent_type == Node._parent_type,
-                Address._parent0_index == Node._parent0_index,
-                Address._index == 0,
             ),
         )
         .where(AnalyzerTime.time >= cutoff_time)
