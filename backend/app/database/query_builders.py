@@ -230,7 +230,9 @@ def build_alert_detail_query(db: Session, alert_id: int):
     alert_idents_query = (
         select(Alertident)
         .where(
-            Alertident._parent_type == "C",
+            # full enum('T','C') - excludes nothing, but uses the PRIMARY index
+            # (covers tool-alert idents too, not just correlation 'C')
+            Alertident._parent_type.in_(("T", "C")),
             Alertident._message_ident == alert_id,
         )
         .distinct()
