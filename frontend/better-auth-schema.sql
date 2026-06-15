@@ -1,3 +1,11 @@
+-- Better Auth assumes modern timestamp semantics. On MariaDB/MySQL with
+-- explicit_defaults_for_timestamp=OFF (the legacy default, e.g. MariaDB 10.5),
+-- a nullable `timestamp` column silently becomes `NOT NULL DEFAULT '0000-00-00'`.
+-- That zero-date reads back as an Invalid Date and breaks the jwks grace-period
+-- filter (NaN), so /api/auth/jwks returns no keys and every JWT 401s. Force the
+-- modern behaviour for this session so nullable timestamps stay NULL.
+SET SESSION explicit_defaults_for_timestamp = 1;
+
 create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `username` varchar(255) unique, `displayUsername` text, `role` text, `banned` boolean, `banReason` text, `banExpires` timestamp(3));
 
 create table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `impersonatedBy` text);
