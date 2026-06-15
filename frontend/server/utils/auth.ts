@@ -4,17 +4,25 @@ import { createPool } from 'mysql2/promise'
 import { username, admin, jwt } from 'better-auth/plugins'
 import bcrypt from 'bcryptjs'
 
-const baseURL = process.env.BETTER_AUTH_URL || 'http://localhost:3000'
+// Fail fast on missing config rather than silently falling back (a localhost
+// default would make prod sign tokens with the wrong issuer and 401 everything).
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) throw new Error(`Missing required env var: ${name}`)
+  return value
+}
+
+const baseURL = requireEnv('BETTER_AUTH_URL')
 
 export const auth = betterAuth({
   baseURL,
-  secret: process.env.BETTER_AUTH_SECRET,
+  secret: requireEnv('BETTER_AUTH_SECRET'),
   database: createPool({
-    host: process.env.MYSQL_HOST,
+    host: requireEnv('MYSQL_HOST'),
     port: Number(process.env.MYSQL_PORT ?? 3306),
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_PREBETTER_DB,
+    user: requireEnv('MYSQL_USER'),
+    password: requireEnv('MYSQL_PASSWORD'),
+    database: requireEnv('MYSQL_PREBETTER_DB'),
   }),
   emailAndPassword: {
     enabled: true,
