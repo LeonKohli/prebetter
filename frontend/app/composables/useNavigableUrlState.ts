@@ -18,7 +18,8 @@ export function useNavigableUrlState(options: {
 } = {}) {
   const route = useRoute()
   const router = useRouter()
-  
+  const { setHint } = useSkeletonHint()
+
   const defaults = {
     view: (options.defaultView || 'grouped') as ViewMode,
     pageSize: (options.defaultPageSize || 100) as PageSize,
@@ -268,7 +269,6 @@ export function useNavigableUrlState(options: {
   const navigateToDetails = async (details: { sourceIp: string; targetIp: string; classification: string; expectedCount?: number }) => {
     // Set skeleton hint if we know expected row count
     if (details.expectedCount) {
-      const { setHint } = useSkeletonHint()
       setHint(details.expectedCount)
     }
 
