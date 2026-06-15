@@ -6,8 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.database.config import get_node_join_conditions, get_prelude_db
-from app.models.prelude import Analyzer, Classification, Impact, Node
+from app.database.config import get_prelude_db
+from app.models.prelude import Classification, Impact, Node
 
 logger = logging.getLogger(__name__)
 
@@ -64,20 +64,16 @@ def get_unique_servers(
 ) -> list[str]:
     """Get a list of unique short node names (servers like server-001)."""
     try:
+        # Analyzer-node rows (_parent_type='A', _parent0_index=-1) map 1:1 to the
+        # index=-1 analyzers, so we read node names directly instead of joining
+        # back through Analyzer (verified equivalent on prod; drops a 786k-row
+        # join). Still ~104k rows -> 7 names, hence DISTINCT.
         results = (
             db.execute(
                 select(Node.name)
-                .select_from(Analyzer)
-                .outerjoin(
-                    Node,
-                    get_node_join_conditions(
-                        Analyzer._message_ident, "A", Analyzer._index
-                    ),
-                )
                 .where(
-                    Analyzer.name.isnot(None),
-                    Analyzer._parent_type == "A",
-                    Analyzer._index == -1,
+                    Node._parent_type == "A",
+                    Node._parent0_index == -1,
                     Node.name.isnot(None),
                 )
                 .distinct()
