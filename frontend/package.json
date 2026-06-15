@@ -30,7 +30,6 @@
     "clsx": "^2.1.1",
     "mysql2": "^3.22.5",
     "nuxt": "^4.4.8",
-    "nuxt-auth-utils": "^0.5.29",
     "reka-ui": "^2.9.10",
     "shadcn-nuxt": "^2.7.4",
     "tailwind-merge": "^3.6.0",

@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 // Get auth session state
-const { ready } = useUserSession()
+const { isPending } = useAuth()
 
 // Global app configuration with reactive HTML attributes
 useHead({
@@ -15,7 +15,7 @@ useHead({
   },
   htmlAttrs: {
     lang: 'de-DE',
-    'data-auth-ready': () => String(ready.value)
+    'data-auth-ready': () => String(!isPending.value)
   }
 })
 </script>

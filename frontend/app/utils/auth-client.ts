@@ -5,3 +5,7 @@ import { usernameClient, adminClient } from 'better-auth/client/plugins'
 export const authClient = createAuthClient({
   plugins: [usernameClient(), adminClient()],
 })
+
+// Inferred from the auth config (incl. username/admin plugin fields). Source of
+// truth for the user shape across components — never hand-maintained.
+export type AppUser = typeof authClient.$Infer.Session.user

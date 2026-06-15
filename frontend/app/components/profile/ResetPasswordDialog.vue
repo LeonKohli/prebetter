@@ -57,16 +57,8 @@
 import { toFormValidator } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
-interface User {
-  id: string
-  username: string
-  email: string
-  created_at: string
-  updated_at?: string | null
-}
-
 interface Props {
-  user: User | null
+  user: AppUser | null
 }
 
 const props = defineProps<Props>()
@@ -103,12 +95,11 @@ const onSubmit = form.handleSubmit(async (values) => {
   if (!props.user) return
 
   try {
-    await $fetch(`/api/users/${props.user.id}/reset-password`, {
-      method: 'POST',
-      body: {
-        new_password: values.newPassword,
-      },
+    const { error } = await authClient.admin.setUserPassword({
+      userId: props.user.id,
+      newPassword: values.newPassword,
     })
+    if (error) throw new Error(error.message || 'Failed to reset password')
 
     // Emit success event
     emit('reset:success')

@@ -74,18 +74,16 @@
 
 <script setup lang="ts">
 import { toFormValidator } from '@vee-validate/zod'
-import type { FetchError } from 'ofetch'
 import { useForm } from 'vee-validate'
-import type { User } from '#auth-utils'
 
 interface Props {
-  user: User | null
+  user: AppUser | null
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  updateSuccess: [user: User]
+  updateSuccess: [user: AppUser]
 }>()
 
 // Dialog state
@@ -98,8 +96,8 @@ const form = useForm({
   initialValues: {
     username: props.user?.username ?? '',
     email: props.user?.email ?? '',
-    fullName: props.user?.full_name ?? '',
-    isSuperuser: props.user?.is_superuser ?? false,
+    fullName: props.user?.name ?? '',
+    isSuperuser: props.user?.role === 'admin',
   },
 })
 
@@ -108,21 +106,14 @@ const { isSubmitting, setFieldError, meta, resetForm, setValues } = form
 // Update form values when user prop changes
 watch(() => props.user, (newUser) => {
   if (newUser) {
-    setValues({
-      username: newUser.username,
+    const values = {
+      username: newUser.username ?? '',
       email: newUser.email,
-      fullName: newUser.full_name ?? '',
-      isSuperuser: newUser.is_superuser,
-    })
-    // Reset dirty state after setting values from prop
-    resetForm({
-      values: {
-        username: newUser.username,
-        email: newUser.email,
-        fullName: newUser.full_name ?? '',
-        isSuperuser: newUser.is_superuser,
-      },
-    })
+      fullName: newUser.name ?? '',
+      isSuperuser: newUser.role === 'admin',
+    }
+    setValues(values)
+    resetForm({ values }) // reset dirty state after applying prop values
   }
 })
 
@@ -130,45 +121,45 @@ watch(() => props.user, (newUser) => {
 const onSubmit = form.handleSubmit(async (values) => {
   if (!props.user) return
 
-  try {
-    // Build update payload - only include changed fields
-    const updates: Record<string, string | boolean | null> = {}
-    if (values.email !== props.user.email) updates.email = values.email
-    if (values.fullName !== props.user.full_name) updates.full_name = values.fullName || null
-    if (values.isSuperuser !== props.user.is_superuser) updates.is_superuser = values.isSuperuser
+  const emailChanged = values.email !== props.user.email
+  const nameChanged = values.fullName !== (props.user.name ?? '')
+  const roleChanged = values.isSuperuser !== (props.user.role === 'admin')
 
-    // Skip if no changes
-    if (Object.keys(updates).length === 0) {
-      isOpen.value = false
-      return
-    }
-
-    const data = await $fetch<User>(`/api/users/${props.user.id}`, {
-      method: 'PUT',
-      body: updates,
-    })
-
-    // Emit success event
-    emit('updateSuccess', data)
+  if (!emailChanged && !nameChanged && !roleChanged) {
     isOpen.value = false
-  } catch (error) {
-    console.error('Update user error:', error)
+    return
+  }
 
-    const fetchError = error as FetchError<FastAPIErrorData>
-    const detail = fetchError.data?.detail
-    if (!detail) return
-
-    if (typeof detail === 'string') {
-      if (detail.includes('Email already')) {
-        setFieldError('email', 'Email is already in use')
-      } else {
-        setFieldError('email', detail)
-      }
+  // Profile fields (email/name) go through update-user; role through set-role.
+  if (emailChanged || nameChanged) {
+    const data: Record<string, string> = {}
+    if (emailChanged) data.email = values.email
+    if (nameChanged) data.name = values.fullName || ''
+    const { error } = await authClient.admin.updateUser({ userId: props.user.id, data })
+    if (error) {
+      setFieldError('email', error.message || 'Failed to update user')
       return
     }
-
-    mapValidationErrorsToForm(detail, { username: 'username', email: 'email', full_name: 'fullName' }, setFieldError)
   }
+
+  if (roleChanged) {
+    const { error } = await authClient.admin.setRole({
+      userId: props.user.id,
+      role: values.isSuperuser ? 'admin' : 'user',
+    })
+    if (error) {
+      setFieldError('email', error.message || 'Failed to change role')
+      return
+    }
+  }
+
+  emit('updateSuccess', {
+    ...props.user,
+    email: values.email,
+    name: values.fullName || '',
+    role: values.isSuperuser ? 'admin' : 'user',
+  })
+  isOpen.value = false
 })
 
 // Expose open method for parent component

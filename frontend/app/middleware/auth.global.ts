@@ -1,18 +1,16 @@
-export default defineNuxtRouteMiddleware((to) => {
-  const { loggedIn, ready } = useUserSession()
-  
-  // Skip during SSR to avoid hydration mismatches
-  if (!ready.value) {
-    return
-  }
-
+export default defineNuxtRouteMiddleware(async (to) => {
   const needsAuth = to.meta.requiresAuth === true
   const guestOnly = to.meta.guestOnly === true
+  if (!needsAuth && !guestOnly) return
 
-  if (needsAuth && !loggedIn.value) {
+  // SSR-safe session load; also warms the shared store for client components.
+  const { data: session } = await authClient.useSession(useFetch)
+  const loggedIn = !!session.value
+
+  if (needsAuth && !loggedIn) {
     return navigateTo(`/login?redirect=${encodeURIComponent(to.fullPath)}`)
   }
-  if (guestOnly && loggedIn.value) {
+  if (guestOnly && loggedIn) {
     return navigateTo('/')
   }
 })

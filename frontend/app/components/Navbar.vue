@@ -3,8 +3,7 @@
     role="banner"
     class="sticky top-0 z-20 border-b backdrop-blur supports-backdrop-blur:bg-background/95 px-2 md:px-4"
   >
-    <AuthState v-slot="{ loggedIn, user }">
-      <div class="h-12 flex items-center justify-between">
+    <div class="h-12 flex items-center justify-between">
         <div class="flex items-center gap-6">
           <NuxtLink to="/" class="flex items-center space-x-2 group" aria-label="Home">
             <Icon name="lucide:shield-alert" class="h-5 w-5 text-primary" />
@@ -14,35 +13,38 @@
             </div>
           </NuxtLink>
 
-          <nav v-if="loggedIn" class="hidden items-center gap-3 md:flex" aria-label="Main">
-            <NuxtLink
-              v-for="link in navLinks"
-              :key="link.to"
-              :to="link.to"
-              :class="cn(
-                'text-sm font-medium transition-colors hover:text-foreground',
-                isActiveLink(link) ? 'text-foreground' : 'text-muted-foreground'
-              )"
-            >
-              {{ link.label }}
-            </NuxtLink>
-          </nav>
+          <ClientOnly>
+            <nav v-if="loggedIn" class="hidden items-center gap-3 md:flex" aria-label="Main">
+              <NuxtLink
+                v-for="link in navLinks"
+                :key="link.to"
+                :to="link.to"
+                :class="cn(
+                  'text-sm font-medium transition-colors hover:text-foreground',
+                  isActiveLink(link) ? 'text-foreground' : 'text-muted-foreground'
+                )"
+              >
+                {{ link.label }}
+              </NuxtLink>
+            </nav>
+          </ClientOnly>
         </div>
 
         <div class="flex items-center space-x-4">
+          <ClientOnly>
           <div v-if="loggedIn && user" class="flex items-center space-x-4">
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="ghost" class="flex items-center space-x-2">
                   <Icon name="lucide:user" class="size-4" />
-                  <span class="hidden md:inline">{{ user.username }}</span>
+                  <span class="hidden md:inline">{{ user.username || user.name }}</span>
                   <Icon name="lucide:chevron-down" class="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" class="w-56">
                 <DropdownMenuLabel>
                   <div class="flex flex-col space-y-1">
-                    <p class="text-sm font-medium">{{ user.full_name || user.username }}</p>
+                    <p class="text-sm font-medium">{{ user.name || user.username }}</p>
                     <p class="text-xs text-muted-foreground">{{ user.email }}</p>
                   </div>
                 </DropdownMenuLabel>
@@ -68,6 +70,7 @@
               </NuxtLink>
             </Button>
           </div>
+          </ClientOnly>
 
           <ClientOnly>
             <ColorModeToggle />
@@ -77,14 +80,13 @@
           </ClientOnly>
         </div>
       </div>
-    </AuthState>
   </header>
 </template>
 
 <script setup lang="ts">
 import { cn } from '@/utils/utils'
 
-const { clear } = useUserSession()
+const { loggedIn, user } = useAuth()
 const router = useRouter()
 const route = useRoute()
 
@@ -106,7 +108,7 @@ function isActiveLink(link: (typeof navLinks)[number]) {
 }
 
 const handleLogout = async () => {
-  await clear() // Clears both client & server session
+  await authClient.signOut()
   await router.push('/login')
 }
 </script> 

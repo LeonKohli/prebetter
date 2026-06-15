@@ -44,20 +44,20 @@
           </template>
           <template v-else>
             <TableRow v-for="user in users" :key="user.id">
-              <TableCell class="font-medium">{{ user.username }}</TableCell>
+              <TableCell class="font-medium">{{ user.username || user.name }}</TableCell>
               <TableCell>{{ user.email }}</TableCell>
-              <TableCell>{{ user.full_name || '-' }}</TableCell>
+              <TableCell>{{ user.name || '-' }}</TableCell>
               <TableCell>
-                <Badge :variant="user.is_superuser ? 'default' : 'secondary'">
-                  {{ user.is_superuser ? 'Admin' : 'User' }}
+                <Badge :variant="user.role === 'admin' ? 'default' : 'secondary'">
+                  {{ user.role === 'admin' ? 'Admin' : 'User' }}
                 </Badge>
               </TableCell>
-              <TableCell>{{ formatDate(user.created_at) }}</TableCell>
+              <TableCell>{{ formatDate(user.createdAt) }}</TableCell>
               <TableCell class="text-right">
                 <ProfileUserActions
                   :user="user"
                   :current-user-id="currentUserId"
-                  :is-last-superuser="user.is_superuser && superuserCount === 1"
+                  :is-last-superuser="user.role === 'admin' && superuserCount === 1"
                   @edit="handleEditUser"
                   @delete="handleDeleteUser"
                   @reset-password="handleResetPassword"
@@ -124,7 +124,7 @@
               <dt class="text-xs font-medium text-muted-foreground">Email</dt>
               <dd class="text-sm">{{ userToDelete.email }}</dd>
             </div>
-            <div v-if="userToDelete.is_superuser" class="flex items-start justify-between gap-4">
+            <div v-if="userToDelete.role === 'admin'" class="flex items-start justify-between gap-4">
               <dt class="text-xs font-medium text-muted-foreground">Role</dt>
               <dd class="flex items-center gap-1.5 text-sm">
                 <Icon name="lucide:shield-check" class="h-3.5 w-3.5 text-primary" />
@@ -158,16 +158,9 @@
 </template>
 
 <script setup lang="ts">
-import type { User } from '#auth-utils'
-
 // Type for dialog components that expose an open() method
 interface DialogRef {
   open: () => void
-}
-
-interface UserWithTimestamps extends User {
-  created_at: string
-  updated_at?: string | null
 }
 
 interface Props {
@@ -176,81 +169,85 @@ interface Props {
 
 const props = defineProps<Props>()
 
+const { user: currentUser, refetch: refetchSession } = useAuth()
+
 const currentPage = ref(1)
 const pageSize = ref(100)
-const selectedUser = ref<UserWithTimestamps | null>(null)
-const userToDelete = ref<UserWithTimestamps | null>(null)
-const userToReset = ref<UserWithTimestamps | null>(null)
+const selectedUser = ref<AppUser | null>(null)
+const userToDelete = ref<AppUser | null>(null)
+const userToReset = ref<AppUser | null>(null)
 const isDeleteDialogOpen = ref(false)
 
-const { data: response, pending, error, refresh } = await useFetch<{
-  items: UserWithTimestamps[]
-  pagination: {
-    total: number
-    page: number
-    size: number
-    pages: number
-  }
-}>('/api/users', {
-  query: {
-    page: currentPage,
-    size: pageSize,
+// Admin endpoints are session-cookie authenticated and client-side only.
+const { data: response, status, error, refresh } = await useAsyncData(
+  'admin-users',
+  async () => {
+    const { data, error: listError } = await authClient.admin.listUsers({
+      query: {
+        limit: pageSize.value,
+        offset: (currentPage.value - 1) * pageSize.value,
+        sortBy: 'createdAt',
+        sortDirection: 'desc',
+      },
+    })
+    if (listError) throw new Error(listError.message || 'Failed to load users')
+    return data
   },
-  watch: [currentPage, pageSize],
-})
+  { watch: [currentPage, pageSize], server: false },
+)
 
-const users = computed(() => response.value?.items || [])
-const superuserCount = computed(() => users.value.filter(u => u.is_superuser).length)
-const totalPages = computed(() => response.value?.pagination.pages || 1)
-const totalItems = computed(() => response.value?.pagination.total || 0)
+const pending = computed(() => status.value === 'pending')
+const users = computed(() => (response.value?.users ?? []) as AppUser[])
+const superuserCount = computed(() => users.value.filter(u => u.role === 'admin').length)
+const totalItems = computed(() => response.value?.total ?? 0)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize.value)))
 const startItem = computed(() => ((currentPage.value - 1) * pageSize.value) + 1)
 const endItem = computed(() => Math.min(currentPage.value * pageSize.value, totalItems.value))
 
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
+const formatDate = (date: string | Date) => {
+  return new Date(date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   })
 }
 
-const handleUserCreated = (user: User) => {
+const handleUserCreated = () => {
   refresh()
 }
 
 const editDialog = ref<DialogRef | null>(null)
 const resetPasswordDialog = ref<DialogRef | null>(null)
 
-const handleEditUser = (user: UserWithTimestamps) => {
+const handleEditUser = (user: AppUser) => {
   selectedUser.value = user
   nextTick(() => {
     editDialog.value?.open()
   })
 }
 
-const handleUserUpdated = async (updatedUser: User) => {
+const handleUserUpdated = async (updatedUser: AppUser) => {
   refresh()
-  
-  // Critical: Refresh session if user edited their own profile
-  const session = useUserSession()
-  if (session.user.value && session.user.value.id === updatedUser.id) {
-    await session.fetch()
+
+  // Critical: Refresh session if the admin edited their own profile
+  if (currentUser.value?.id === updatedUser.id) {
+    await refetchSession()
   }
-  
 }
 
-const handleDeleteUser = (user: UserWithTimestamps) => {
+const handleDeleteUser = (user: AppUser) => {
   userToDelete.value = user
   isDeleteDialogOpen.value = true
 }
 
 const confirmDelete = async () => {
   if (!userToDelete.value) return
-  
+
   try {
-    await $fetch(`/api/users/${userToDelete.value.id}`, {
-      method: 'DELETE',
+    const { error: removeError } = await authClient.admin.removeUser({
+      userId: userToDelete.value.id,
     })
+    if (removeError) throw new Error(removeError.message || 'Failed to delete user')
     refresh()
   } catch (error) {
     console.error('Delete user error:', error)
@@ -260,7 +257,7 @@ const confirmDelete = async () => {
   }
 }
 
-const handleResetPassword = (user: UserWithTimestamps) => {
+const handleResetPassword = (user: AppUser) => {
   userToReset.value = user
   nextTick(() => {
     resetPasswordDialog.value?.open()

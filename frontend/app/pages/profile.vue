@@ -1,7 +1,8 @@
 <template>
   <div class="container mx-auto py-6 space-y-6">
     <h1 class="font-display text-3xl font-bold">Profile</h1>
-    
+
+    <ClientOnly>
     <Card>
       <CardHeader class="flex flex-row items-center justify-between">
         <CardTitle>Your Information</CardTitle>
@@ -26,19 +27,19 @@
           </div>
           <div class="flex items-center gap-2">
             <span class="font-medium text-muted-foreground">Full Name:</span>
-            <span>{{ user?.full_name || 'Not set' }}</span>
+            <span>{{ user?.name || 'Not set' }}</span>
           </div>
           <div class="flex items-center gap-2">
             <span class="font-medium text-muted-foreground">Role:</span>
-            <Badge :variant="user?.is_superuser ? 'default' : 'secondary'">
-              {{ user?.is_superuser ? 'Administrator' : 'User' }}
+            <Badge :variant="isAdmin ? 'default' : 'secondary'">
+              {{ isAdmin ? 'Administrator' : 'User' }}
             </Badge>
           </div>
         </div>
       </CardContent>
     </Card>
 
-    <Card v-if="user?.is_superuser">
+    <Card v-if="isAdmin">
       <CardHeader>
         <CardTitle>Administration</CardTitle>
         <CardDescription>
@@ -49,6 +50,7 @@
         <ProfileUserManagementTable v-if="user" :current-user-id="user.id" />
       </CardContent>
     </Card>
+    </ClientOnly>
 
     <Transition name="fade">
       <Alert v-if="alert" :variant="alert.variant" class="fixed bottom-4 right-4 w-auto max-w-md">
@@ -68,8 +70,7 @@ definePageMeta({
   requiresAuth: true
 })
 
-const session = useUserSession()
-const { user } = session
+const { user, isAdmin, refetch } = useAuth()
 
 interface AlertState {
   variant: 'default' | 'destructive'
@@ -93,8 +94,8 @@ const showAlert = (alertData: AlertState) => {
 
 const handleProfileUpdate = async () => {
   // Critical: Refresh session to sync navbar and permissions
-  await session.fetch()
-  
+  await refetch()
+
   showAlert({
     variant: 'default',
     icon: 'lucide:check-circle',

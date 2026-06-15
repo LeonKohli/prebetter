@@ -36,18 +36,8 @@
 </template>
 
 <script setup lang="ts">
-interface User {
-  id: string
-  username: string
-  email: string
-  full_name?: string | null
-  is_superuser: boolean
-  created_at: string
-  updated_at?: string | null
-}
-
 interface Props {
-  user: User
+  user: AppUser
   currentUserId: string
   isLastSuperuser?: boolean
 }
@@ -57,8 +47,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 defineEmits<{
-  edit: [user: User]
-  delete: [user: User]
-  resetPassword: [user: User]
+  edit: [user: AppUser]
+  delete: [user: AppUser]
+  resetPassword: [user: AppUser]
 }>()
 </script>

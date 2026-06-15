@@ -9,22 +9,12 @@ export default defineNuxtConfig({
     'shadcn-nuxt',
     '@vueuse/nuxt',
     '@nuxtjs/color-mode',
-    'nuxt-auth-utils',
     '@nuxt/fonts',
   ],
   runtimeConfig: {
-    // Empty defaults - overridden by NUXT_* env vars at runtime (12-factor)
-    // NUXT_API_BASE, NUXT_SESSION_PASSWORD, etc.
+    // Empty default - overridden by NUXT_API_BASE at runtime (12-factor).
+    // Better Auth reads its own env (BETTER_AUTH_*, MYSQL_*) in server/utils/auth.ts.
     apiBase: '',
-    session: {
-      maxAge: 604800, // 7 days - must match REFRESH_TOKEN_EXPIRE_DAYS
-      password: '',
-      cookie: {
-        secure: true,
-        httpOnly: true,
-        sameSite: 'lax',
-      },
-    },
   },
   css: ['~/assets/css/tailwind.css'],
   shadcn: {

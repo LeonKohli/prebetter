@@ -89,12 +89,10 @@
 
 <script setup lang="ts">
 import { toFormValidator } from '@vee-validate/zod'
-import type { FetchError } from 'ofetch'
 import { useForm } from 'vee-validate'
-import type { User } from '#auth-utils'
 
 const emit = defineEmits<{
-  createSuccess: [user: User]
+  createSuccess: [user: AppUser]
 }>()
 
 // Dialog state
@@ -120,51 +118,29 @@ const handleCancel = () => {
 
 // handleSubmit returns a properly typed submit handler
 const onSubmit = form.handleSubmit(async (values) => {
-  try {
-    const data = await $fetch<User>('/api/users', {
-      method: 'POST',
-      body: {
-        username: values.username,
-        email: values.email,
-        full_name: values.fullName || null,
-        password: values.password,
-        is_superuser: values.isSuperuser,
-      },
-    })
+  const name = values.fullName || values.username
+  const { data, error } = await authClient.admin.createUser({
+    email: values.email,
+    password: values.password,
+    name,
+    role: values.isSuperuser ? 'admin' : 'user',
+    // username/displayUsername are user-table fields added by the username plugin
+    data: { username: values.username, displayUsername: values.username },
+  })
 
-    // Emit success event
-    emit('createSuccess', data)
-
-    // Reset form and close dialog
-    resetForm()
-    isOpen.value = false
-  } catch (error) {
-    console.error('Create user error:', error)
-
-    const fetchError = error as FetchError<FastAPIErrorData>
-    const detail = fetchError.data?.detail
-    if (!detail) return
-
-    // String detail from custom HTTPException (e.g. duplicate username/email)
-    if (typeof detail === 'string') {
-      if (detail.includes('Username already')) {
-        setFieldError('username', 'Username is already taken')
-      } else if (detail.includes('Email already')) {
-        setFieldError('email', 'Email is already in use')
-      } else {
-        setFieldError('username', detail)
-      }
-      return
+  if (error) {
+    if (error.code === 'USERNAME_IS_ALREADY_TAKEN') {
+      setFieldError('username', 'Username is already taken')
+    } else if (error.code?.includes('USER_ALREADY_EXISTS')) {
+      setFieldError('email', 'Email is already in use')
+    } else {
+      setFieldError('username', error.message || 'Failed to create user')
     }
-
-    // Array detail from Pydantic validation — map backend fields to form fields
-    mapValidationErrorsToForm(detail, {
-      username: 'username',
-      email: 'email',
-      full_name: 'fullName',
-      password: 'password',
-      is_superuser: 'isSuperuser',
-    }, setFieldError)
+    return
   }
+
+  emit('createSuccess', data.user as AppUser)
+  resetForm()
+  isOpen.value = false
 })
 </script>

@@ -1,31 +1,27 @@
 import { joinURL } from 'ufo'
 import type { H3Event } from 'h3'
 import type { FetchError } from 'ofetch'
-import { getSessionWithFreshTokens } from '#server/utils/auth-session'
-
-// Auth endpoints must not be forwarded through the proxy — they expose JWT tokens.
-const BLOCKED_PATHS = ['auth/token', 'auth/refresh']
+import { auth } from '~~/server/utils/auth'
 
 /**
  * API Proxy - forwards requests to the backend API.
- * Refreshes access tokens before proxying since sessionHooks.fetch only fires on /api/_auth/session.
+ * Mints a short-lived Better Auth JWT for the current session and injects it as
+ * a Bearer token, so the client never handles tokens. `/api/auth/*` is served by
+ * Better Auth's own handler and never reaches this catch-all.
  */
 export default defineEventHandler(async (event: H3Event) => {
   const path = event.path.replace(/^\/api\//, '')
-
-  if (BLOCKED_PATHS.some((blocked) => path === blocked || path.startsWith(blocked + '/'))) {
-    throw createError({ statusCode: 404, statusMessage: 'Not Found' })
-  }
-
   const target = joinURL(useRuntimeConfig().apiBase as string, 'api/v1', path)
-
-  const session = await getSessionWithFreshTokens(event)
 
   const headers: Record<string, string> = {
     accept: getRequestHeader(event, 'accept') || 'application/json',
   }
-  if (session.secure?.apiToken) {
-    headers['Authorization'] = `Bearer ${session.secure.apiToken}`
+
+  try {
+    const { token } = await auth.api.getToken({ headers: event.headers })
+    if (token) headers['Authorization'] = `Bearer ${token}`
+  } catch {
+    // No valid session: forward unauthenticated and let the backend return 401.
   }
 
   try {
@@ -41,10 +37,6 @@ export default defineEventHandler(async (event: H3Event) => {
     return (await $fetch.raw(target, fetchOptions))._data
   } catch (error) {
     const fetchError = error as FetchError
-
-    if (fetchError.statusCode === 401) {
-      await clearUserSession(event)
-    }
 
     if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
       throw createError({

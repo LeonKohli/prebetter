@@ -26,6 +26,13 @@ export const profileEditSchema = z.object({
   fullName: fullNameSchema,
 })
 
+// Self-service profile edit: email changes are an admin action (Better Auth
+// self email change needs a verification flow that isn't configured here).
+export const selfProfileEditSchema = z.object({
+  username: usernameSchema,
+  fullName: fullNameSchema,
+})
+
 export const userEditSchema = profileEditSchema.extend({
   isSuperuser: z.boolean(),
 })

@@ -65,7 +65,6 @@
 
 <script setup lang="ts">
 import { toFormValidator } from '@vee-validate/zod'
-import type { FetchError } from 'ofetch'
 import { useForm } from 'vee-validate'
 
 // Emits
@@ -90,37 +89,22 @@ const { isSubmitting, setFieldError } = form
 
 // handleSubmit returns a properly typed submit handler
 const onSubmit = form.handleSubmit(async (values) => {
-  try {
-    await $fetch('/api/users/change-password', {
-      method: 'POST',
-      body: {
-        current_password: values.currentPassword,
-        new_password: values.newPassword,
-      },
-    })
+  const { error } = await authClient.changePassword({
+    currentPassword: values.currentPassword,
+    newPassword: values.newPassword,
+    revokeOtherSessions: true,
+  })
 
-    // Emit success event
-    emit('updateSuccess')
-
-    // Close dialog
-    isOpen.value = false
-  } catch (error) {
-    console.error('Password change error:', error)
-
-    const fetchError = error as FetchError<FastAPIErrorData>
-    const detail = fetchError.data?.detail
-    if (!detail) return
-
-    if (typeof detail === 'string') {
-      if (detail.includes('Incorrect current password')) {
-        setFieldError('currentPassword', 'Current password is incorrect')
-      } else {
-        setFieldError('currentPassword', detail)
-      }
-      return
+  if (error) {
+    if (error.code === 'INVALID_PASSWORD') {
+      setFieldError('currentPassword', 'Current password is incorrect')
+    } else {
+      setFieldError('currentPassword', error.message || 'Failed to change password')
     }
-
-    mapValidationErrorsToForm(detail, { current_password: 'currentPassword', new_password: 'newPassword' }, setFieldError)
+    return
   }
+
+  emit('updateSuccess')
+  isOpen.value = false
 })
 </script>

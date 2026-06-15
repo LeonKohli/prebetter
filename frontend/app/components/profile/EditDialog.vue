@@ -26,16 +26,6 @@
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="email">
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input type="email" v-bind="componentField" placeholder="Enter email" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          </FormField>
-
           <FormField v-slot="{ componentField }" name="fullName">
             <FormItem>
               <FormLabel>Full Name <span class="text-muted-foreground text-sm">(optional)</span></FormLabel>
@@ -65,12 +55,10 @@
 
 <script setup lang="ts">
 import { toFormValidator } from '@vee-validate/zod'
-import type { FetchError } from 'ofetch'
 import { useForm } from 'vee-validate'
-import type { User } from '#auth-utils'
 
 interface Props {
-  user: User
+  user: { id: string; username?: string | null; name?: string | null; email: string }
 }
 
 const props = defineProps<Props>()
@@ -81,13 +69,11 @@ const emit = defineEmits<{
 // Dialog state
 const isOpen = ref(false)
 
-// Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toFormValidator(profileEditSchema),
+  validationSchema: toFormValidator(selfProfileEditSchema),
   initialValues: {
-    username: props.user.username,
-    email: props.user.email,
-    fullName: props.user.full_name ?? '',
+    username: props.user.username ?? '',
+    fullName: props.user.name ?? '',
   },
 })
 
@@ -95,66 +81,39 @@ const { isSubmitting, setFieldError, meta, resetForm, setValues } = form
 
 // Update form values when user prop changes
 watch(() => props.user, (newUser) => {
-  setValues({
-    username: newUser.username,
-    email: newUser.email,
-    fullName: newUser.full_name ?? '',
-  })
-  // Reset dirty state after setting values from prop
-  resetForm({
-    values: {
-      username: newUser.username,
-      email: newUser.email,
-      fullName: newUser.full_name ?? '',
-    },
-  })
+  const values = {
+    username: newUser.username ?? '',
+    fullName: newUser.name ?? '',
+  }
+  setValues(values)
+  resetForm({ values })
 }, { deep: true })
 
 // handleSubmit returns a properly typed submit handler
 const onSubmit = form.handleSubmit(async (values) => {
-  try {
-    // Clean up values - only send changed fields
-    const updates: Record<string, string | null> = {}
-    if (values.username !== props.user.username) updates.username = values.username
-    if (values.email !== props.user.email) updates.email = values.email
-    if (values.fullName !== props.user.full_name) updates.full_name = values.fullName || null
+  const usernameChanged = values.username !== (props.user.username ?? '')
+  const nameChanged = values.fullName !== (props.user.name ?? '')
 
-    // Skip if no changes
-    if (Object.keys(updates).length === 0) {
-      isOpen.value = false
-      return
-    }
-
-    // Update profile via API
-    await $fetch('/api/auth/users/me', {
-      method: 'PUT',
-      body: updates,
-    })
-
-    // Emit success event (parent will handle session refresh)
-    emit('updateSuccess')
-
-    // Close dialog
+  if (!usernameChanged && !nameChanged) {
     isOpen.value = false
-  } catch (error) {
-    console.error('Profile update error:', error)
+    return
+  }
 
-    const fetchError = error as FetchError<FastAPIErrorData>
-    const detail = fetchError.data?.detail
-    if (!detail) return
+  const { error } = await authClient.updateUser({
+    name: values.fullName || undefined,
+    username: usernameChanged ? values.username : undefined,
+  })
 
-    if (typeof detail === 'string') {
-      if (detail.includes('Username already')) {
-        setFieldError('username', 'Username is already taken')
-      } else if (detail.includes('Email already')) {
-        setFieldError('email', 'Email is already in use')
-      } else {
-        setFieldError('username', detail)
-      }
-      return
-    }
+  if (!error) {
+    emit('updateSuccess')
+    isOpen.value = false
+    return
+  }
 
-    mapValidationErrorsToForm(detail, { username: 'username', email: 'email', full_name: 'fullName' }, setFieldError)
+  if (error.code === 'USERNAME_IS_ALREADY_TAKEN') {
+    setFieldError('username', 'Username is already taken')
+  } else {
+    setFieldError('username', error.message || 'Failed to update profile')
   }
 })
 </script>

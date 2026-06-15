@@ -1,5 +1,5 @@
 import { joinURL } from 'ufo'
-import { getSessionWithFreshTokens } from '#server/utils/auth-session'
+import { auth } from '~~/server/utils/auth'
 
 /**
  * SSE Proxy for real-time heartbeat streaming.
@@ -9,9 +9,10 @@ import { getSessionWithFreshTokens } from '#server/utils/auth-session'
  */
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
-  const session = await getSessionWithFreshTokens(event)
 
-  if (!session.secure?.apiToken) {
+  const result = await auth.api.getToken({ headers: event.headers }).catch(() => null)
+  const token = result?.token
+  if (!token) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
   try {
     response = await fetch(target, {
       headers: {
-        'Authorization': `Bearer ${session.secure!.apiToken}`,
+        'Authorization': `Bearer ${token}`,
         'Accept': 'text/event-stream',
         'Cache-Control': 'no-cache',
       },

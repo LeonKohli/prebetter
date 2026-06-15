@@ -80,7 +80,6 @@ useHead({
   title: 'Sign in · Prebetter',
 })
 
-const session = useUserSession()
 const route = useRoute()
 
 const authError = ref('')
@@ -100,36 +99,25 @@ const { isSubmitting, setFieldError } = form
 const onSubmit = form.handleSubmit(async (values) => {
   authError.value = ''
 
-  try {
-    await $fetch('/api/auth/login', {
-      method: 'POST',
-      body: {
-        username: values.username.trim(),
-        password: values.password,
-      },
-    })
+  const { error } = await authClient.signIn.username({
+    username: values.username.trim(),
+    password: values.password,
+  })
 
-    await session.fetch()
-
-    // Validate redirect to prevent open redirect attacks
-    // Pattern from Nuxt Content Studio - only allow safe relative paths
-    const rawRedirect = route.query.redirect
-    let redirect = '/'
-    if (typeof rawRedirect === 'string' && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')) {
-      redirect = rawRedirect
-    }
-
-    await navigateTo(redirect, { replace: true })
-  } catch (error) {
-    console.error('Login error:', error)
-    const fetchError = error as { data?: { message?: string; detail?: string }; statusMessage?: string }
-    const message =
-      fetchError?.data?.message ||
-      fetchError?.data?.detail ||
-      fetchError?.statusMessage ||
-      'Invalid username or password. Please try again.'
-    authError.value = message
+  if (error) {
+    authError.value = error.message || 'Invalid username or password. Please try again.'
     setFieldError('password', 'Check your credentials and try again.')
+    return
   }
+
+  // Validate redirect to prevent open redirect attacks
+  // Pattern from Nuxt Content Studio - only allow safe relative paths
+  const rawRedirect = route.query.redirect
+  let redirect = '/'
+  if (typeof rawRedirect === 'string' && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')) {
+    redirect = rawRedirect
+  }
+
+  await navigateTo(redirect, { replace: true })
 })
 </script>

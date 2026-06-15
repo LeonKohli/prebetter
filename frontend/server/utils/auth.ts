@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth'
+import { createAuthMiddleware, APIError } from 'better-auth/api'
 import { createPool } from 'mysql2/promise'
 import { username, admin, jwt } from 'better-auth/plugins'
 import bcrypt from 'bcryptjs'
@@ -25,6 +26,38 @@ export const auth = betterAuth({
   },
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days, matches the previous refresh-token lifetime
+  },
+  hooks: {
+    // Block removing or demoting the last administrator (admin plugin has no such guard).
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/admin/remove-user' && ctx.path !== '/admin/set-role') return
+
+      const userId = ctx.body?.userId as string | undefined
+      if (!userId) return
+
+      const target = await ctx.context.adapter.findOne<{ role?: string | null }>({
+        model: 'user',
+        where: [{ field: 'id', value: userId }],
+      })
+      if (target?.role !== 'admin') return
+
+      // Keeping admin role on set-role is fine; only guard demotion or removal.
+      if (ctx.path === '/admin/set-role') {
+        const role = ctx.body?.role
+        const roles = Array.isArray(role) ? role : [role]
+        if (roles.includes('admin')) return
+      }
+
+      const adminCount = await ctx.context.adapter.count({
+        model: 'user',
+        where: [{ field: 'role', value: 'admin' }],
+      })
+      if (adminCount <= 1) {
+        throw new APIError('BAD_REQUEST', {
+          message: 'Cannot remove or demote the last administrator',
+        })
+      }
+    }),
   },
   plugins: [
     username(),
