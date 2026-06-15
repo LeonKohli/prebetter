@@ -2,74 +2,68 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jwt import PyJWTError
-from sqlalchemy.orm import Session
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jwt import PyJWKClient, PyJWTError
+from pydantic import BaseModel
 
-from app.core.security import ALGORITHM, SECRET_KEY
-from app.database.config import get_prebetter_db
-from app.models.users import User
-from app.schemas.users import TokenData
-from app.services.users import UserService
+from app.core.config import get_settings
 
-# OAuth2 configuration for Swagger UI "Authorize" button.
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
-TokenDep = Annotated[str, Depends(oauth2_scheme)]
+settings = get_settings()
 
+# JWKS client fetches and caches Better Auth's public keys.
+_jwks_client = PyJWKClient(settings.JWKS_URL)
 
-def get_user_service(
-    db: Annotated[Session, Depends(get_prebetter_db, scope="function")],
-) -> UserService:
-    return UserService(db)
+# Bearer scheme drives Swagger UI's "Authorize" button.
+bearer_scheme = HTTPBearer(auto_error=True)
+BearerDep = Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)]
 
 
-UserServiceDep = Annotated[
-    UserService,
-    Depends(get_user_service, scope="function"),
-]
+class AuthUser(BaseModel):
+    """Authenticated identity built from verified JWT claims (no DB lookup)."""
+
+    id: str
+    username: str | None = None
+    email: str | None = None
+    role: str | None = None
 
 
-def validate_access_token(token: str, user_service: UserService) -> User:
-    """Validate an access token and return the associated user."""
+def get_current_user(credentials: BearerDep) -> AuthUser:
+    """Verify a Better Auth JWT against its JWKS and return the identity."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-
-        # Reject refresh tokens used as access tokens.
-        if payload.get("type") != "access":
-            raise credentials_exception
-
-        user_id: str = payload.get("sub")
-        if not user_id:
-            raise credentials_exception
-        token_data = TokenData(user_id=user_id)
+        signing_key = _jwks_client.get_signing_key_from_jwt(credentials.credentials)
+        payload = jwt.decode(
+            credentials.credentials,
+            signing_key.key,
+            algorithms=[settings.JWT_ALGORITHM],
+            issuer=settings.BETTER_AUTH_URL,
+            audience=settings.BETTER_AUTH_URL,
+        )
     except PyJWTError:
         raise credentials_exception
 
-    user = user_service.get_by_id(token_data.user_id)
-    if not user:
+    user_id = payload.get("sub")
+    if not user_id:
         raise credentials_exception
-    return user
+
+    return AuthUser(
+        id=user_id,
+        username=payload.get("username"),
+        email=payload.get("email"),
+        role=payload.get("role"),
+    )
 
 
-def get_current_user(
-    token: TokenDep,
-    user_service: UserServiceDep,
-) -> User:
-    """Retrieve the current user based on JWT token."""
-    return validate_access_token(token, user_service)
+CurrentUser = Annotated[AuthUser, Depends(get_current_user, scope="function")]
 
 
-CurrentUser = Annotated[User, Depends(get_current_user, scope="function")]
-
-
-def get_current_superuser(current_user: CurrentUser) -> User:
-    """Ensure the current user is a superuser."""
-    if current_user.is_superuser is not True:
+def get_current_superuser(current_user: CurrentUser) -> AuthUser:
+    """Ensure the current user has the admin role."""
+    if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough privileges",
@@ -78,6 +72,6 @@ def get_current_superuser(current_user: CurrentUser) -> User:
 
 
 CurrentSuperuser = Annotated[
-    User,
+    AuthUser,
     Depends(get_current_superuser, scope="function"),
 ]

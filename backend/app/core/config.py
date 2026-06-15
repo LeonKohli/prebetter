@@ -1,4 +1,3 @@
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from sqlalchemy.engine import URL
@@ -18,17 +17,19 @@ class Settings(BaseSettings):
     MYSQL_PRELUDE_DB: str
     MYSQL_PREBETTER_DB: str
 
-    # Security - all required, no defaults
-    SECRET_KEY: str = Field(min_length=32)
-    ALGORITHM: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int
-    REFRESH_TOKEN_EXPIRE_DAYS: int
-    BCRYPT_ROUNDS: int
+    # Auth - tokens are issued by Better Auth (Nuxt) and verified here via JWKS.
+    # BETTER_AUTH_URL is the Better Auth base URL; it is the JWT issuer/audience.
+    BETTER_AUTH_URL: str
+    JWT_ALGORITHM: str = "EdDSA"
 
     # Runtime - required
     ENVIRONMENT: str
     LOG_LEVEL: str
     BACKEND_CORS_ORIGINS: list[str]
+
+    @property
+    def JWKS_URL(self) -> str:
+        return f"{self.BETTER_AUTH_URL.rstrip('/')}/api/auth/jwks"
 
     @property
     def PRELUDE_DATABASE_URL(self) -> URL:
