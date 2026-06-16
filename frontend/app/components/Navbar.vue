@@ -13,25 +13,22 @@
             </div>
           </NuxtLink>
 
-          <ClientOnly>
-            <nav v-if="loggedIn" class="hidden items-center gap-3 md:flex" aria-label="Main">
-              <NuxtLink
-                v-for="link in navLinks"
-                :key="link.to"
-                :to="link.to"
-                :class="cn(
-                  'text-sm font-medium transition-colors hover:text-foreground',
-                  isActiveLink(link) ? 'text-foreground' : 'text-muted-foreground'
-                )"
-              >
-                {{ link.label }}
-              </NuxtLink>
-            </nav>
-          </ClientOnly>
+          <nav v-if="loggedIn" class="hidden items-center gap-3 md:flex" aria-label="Main">
+            <NuxtLink
+              v-for="link in navLinks"
+              :key="link.to"
+              :to="link.to"
+              :class="cn(
+                'text-sm font-medium transition-colors hover:text-foreground',
+                isActiveLink(link) ? 'text-foreground' : 'text-muted-foreground'
+              )"
+            >
+              {{ link.label }}
+            </NuxtLink>
+          </nav>
         </div>
 
         <div class="flex items-center space-x-4">
-          <ClientOnly>
           <div v-if="loggedIn && user" class="flex items-center space-x-4">
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
@@ -70,7 +67,6 @@
               </NuxtLink>
             </Button>
           </div>
-          </ClientOnly>
 
           <ClientOnly>
             <ColorModeToggle />

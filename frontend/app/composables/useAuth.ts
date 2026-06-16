@@ -1,16 +1,45 @@
+import { createAuthClient } from 'better-auth/vue'
+import type { AppUser } from '~/utils/auth-client'
+
+type AppSession = typeof authClient.$Infer.Session.session
+
 /**
- * Reactive auth state from Better Auth's session store (shared nanostore). It
- * updates on sign-in and sign-out, so components read it for live UI. Route
- * gating lives in the auth.global middleware, which reads the session fresh.
+ * Auth state in Nuxt `useState` so it is serialized from SSR and known at
+ * hydration — components render the correct state immediately instead of
+ * flashing logged-out while a client-only session request resolves. The route
+ * middleware seeds and refreshes it via `fetchSession` on each navigation.
  */
 export function useAuth() {
-  const session = authClient.useSession()
+  const session = useState<AppSession | null>('auth:session', () => null)
+  const user = useState<AppUser | null>('auth:user', () => null)
+  const ready = useState('auth:ready', () => false)
 
-  const user = computed(() => session.value?.data?.user ?? null)
-  const loggedIn = computed(() => !!session.value?.data)
-  const isAdmin = computed(() => user.value?.role === 'admin')
-  const isPending = computed(() => session.value?.isPending ?? false)
-  const refetch = () => session.value?.refetch()
+  async function fetchSession() {
+    // On the server the singleton client has no request context, so build a
+    // request-scoped client that forwards the incoming cookies; on the client
+    // the singleton already targets the current origin.
+    const client = import.meta.server
+      ? createAuthClient({
+          baseURL: useRequestURL().origin,
+          fetchOptions: { headers: useRequestHeaders(['cookie']) },
+        })
+      : authClient
+    const { data } = await client.getSession()
+    // The server response carries plugin fields (role/username) regardless of
+    // the plugin-less scoped client's narrower type, so bridge it to AppUser.
+    session.value = (data?.session ?? null) as AppSession | null
+    user.value = (data?.user ?? null) as AppUser | null
+    ready.value = true
+    return data
+  }
 
-  return { session, user, loggedIn, isAdmin, isPending, refetch }
+  return {
+    session,
+    user,
+    loggedIn: computed(() => !!session.value),
+    isAdmin: computed(() => user.value?.role === 'admin'),
+    isPending: computed(() => !ready.value),
+    refetch: fetchSession,
+    fetchSession,
+  }
 }
