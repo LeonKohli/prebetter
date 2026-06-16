@@ -1,4 +1,3 @@
-import { createAuthClient } from 'better-auth/vue'
 import type { AppUser } from '~/utils/auth-client'
 
 type AppSession = typeof authClient.$Infer.Session.session
@@ -15,20 +14,16 @@ export function useAuth() {
   const ready = useState('auth:ready', () => false)
 
   async function fetchSession() {
-    // On the server the singleton client has no request context, so build a
-    // request-scoped client that forwards the incoming cookies; on the client
-    // the singleton already targets the current origin.
-    const client = import.meta.server
-      ? createAuthClient({
-          baseURL: useRequestURL().origin,
-          fetchOptions: { headers: useRequestHeaders(['cookie']) },
-        })
-      : authClient
-    const { data } = await client.getSession()
-    // The server response carries plugin fields (role/username) regardless of
-    // the plugin-less scoped client's narrower type, so bridge it to AppUser.
-    session.value = (data?.session ?? null) as AppSession | null
-    user.value = (data?.user ?? null) as AppUser | null
+    // useRequestFetch() is Nuxt's primitive for an SSR-authenticated request: on
+    // the server it forwards the incoming cookies and the relative URL resolves
+    // to an in-process Nitro call (no public-origin round trip); on the client
+    // it is a plain $fetch using the browser's cookies. This is what makes the
+    // session known at SSR so the navbar/guard never flash logged-out.
+    const data = await useRequestFetch()<{ session: AppSession; user: AppUser } | null>(
+      '/api/auth/get-session',
+    )
+    session.value = data?.session ?? null
+    user.value = data?.user ?? null
     ready.value = true
     return data
   }
