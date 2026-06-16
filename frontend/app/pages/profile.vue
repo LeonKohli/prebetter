@@ -2,7 +2,6 @@
   <div class="container mx-auto py-6 space-y-6">
     <h1 class="font-display text-3xl font-bold">Profile</h1>
 
-    <ClientOnly>
     <Card>
       <CardHeader class="flex flex-row items-center justify-between">
         <CardTitle>Your Information</CardTitle>
@@ -47,10 +46,13 @@
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ProfileUserManagementTable v-if="user" :current-user-id="user.id" />
+        <!-- Client-only: admin list uses session-cookie auth + useAsyncData(server:false),
+             so SSR renders the idle/empty table while the client renders loading → mismatch. -->
+        <ClientOnly>
+          <ProfileUserManagementTable v-if="user" :current-user-id="user.id" />
+        </ClientOnly>
       </CardContent>
     </Card>
-    </ClientOnly>
 
     <Transition name="fade">
       <Alert v-if="alert" :variant="alert.variant" class="fixed bottom-4 right-4 w-auto max-w-md">
