@@ -17,6 +17,8 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
     ? useDebounceFn(onNewAlerts, debounceMs)
     : undefined
 
+  const onSseGiveUp = useSseSessionGuard()
+
   const url = computed(() => {
     const base = '/api/alerts-stream'
     if (requireIps && !requireIps.value) {
@@ -33,6 +35,7 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
       delay: 5000,
       onFailed() {
         console.error('[AlertStream] Failed to reconnect after max retries')
+        onSseGiveUp()
       },
     },
   })

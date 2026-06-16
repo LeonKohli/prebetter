@@ -11,6 +11,8 @@ export function useHeartbeatStream(options: UseHeartbeatStreamOptions = {}) {
     ? useDebounceFn(onNewHeartbeats, debounceMs)
     : undefined
 
+  const onSseGiveUp = useSseSessionGuard()
+
   const url = '/api/heartbeats-stream'
 
   const { status, data, error, close, open } = useEventSource(url, ['heartbeat_update'], {
@@ -21,6 +23,7 @@ export function useHeartbeatStream(options: UseHeartbeatStreamOptions = {}) {
       delay: 5000,
       onFailed() {
         console.error('[HeartbeatStream] Failed to connect after max retries')
+        onSseGiveUp()
       },
     },
   })
