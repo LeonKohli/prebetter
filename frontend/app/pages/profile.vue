@@ -72,7 +72,7 @@ definePageMeta({
   requiresAuth: true
 })
 
-const { user, isAdmin, refetch } = useAuth()
+const { user, isAdmin } = useAuth()
 
 interface AlertState {
   variant: 'default' | 'destructive'
@@ -94,10 +94,9 @@ const showAlert = (alertData: AlertState) => {
   startAlertTimeout()
 }
 
-const handleProfileUpdate = async () => {
-  // Critical: Refresh session to sync navbar and permissions
-  await refetch()
-
+const handleProfileUpdate = () => {
+  // updateUser toggles Better Auth's $sessionSignal → auth-signal plugin
+  // refetches the session, so the navbar/permissions sync reactively.
   showAlert({
     variant: 'default',
     icon: 'lucide:check-circle',

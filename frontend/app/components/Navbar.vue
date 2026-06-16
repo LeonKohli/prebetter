@@ -82,8 +82,7 @@
 <script setup lang="ts">
 import { cn } from '@/utils/utils'
 
-const { loggedIn, user } = useAuth()
-const router = useRouter()
+const { loggedIn, user, signOut } = useAuth()
 const route = useRoute()
 
 const navLinks = [
@@ -103,8 +102,5 @@ function isActiveLink(link: (typeof navLinks)[number]) {
   return link.match ? link.match(route.path) : route.path === link.to
 }
 
-const handleLogout = async () => {
-  await authClient.signOut()
-  await router.push('/login')
-}
+const handleLogout = () => signOut('/login')
 </script> 

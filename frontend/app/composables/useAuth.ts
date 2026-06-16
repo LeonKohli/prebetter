@@ -28,6 +28,15 @@ export function useAuth() {
     return data
   }
 
+  async function signOut(redirectTo?: string) {
+    await authClient.signOut()
+    // Clear immediately so the navbar and guards flip without waiting for the
+    // $sessionSignal round-trip or the next navigation.
+    session.value = null
+    user.value = null
+    if (redirectTo) await navigateTo(redirectTo)
+  }
+
   return {
     session,
     user,
@@ -36,5 +45,6 @@ export function useAuth() {
     isPending: computed(() => !ready.value),
     refetch: fetchSession,
     fetchSession,
+    signOut,
   }
 }
