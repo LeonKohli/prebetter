@@ -24,7 +24,7 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
     // Include token for SSE refresh: any preset OR default fallback (but not explicit user dates)
     const includeToken = !!presetId || !hasExplicitDates
 
-    return `alerts-${btoa(JSON.stringify({
+    return `alerts-${JSON.stringify({
       view: urlState.view.value,
       page: urlState.page.value,
       pageSize: urlState.pageSize.value,
@@ -32,7 +32,7 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
       sortOrder: urlState.sortOrder.value,
       filters: filters,
       ...(includeToken && { t: sseRefreshToken.value }),
-    }))}`
+    })}`
   })
 
   const fetchQuery = computed(() => {

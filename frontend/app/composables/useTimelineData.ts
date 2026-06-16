@@ -38,10 +38,10 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     const hasExplicitDates = !!(filters.start_date && filters.end_date) && !presetId
     const includeToken = !!presetId || !hasExplicitDates
 
-    return `timeline-${btoa(JSON.stringify({
+    return `timeline-${JSON.stringify({
       filters,
       ...(includeToken && { t: sseRefreshToken.value }),
-    }))}`
+    })}`
   })
 
   const fetchQuery = computed(() => {
