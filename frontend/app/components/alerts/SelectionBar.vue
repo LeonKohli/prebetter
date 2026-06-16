@@ -105,7 +105,7 @@ const handleExport = () => {
 }
 
 // Keyboard shortcut: ESC to clear selection
-if (process.client) {
+if (import.meta.client) {
   useEventListener(document, 'keydown', (e: KeyboardEvent) => {
     if (e.key === 'Escape' && selectionCount.value > 0) {
       clearSelection()
