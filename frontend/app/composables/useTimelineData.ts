@@ -1,5 +1,6 @@
 import type { TimelineResponse, TimeFrame } from '~~/shared/types/timeline'
 import { getPresetRange, isRelativePreset, getActivePresetId } from '@/utils/datePresets'
+import { getTimelineBucketPlotTimestamp } from '@/utils/timelineChart'
 
 export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState>) {
   const { token: sseRefreshToken } = useSseRefreshToken()
@@ -27,6 +28,7 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
 
   const timeFrame = computed<TimeFrame>(() => {
     const hours = (dateRange.value.end.getTime() - dateRange.value.start.getTime()) / (1000 * 60 * 60)
+    if (hours <= 2) return 'minute'
     if (hours <= 168) return 'hour'
     if (hours <= 2160) return 'day'
     return 'week'
@@ -70,13 +72,25 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
   })
 
   const chartSeries = computed(() => {
-    if (!data.value?.data) return [{ name: 'Alerts', data: [] as { x: number; y: number }[] }]
+    if (!data.value?.data) {
+      return [{ name: 'Alerts', data: [] as { x: number; y: number; bucketStart: number }[] }]
+    }
+
+    const fullStart = dateRange.value.start.getTime()
+    const fullEnd = dateRange.value.end.getTime()
 
     return [{
       name: 'Alerts',
       data: data.value.data
-        .map(p => ({ x: new Date(p.timestamp).getTime(), y: p.total }))
-        .filter(p => Number.isFinite(p.x))
+        .map((point) => {
+          const bucketStart = new Date(point.timestamp).getTime()
+          return {
+            x: getTimelineBucketPlotTimestamp(bucketStart, fullStart, fullEnd, timeFrame.value),
+            y: point.total,
+            bucketStart,
+          }
+        })
+        .filter(point => Number.isFinite(point.x) && Number.isFinite(point.bucketStart))
     }]
   })
 

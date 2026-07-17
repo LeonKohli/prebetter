@@ -141,7 +141,7 @@ def test_timeline(auth_client):
 
 def test_timeline_time_frames(auth_client):
     """Test timeline endpoint with different time frames"""
-    time_frames = ["hour", "day", "week", "month"]
+    time_frames = ["minute", "hour", "day", "week", "month"]
 
     for time_frame in time_frames:
         response = auth_client.get(
@@ -168,7 +168,9 @@ def test_timeline_time_frames(auth_client):
                     diff = valid_timestamps[i] - valid_timestamps[i - 1]
                     assert diff.total_seconds() > 0, "Timestamps not ascending"
 
-                    if time_frame == "hour":
+                    if time_frame == "minute":
+                        assert diff.total_seconds() >= 60
+                    elif time_frame == "hour":
                         assert diff.total_seconds() >= 3600
                     elif time_frame == "day":
                         assert diff.days >= 1

@@ -13,6 +13,12 @@
 import type { ApexOptions } from 'apexcharts'
 import { useDebounceFn, useWindowSize } from '@vueuse/core'
 import { getActivePresetId } from '@/utils/datePresets'
+import {
+  getTimelineBucketDuration,
+  getTimelineBucketDisplayRange,
+  getTimelineColumnWidth,
+  getTimelineXAxisRange,
+} from '@/utils/timelineChart'
 
 interface ChartInstance {
   updateOptions(options: ApexOptions, redrawPaths?: boolean, animate?: boolean): Promise<void>
@@ -53,61 +59,17 @@ const dynamicXAxisRange = computed(() => {
   const fullStart = dateRange.value.start.getTime()
   const fullEnd = dateRange.value.end.getTime()
 
-  if (data.length === 0) {
-    return { min: fullStart, max: fullEnd }
-  }
-
-  const timestamps = data.map(p => p.x)
-  const dataMin = Math.min(...timestamps)
-  const dataMax = Math.max(...timestamps)
-
-  // Always include first bucket in x-axis range - bucket timestamps are truncated
-  // to hour boundaries, so first bucket may start before the requested range.
-  // Using Math.min ensures the bar renders within the visible x-axis.
-  const effectiveStart = Math.min(fullStart, dataMin)
-
-  if (data.length >= 8) {
-    return { min: effectiveStart, max: fullEnd }
-  }
-
-  const HOUR = 60 * 60 * 1000
-  const DAY = 24 * HOUR
-  const padding = timeFrame.value === 'hour' ? HOUR
-    : timeFrame.value === 'day' ? DAY
-    : timeFrame.value === 'week' ? DAY * 7
-    : DAY * 30
-
-  if (data.length === 1) {
-    // Single data point: extend range by padding on each side, clamped to boundaries
-    // This keeps the bar within the visible range without collapsing the view
-    const singlePadding = padding * 2
-    return {
-      min: Math.min(effectiveStart, Math.max(fullStart, dataMin - singlePadding)),
-      max: Math.min(fullEnd, dataMax + singlePadding),
-    }
-  }
-
-  const dataSpan = dataMax - dataMin
-  const edgePadding = Math.max(padding, dataSpan * 0.25)
-  return {
-    min: Math.min(effectiveStart, dataMin - edgePadding),
-    max: Math.min(fullEnd, dataMax + edgePadding),
-  }
+  return getTimelineXAxisRange(data.map(point => point.x), fullStart, fullEnd, timeFrame.value)
 })
 
-/**
- * Calculate optimal bar width based on data point count.
- * Prevents massive bars when there are few data points.
- */
 const dynamicColumnWidth = computed(() => {
-  const pointCount = chartSeries.value[0]?.data?.length ?? 0
-
-  // Thresholds for column width
-  if (pointCount <= 1) return '30%'
-  if (pointCount <= 3) return '40%'
-  if (pointCount <= 6) return '50%'
-  if (pointCount <= 12) return '60%'
-  return '80%'
+  const data = chartSeries.value[0]?.data ?? []
+  const point = data[0]
+  if (!point) return 12
+  return getTimelineColumnWidth(
+    data.map(item => item.x),
+    getTimelineBucketDuration(point.bucketStart, timeFrame.value),
+  )
 })
 
 const chartRef = useTemplateRef<ChartInstance>('chart')
@@ -127,6 +89,8 @@ const dynamicTickAmount = computed(() => {
   const pointCount = chartSeries.value[0]?.data?.length ?? 0
   const chartWidth = isMobile.value ? 300 : 600 // Approximate
 
+  if (timeFrame.value === 'minute') return isMobile.value ? 4 : 6
+
   // For very few points, limit ticks to avoid cluttered labels
   if (pointCount <= 2) return 3
   if (pointCount <= 5) return Math.min(pointCount + 1, 5)
@@ -138,6 +102,8 @@ const dynamicTickAmount = computed(() => {
 
 const xAxisLabelFormat = computed<string>(() => {
   switch (timeFrame.value) {
+    case 'minute':
+      return 'HH:mm'
     case 'hour':
       return rangeDurationHours.value > 24 ? 'dd MMM HH:mm' : 'HH:mm'
     case 'day':
@@ -151,20 +117,57 @@ const xAxisLabelFormat = computed<string>(() => {
   }
 })
 
-const tooltipDateFormat = computed<string>(() => {
-  switch (timeFrame.value) {
-    case 'hour':
-      return 'dd MMM HH:mm'
-    case 'day':
-      return 'dd MMM yyyy'
-    case 'week':
-      return 'dd MMM yyyy'
-    case 'month':
-      return 'MMM yyyy'
-    default:
-      return 'dd MMM HH:mm'
-  }
+const tooltipDateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
 })
+const tooltipTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+  hour: '2-digit',
+  minute: '2-digit',
+})
+const tooltipDateFormatter = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+})
+const tooltipMonthFormatter = new Intl.DateTimeFormat('en-GB', {
+  month: 'short',
+  year: 'numeric',
+})
+
+function formatTooltipBucketRange(bucketStart: number): string {
+  const { start, end } = getTimelineBucketDisplayRange(
+    bucketStart,
+    dateRange.value.start.getTime(),
+    dateRange.value.end.getTime(),
+    timeFrame.value,
+  )
+
+  if (timeFrame.value === 'minute') {
+    return tooltipDateTimeFormatter.format(start)
+  }
+
+  if (timeFrame.value === 'hour') {
+    const startDate = tooltipDateFormatter.format(start)
+    const endDate = tooltipDateFormatter.format(end)
+    const formattedEnd = startDate === endDate
+      ? tooltipTimeFormatter.format(end)
+      : tooltipDateTimeFormatter.format(end)
+    return `${tooltipDateTimeFormatter.format(start)}–${formattedEnd}`
+  }
+
+  if (timeFrame.value === 'month') {
+    const formattedStart = tooltipMonthFormatter.format(start)
+    const formattedEnd = tooltipMonthFormatter.format(end)
+    return formattedStart === formattedEnd ? formattedStart : `${formattedStart}–${formattedEnd}`
+  }
+
+  const formattedStart = tooltipDateFormatter.format(start)
+  const formattedEnd = tooltipDateFormatter.format(end)
+  return formattedStart === formattedEnd ? formattedStart : `${formattedStart}–${formattedEnd}`
+}
 
 // Chart color from design system (--chart-1 changes between light/dark)
 const chartColor = ref(getChartColor(1))
@@ -234,7 +237,14 @@ const chartOptions = computed(() => ({
     intersect: false,
     // apexcharts 5.13+ defaults tooltip.arrow to true; keep the prior flush look
     arrow: false,
-    x: { format: tooltipDateFormat.value },
+    x: {
+      formatter: (value, opts) => {
+        const point = opts
+          ? chartSeries.value[opts.seriesIndex]?.data[opts.dataPointIndex]
+          : undefined
+        return formatTooltipBucketRange(point?.bucketStart ?? Number(value))
+      },
+    },
     y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
   },
   colors: [chartColor.value],
@@ -261,7 +271,8 @@ function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPoint
   const point = chartSeries.value[0]?.data[dataPointIndex]
   if (!point) return
 
-  const timestamp = new Date(point.x)
+  const timestamp = new Date(point.bucketStart)
+  const MINUTE = 60 * 1000
   const HOUR = 60 * 60 * 1000
   const DAY = 24 * HOUR
   const WEEK = 7 * DAY
@@ -269,6 +280,10 @@ function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPoint
   let start: Date, end: Date
 
   switch (timeFrame.value) {
+    case 'minute':
+      start = timestamp
+      end = new Date(timestamp.getTime() + MINUTE - 1)
+      break
     case 'hour':
       start = timestamp
       end = new Date(timestamp.getTime() + HOUR - 1)

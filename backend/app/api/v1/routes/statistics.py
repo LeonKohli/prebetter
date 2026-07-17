@@ -28,6 +28,7 @@ router = APIRouter(dependencies=[Depends(get_current_user, scope="function")])
 
 
 class TimeFrame(str, Enum):
+    MINUTE = "minute"
     HOUR = "hour"
     DAY = "day"
     WEEK = "week"
@@ -35,6 +36,7 @@ class TimeFrame(str, Enum):
 
 
 DATE_FORMATS = {
+    TimeFrame.MINUTE: "%Y-%m-%d %H:%i:00",
     TimeFrame.HOUR: "%Y-%m-%d %H:00:00",
     TimeFrame.DAY: "%Y-%m-%d 00:00:00",
     TimeFrame.WEEK: "%Y-%m-%d 00:00:00",
@@ -42,6 +44,7 @@ DATE_FORMATS = {
 }
 
 DEFAULT_RANGES = {
+    TimeFrame.MINUTE: timedelta(hours=1),
     TimeFrame.HOUR: timedelta(days=1),
     TimeFrame.DAY: timedelta(days=30),
     TimeFrame.WEEK: timedelta(days=90),
@@ -63,7 +66,7 @@ def _compute_date_range(
 
 
 def _aggregate_timeline_results(
-    results, date_format: str, time_frame: TimeFrame
+    results, time_frame: TimeFrame
 ) -> list[TimelineDataPoint]:
     """Aggregate raw SQL results into TimelineDataPoint objects."""
     timeline_data: dict[datetime, dict] = {}
@@ -73,7 +76,7 @@ def _aggregate_timeline_results(
         if not time_str:
             continue
 
-        timestamp = datetime.strptime(time_str, date_format).replace(tzinfo=UTC)
+        timestamp = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
 
         if time_frame == TimeFrame.WEEK:
             timestamp = timestamp - timedelta(days=timestamp.weekday())
@@ -160,7 +163,7 @@ def get_timeline(
 
         date_format = DATE_FORMATS[time_frame]
         results = repo.get_timeline(filters, date_format)
-        timeline_points = _aggregate_timeline_results(results, date_format, time_frame)
+        timeline_points = _aggregate_timeline_results(results, time_frame)
 
         return TimelineResponse(
             time_frame=time_frame.value,

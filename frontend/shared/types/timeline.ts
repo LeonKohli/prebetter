@@ -6,7 +6,7 @@ export interface TimelineDataPoint {
   by_analyzer: Record<string, number>
 }
 
-export type TimeFrame = 'hour' | 'day' | 'week' | 'month'
+export type TimeFrame = 'minute' | 'hour' | 'day' | 'week' | 'month'
 
 export interface TimelineResponse {
   time_frame: TimeFrame
