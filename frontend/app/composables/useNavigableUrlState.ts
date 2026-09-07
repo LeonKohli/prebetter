@@ -21,10 +21,10 @@ export function useNavigableUrlState(options: {
   const { setHint } = useSkeletonHint()
 
   const defaults = {
-    view: (options.defaultView || 'grouped') as ViewMode,
+    view: (options.defaultView || 'grouped'),
     pageSize: (options.defaultPageSize || 100) as PageSize,
     sortBy: options.defaultSortBy || 'detected_at',
-    sortOrder: (options.defaultSortOrder || 'desc') as SortOrder,
+    sortOrder: (options.defaultSortOrder || 'desc'),
     groupedSortBy: options.defaultGroupedSortBy || 'detected_at',
     ungroupedSortBy: options.defaultUngroupedSortBy || 'detected_at',
   } as const
@@ -45,7 +45,7 @@ export function useNavigableUrlState(options: {
     if (!filterString?.trim()) return {}
     
     try {
-      const parsed = JSON.parse(filterString)
+      const parsed: unknown = JSON.parse(filterString)
       
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         return parsed as Record<string, string | number>
@@ -111,7 +111,7 @@ export function useNavigableUrlState(options: {
   const updateUrl = (updates: LocationQuery, isUserAction = false) => {
     Object.assign(pendingUpdates, updates)
     if (isUserAction) pendingHasUserAction = true // Sticky: once true, stays true until flush
-    debouncedFlush()
+    debouncedFlush().catch(err => console.error('Failed to update URL filters:', err))
   }
 
   // Computed refs that read from route.query
@@ -291,9 +291,9 @@ export function useNavigableUrlState(options: {
     })
   }
 
-  const resetToDefaults = (): void => {
+  const resetToDefaults = () => {
     clearPendingUpdates()
-    router.replace({ query: {} })
+    return router.replace({ query: {} })
   }
 
   return {

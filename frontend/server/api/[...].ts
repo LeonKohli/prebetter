@@ -1,6 +1,6 @@
 import { joinURL } from 'ufo'
 import type { H3Event } from 'h3'
-import type { FetchError } from 'ofetch'
+import { FetchError } from 'ofetch'
 import { auth } from '~~/server/utils/auth'
 
 /**
@@ -9,9 +9,9 @@ import { auth } from '~~/server/utils/auth'
  * a Bearer token, so the client never handles tokens. `/api/auth/*` is served by
  * Better Auth's own handler and never reaches this catch-all.
  */
-export default defineEventHandler(async (event: H3Event) => {
+export default defineEventHandler(async (event: H3Event): Promise<unknown> => {
   const path = event.path.replace(/^\/api\//, '')
-  const target = joinURL(useRuntimeConfig().apiBase as string, 'api/v1', path)
+  const target = joinURL(useRuntimeConfig().apiBase, 'api/v1', path)
 
   const headers: Record<string, string> = {
     accept: getRequestHeader(event, 'accept') || 'application/json',
@@ -31,12 +31,13 @@ export default defineEventHandler(async (event: H3Event) => {
       timeout: 30000,
     }
     if (event.method !== 'GET' && event.method !== 'HEAD') {
-      const body = await readBody(event)
+      const body: unknown = await readBody(event)
       if (body !== undefined) fetchOptions.body = body
     }
-    return (await $fetch.raw(target, fetchOptions))._data
+    return (await $fetch.raw<unknown>(target, fetchOptions))._data
   } catch (error) {
-    const fetchError = error as FetchError
+    if (!(error instanceof FetchError)) throw error
+    const fetchError: FetchError<unknown> = error
 
     if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
       throw createError({
@@ -45,7 +46,9 @@ export default defineEventHandler(async (event: H3Event) => {
       })
     }
 
-    if (fetchError.cause && String(fetchError.cause).includes('ECONNREFUSED')) {
+    const cause = fetchError.cause
+    const causeMessage = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : ''
+    if (causeMessage.includes('ECONNREFUSED')) {
       throw createError({
         statusCode: 503,
         statusMessage: 'Service Unavailable',

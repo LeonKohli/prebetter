@@ -4,7 +4,6 @@ import type {
   ColumnFiltersState,
   SortingState,
   VisibilityState,
-  Table,
 } from '@tanstack/vue-table'
 import {
   FlexRender,
@@ -19,7 +18,6 @@ const props = defineProps<{
 }>()
 
 // URL state synchronization
-const router = useRouter()
 const route = useRoute()
 const urlState = props.urlState
 
@@ -35,8 +33,7 @@ const {
   displayData,
   paginationInfo,
   tableTotals,
-  fetchKey,
-} = await useAlertsData(urlState)
+} = useAlertsData(urlState)
 
 // Local UI state
 const rowSelection = ref<Record<string, boolean>>({})
@@ -182,7 +179,7 @@ watch(status, (newStatus) => {
 // Provide context for child components
 provideAlertTableContext({
   urlState,
-  table: table as Table<AlertListItem | GroupedAlert>,
+  table: table,
   isGrouped,
   pending,
 })
@@ -203,7 +200,7 @@ function handleToggleView() {
     newQuery.filter = Object.keys(currentFilters).length > 0 ? JSON.stringify(currentFilters) : undefined
   }
 
-  urlState.navigateTo({ query: newQuery })
+  return urlState.navigateTo({ query: newQuery })
 }
 
 function openDeleteDialog(state: DeleteState) {
@@ -214,7 +211,7 @@ function openDeleteDialog(state: DeleteState) {
 function handleDeleteComplete() {
   deleteState.value = null
   rowSelection.value = {}
-  refresh()
+  return refresh()
 }
 
 function handleBulkDelete() {

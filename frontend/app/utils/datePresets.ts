@@ -1,6 +1,7 @@
-import {
+import type {
   CalendarDate,
-  CalendarDateTime,
+  CalendarDateTime} from '@internationalized/date';
+import {
   Time,
   fromDate,
   getLocalTimeZone,

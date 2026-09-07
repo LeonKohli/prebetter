@@ -174,7 +174,7 @@ const chartColor = ref(getChartColor(1))
 
 // Update chart color when theme changes
 watch(() => colorMode.value, () => {
-  nextTick(() => {
+  return nextTick(() => {
     chartColor.value = getChartColor(1)
   })
 })
@@ -264,6 +264,7 @@ const debouncedSetDateRange = useDebounceFn(setDateRange, 300)
 function handleZoomed(_: unknown, { xaxis }: { xaxis: { min?: number; max?: number } }) {
   if (xaxis.min !== undefined && xaxis.max !== undefined && xaxis.max > xaxis.min) {
     debouncedSetDateRange(new Date(xaxis.min), new Date(xaxis.max))
+      .catch(err => console.error('Failed to update timeline range:', err))
   }
 }
 

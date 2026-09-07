@@ -305,12 +305,10 @@ const { data: serversData, execute: fetchServers } = useFetch<string[]>('/api/re
 const { data: classificationsData, status: classificationsStatus, execute: fetchClassifications } = useFetch<string[]>('/api/reference/classifications', { default: () => [], lazy: true, immediate: false })
 
 const referenceDataLoaded = ref(false)
-watch(isOpen, (open) => {
+watch(isOpen, async (open) => {
   if (open && !referenceDataLoaded.value) {
     referenceDataLoaded.value = true
-    fetchSeverities()
-    fetchServers()
-    fetchClassifications()
+    await Promise.all([fetchSeverities(), fetchServers(), fetchClassifications()])
   }
 })
 

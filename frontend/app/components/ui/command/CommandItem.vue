@@ -22,17 +22,15 @@ const isRender = computed(() => {
   if (!filterState.search) {
     return true
   }
-  else {
-    const filteredCurrentItem = filterState.filtered.items.get(id)
-    // If the filtered items is undefined means not in the all times map yet
-    // Do the first render to add into the map
-    if (filteredCurrentItem === undefined) {
-      return true
-    }
-
-    // Check with filter
-    return filteredCurrentItem > 0
+  const filteredCurrentItem = filterState.filtered.items.get(id)
+  // If the filtered items is undefined means not in the all times map yet
+  // Do the first render to add into the map
+  if (filteredCurrentItem === undefined) {
+    return true
   }
+
+  // Check with filter
+  return filteredCurrentItem > 0
 })
 
 const itemRef = ref()
@@ -42,7 +40,7 @@ onMounted(() => {
     return
 
   // textValue to perform filter
-  allItems.value.set(id, currentElement.value.textContent ?? (props.value?.toString() ?? ""))
+  allItems.value.set(id, currentElement.value.textContent ?? "")
 
   const groupId = groupContext?.id
   if (groupId) {

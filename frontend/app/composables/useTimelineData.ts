@@ -18,7 +18,7 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     }
 
     if (filters.start_date && filters.end_date) {
-      return { start: new Date(filters.start_date as string), end: new Date(filters.end_date as string) }
+      return { start: new Date(filters.start_date), end: new Date(filters.end_date) }
     }
 
     // Default: sliding 24h window - needs token dependency for SSE refresh

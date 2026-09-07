@@ -6,7 +6,7 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
-const isDev = process.dev
+const isDev = import.meta.dev
 
 const codeContainer = ref<HTMLElement | null>(null)
 

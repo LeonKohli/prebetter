@@ -1,4 +1,4 @@
-import type { TimeFrame } from '~~/shared/types/timeline'
+import type { TimeFrame } from '../../shared/types/timeline'
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR

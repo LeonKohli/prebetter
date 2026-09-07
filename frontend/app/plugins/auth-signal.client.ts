@@ -14,5 +14,6 @@ export default defineNuxtPlugin((nuxtApp) => {
   const { fetchSession } = useAuth()
   authClient.$store.listen('$sessionSignal', () => {
     nuxtApp.runWithContext(() => fetchSession())
+      .catch(err => console.error('Failed to refresh session:', err))
   })
 })

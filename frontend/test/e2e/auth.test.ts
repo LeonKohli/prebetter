@@ -16,10 +16,9 @@ const origin = 'http://127.0.0.1:43017'
 process.env.BETTER_AUTH_URL = origin
 process.env.BETTER_AUTH_SECRET = randomUUID() + randomUUID()
 const jwks = createRemoteJWKSet(new URL('/api/auth/jwks', origin))
-const backend = createServer(async (request, response) => {
-  try {
-    const token = request.headers.authorization?.replace(/^Bearer /, '') ?? ''
-    const { payload } = await jwtVerify(token, jwks, { issuer: origin, audience: origin })
+const backend = createServer((request, response) => {
+  const token = request.headers.authorization?.replace(/^Bearer /, '') ?? ''
+  jwtVerify(token, jwks, { issuer: origin, audience: origin }).then(({ payload }) => {
     if (request.url?.includes('/stream')) {
       response.writeHead(200, { 'Content-Type': 'text/event-stream' })
       response.end(`data: ${JSON.stringify({ userId: payload.sub })}\n\n`)
@@ -32,10 +31,10 @@ const backend = createServer(async (request, response) => {
     }
     response.writeHead(200, { 'Content-Type': 'application/json' })
     response.end(JSON.stringify({ userId: payload.sub, path: request.url }))
-  } catch {
+  }).catch(() => {
     response.writeHead(401, { 'Content-Type': 'application/json' })
     response.end(JSON.stringify({ detail: 'Unauthorized' }))
-  }
+  })
 })
 backend.listen(0, '127.0.0.1')
 await once(backend, 'listening')
@@ -134,7 +133,7 @@ describe('Better Auth and API proxies', async () => {
       $fetch<{ userId: string; path: string }>('/api/alerts/?classification=%E6%B5%8B%E8%AF%95', { headers: { cookie } }),
     ))
     expect(results.map(result => result.userId)).toEqual(users.map(user => user.id))
-    expect(results[0].path).toBe('/api/v1/alerts/?classification=%E6%B5%8B%E8%AF%95')
+    expect(results[0]?.path).toBe('/api/v1/alerts/?classification=%E6%B5%8B%E8%AF%95')
     const sameSession = await Promise.all([0, 1].map(() =>
       $fetch<{ userId: string }>('/api/alerts/', { headers: { cookie: cookies[0]! } }),
     ))

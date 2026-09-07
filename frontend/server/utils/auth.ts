@@ -43,8 +43,10 @@ export const auth = betterAuth({
     before: createAuthMiddleware(async (ctx) => {
       if (ctx.path !== '/admin/remove-user' && ctx.path !== '/admin/set-role') return
 
-      const userId = ctx.body?.userId as string | undefined
-      if (!userId) return
+      const body: unknown = ctx.body
+      if (typeof body !== 'object' || body === null ||
+        !('userId' in body) || typeof body.userId !== 'string' || !body.userId) return
+      const { userId } = body
 
       const target = await ctx.context.adapter.findOne<{ role?: string | null }>({
         model: 'user',
@@ -54,7 +56,7 @@ export const auth = betterAuth({
 
       // Keeping admin role on set-role is fine; only guard demotion or removal.
       if (ctx.path === '/admin/set-role') {
-        const role = ctx.body?.role
+        const role = 'role' in body ? body.role : undefined
         const roles = Array.isArray(role) ? role : [role]
         if (roles.includes('admin')) return
       }

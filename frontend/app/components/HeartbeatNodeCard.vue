@@ -91,7 +91,7 @@
 import { formatRelativeFromSeconds } from '@/composables/useHeartbeats'
 import { formatTimestamp } from '@/utils/timestampFormatter'
 
-const props = defineProps<{
+defineProps<{
   node?: HeartbeatNode
   skeleton?: boolean
 }>()

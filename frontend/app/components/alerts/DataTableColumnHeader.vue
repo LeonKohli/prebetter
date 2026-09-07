@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { computed } from 'vue'
 
 interface Props {
-  column: Column<any, any>
+  column: Pick<Column<unknown>, 'getIsSorted' | 'getCanSort' | 'toggleSorting'>
   title: string
 }
 

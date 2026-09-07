@@ -143,7 +143,7 @@ interface Emits {
   refresh: []
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   isLive: false,
   sseStatus: 'CLOSED',
   sseError: null,
@@ -200,14 +200,14 @@ watchEffect(() => {
     dateRangeRef.value = { from, to, presetId }
   } else if (filters.start_date && filters.end_date) {
     dateRangeRef.value = {
-      from: new Date(filters.start_date as string),
-      to: new Date(filters.end_date as string)
+      from: new Date(filters.start_date),
+      to: new Date(filters.end_date)
     }
   } else {
     // Default fallback - also a sliding window
     void sseRefreshToken.value
     const { from, to } = getPresetRange('last-24-hours')
-    dateRangeRef.value = { from, to, presetId: 'last-24-hours' as DatePresetId }
+    dateRangeRef.value = { from, to, presetId: 'last-24-hours' }
   }
 })
 
@@ -222,7 +222,7 @@ const dateRange = computed<DateRangeValue>({
     delete nextFilters.date_preset
 
     if (value.presetId && isValidPresetId(value.presetId)) {
-      const presetId = value.presetId as DatePresetId
+      const presetId = value.presetId
       if (!isRelativePreset(presetId)) {
         const { from, to } = getPresetRange(presetId)
         nextFilters.start_date = from.toISOString()

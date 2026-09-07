@@ -7,10 +7,10 @@
  *
  * Run: bun run scripts/migrate-users.ts   (env loaded from .env)
  */
-import { createPool } from 'mysql2/promise'
+import { createPool, type RowDataPacket } from 'mysql2/promise'
 import { randomUUID } from 'node:crypto'
 
-type LegacyUser = {
+interface LegacyUser extends RowDataPacket {
   id: string
   email: string
   username: string
@@ -29,14 +29,14 @@ const pool = createPool({
   database: process.env.MYSQL_PREBETTER_DB,
 })
 
-const [legacy] = await pool.query<LegacyUser[] & any>('SELECT * FROM users')
+const [legacy] = await pool.query<LegacyUser[]>('SELECT * FROM users')
 
 let migrated = 0
 let skipped = 0
 
-for (const u of legacy as LegacyUser[]) {
-  const [existing] = await pool.query<any[]>('SELECT id FROM `user` WHERE id = ?', [u.id])
-  if ((existing as any[]).length > 0) {
+for (const u of legacy) {
+  const [existing] = await pool.query<RowDataPacket[]>('SELECT id FROM `user` WHERE id = ?', [u.id])
+  if (existing.length > 0) {
     skipped++
     continue
   }
@@ -73,5 +73,5 @@ for (const u of legacy as LegacyUser[]) {
   }
 }
 
-console.log(`migrated=${migrated} skipped=${skipped} total=${(legacy as LegacyUser[]).length}`)
+console.log(`migrated=${migrated} skipped=${skipped} total=${legacy.length}`)
 await pool.end()

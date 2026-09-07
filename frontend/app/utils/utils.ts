@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // TanStack Table updater pattern for Vue refs
-export function valueUpdater<T extends unknown>(
+export function valueUpdater<T>(
   updaterOrValue: Updater<T> | T, 
   ref: Ref<T>
 ): void {

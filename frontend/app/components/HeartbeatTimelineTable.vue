@@ -114,7 +114,7 @@ interface Props {
   showHost?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   subtitle: undefined,
   emptyMessage: 'No timeline data found for this period.',
   showHost: true,

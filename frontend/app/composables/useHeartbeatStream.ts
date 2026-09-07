@@ -1,6 +1,6 @@
 interface UseHeartbeatStreamOptions {
   immediate?: boolean
-  onNewHeartbeats?: () => void
+  onNewHeartbeats?: () => void | Promise<void>
   debounceMs?: number
 }
 
@@ -15,7 +15,7 @@ export function useHeartbeatStream(options: UseHeartbeatStreamOptions = {}) {
 
   const url = '/api/heartbeats-stream'
 
-  const { status, data, error, close, open } = useEventSource(url, ['heartbeat_update'], {
+  const { status, data, error, close, open } = useEventSource<['heartbeat_update'], string>(url, ['heartbeat_update'], {
     immediate,
     withCredentials: true,
     autoReconnect: {
@@ -23,7 +23,7 @@ export function useHeartbeatStream(options: UseHeartbeatStreamOptions = {}) {
       delay: 5000,
       onFailed() {
         console.error('[HeartbeatStream] Failed to connect after max retries')
-        onSseGiveUp()
+        onSseGiveUp().catch(err => console.error('[HeartbeatStream] Session check failed:', err))
       },
     },
   })
@@ -35,7 +35,7 @@ export function useHeartbeatStream(options: UseHeartbeatStreamOptions = {}) {
 
   watch(data, (raw) => {
     if (!raw) return
-    debouncedOnNewHeartbeats?.()
+    return debouncedOnNewHeartbeats?.()
   })
 
   return {

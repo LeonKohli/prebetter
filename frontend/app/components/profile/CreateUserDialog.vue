@@ -139,7 +139,7 @@ const onSubmit = form.handleSubmit(async (values) => {
     return
   }
 
-  emit('createSuccess', data.user as AppUser)
+  emit('createSuccess', data.user)
   resetForm()
   isOpen.value = false
 })

@@ -5,7 +5,7 @@ import {
   getTimelineBucketVisibleRange,
   getTimelineColumnWidth,
   getTimelineXAxisRange,
-} from '@/utils/timelineChart'
+} from '../app/utils/timelineChart'
 
 const HOUR = 60 * 60 * 1000
 const MINUTE = 60 * 1000

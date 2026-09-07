@@ -53,7 +53,7 @@ export function useHeartbeatStatus(options: {
 
   const statusSummaryList = computed(() => {
     const base = WELL_KNOWN_STATUSES.map((statusKey) => ({
-      status: statusKey as string,
+      status: statusKey,
       count: statusSummary.value[statusKey] ?? 0,
     }))
 
@@ -78,7 +78,7 @@ export function useHeartbeatStatus(options: {
   // When SSE is used, pass autoRefreshMs: 0 to disable polling
   const { pause: pauseAutoRefresh, resume: resumeAutoRefresh } = useIntervalFn(
     () => {
-      refresh()
+      void refresh()
     },
     autoRefreshInterval,
     { immediate: false }
@@ -114,7 +114,7 @@ export function useHeartbeatStatus(options: {
     refresh,
     status,
     days,
-    setDays(value: number) {
+    setDays: (value: number) => {
       days.value = value
     },
     lastUpdated,

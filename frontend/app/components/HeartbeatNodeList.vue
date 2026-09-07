@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   nodes?: HeartbeatNode[]
   totalAgents?: number
   pending?: boolean

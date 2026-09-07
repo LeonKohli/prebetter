@@ -8,7 +8,7 @@
  * - Non-relative presets (today): Dates stay fixed, but data still refreshes
  * - Explicit user dates: No SSE refresh (user-selected range)
  */
-import { getPresetRange, isRelativePreset, getActivePresetId, type DatePresetId } from '@/utils/datePresets'
+import { getPresetRange, isRelativePreset, getActivePresetId } from '@/utils/datePresets'
 
 export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>) {
   const { sortFieldMap, filterFieldMap } = useAlertTableColumns()
@@ -120,7 +120,7 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
     if (!data.value) return { total: 0, pages: 0, page: 1, size: 100 }
     return isGroupedResponse(data.value)
       ? data.value.pagination
-      : (data.value as AlertListResponse).pagination
+      : (data.value).pagination
   })
 
   const tableTotals = computed(() => {
@@ -132,7 +132,7 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
         total: data.value.pagination.total
       }
     }
-    const items = (data.value as AlertListResponse).items ?? []
+    const items = (data.value).items ?? []
     return { rows: items.length, alerts: items.length, total: paginationInfo.value.total }
   })
 

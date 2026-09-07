@@ -161,7 +161,10 @@ export interface AlertDetail {
   services: ServiceInfo[]
   web_services: WebServiceInfo[]
   alert_idents: AlertIdentInfo[]
-  additional_data: Record<string, any>
+  additional_data: Record<string, string | number | boolean | null | {
+    readable: string
+    original: string | null
+  }>
   forwarded?: ForwardedInfo
   correlation_description?: string
 }

@@ -168,19 +168,17 @@ function toggleLive() {
   if (isLive.value) {
     // Resume: reopen SSE and refresh data
     sseOpen()
-    refreshStatus()
-    refreshTimeline()
-  } else {
-    // Pause: close SSE connection
-    sseClose()
+    return Promise.all([refreshStatus(), refreshTimeline()])
   }
+  // Pause: close SSE connection
+  sseClose()
 }
 
 const lastUpdatedAt = computed(() => lastUpdated.value)
 const timelineErrorNormalized = computed(() => timelineError.value ?? null)
 
 function handleAgentSelect(payload: { node: string; agent: string }) {
-  router.push({
+  return router.push({
     path: `/heartbeats/${encodeURIComponent(payload.node)}/${encodeURIComponent(payload.agent)}`,
   })
 }

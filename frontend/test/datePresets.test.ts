@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 
-let datePresets: typeof import('@/utils/datePresets')
+let datePresets: typeof import('../app/utils/datePresets')
 
 const iso = (date: Date) => date.toISOString()
 
 beforeAll(async () => {
   process.env.TZ = 'UTC'
-  datePresets = await import('@/utils/datePresets')
+  datePresets = await import('../app/utils/datePresets')
 })
 
 describe('datePresets', () => {

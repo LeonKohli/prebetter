@@ -144,7 +144,6 @@ describe('Date Range Preset Detection Logic', () => {
     })
 
     it('should detect "This Week" with generous tolerance', () => {
-      const now = new Date('2024-01-15T10:30:00Z').getTime()
       const weekStart = new Date('2024-01-14T00:00:00Z').getTime()
       const weekEnd = new Date('2024-01-20T23:59:59Z').getTime()
       

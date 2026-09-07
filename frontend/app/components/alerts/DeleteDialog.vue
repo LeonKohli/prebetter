@@ -72,7 +72,7 @@ async function confirmDeletion() {
     emit('update:open', false)
     emit('deleted')
   } catch (err) {
-    const fetchError = err as FetchError & { data?: { detail?: string } }
+    const fetchError = err as FetchError<{ detail?: string }>
     error.value = fetchError?.data?.detail || fetchError?.message || 'Failed to delete alerts.'
   } finally {
     pending.value = false

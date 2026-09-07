@@ -167,7 +167,7 @@ interface Props {
   currentUserId: string
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 
 const { user: currentUser, refetch: refetchSession } = useAuth()
 
@@ -213,7 +213,7 @@ const formatDate = (date: string | Date) => {
 }
 
 const handleUserCreated = () => {
-  refresh()
+  return refresh()
 }
 
 const editDialog = ref<DialogRef | null>(null)
@@ -221,13 +221,13 @@ const resetPasswordDialog = ref<DialogRef | null>(null)
 
 const handleEditUser = (user: AppUser) => {
   selectedUser.value = user
-  nextTick(() => {
+  return nextTick(() => {
     editDialog.value?.open()
   })
 }
 
 const handleUserUpdated = async (updatedUser: AppUser) => {
-  refresh()
+  await refresh()
 
   // Critical: Refresh session if the admin edited their own profile
   if (currentUser.value?.id === updatedUser.id) {
@@ -248,9 +248,9 @@ const confirmDelete = async () => {
       userId: userToDelete.value.id,
     })
     if (removeError) throw new Error(removeError.message || 'Failed to delete user')
-    refresh()
-  } catch (error) {
-    console.error('Delete user error:', error)
+    await refresh()
+  } catch (err) {
+    console.error('Delete user error:', err)
   } finally {
     isDeleteDialogOpen.value = false
     userToDelete.value = null
@@ -259,13 +259,13 @@ const confirmDelete = async () => {
 
 const handleResetPassword = (user: AppUser) => {
   userToReset.value = user
-  nextTick(() => {
+  return nextTick(() => {
     resetPasswordDialog.value?.open()
   })
 }
 
 const handlePasswordReset = () => {
   userToReset.value = null
-  refresh()
+  return refresh()
 }
 </script>

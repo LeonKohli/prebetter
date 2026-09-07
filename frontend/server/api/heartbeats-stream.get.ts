@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
-  const target = joinURL(config.apiBase as string, 'api/v1/heartbeats/stream')
+  const target = joinURL(config.apiBase, 'api/v1/heartbeats/stream')
 
   // AbortController to cancel backend fetch when client disconnects
   const abortController = new AbortController()

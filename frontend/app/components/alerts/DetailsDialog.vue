@@ -85,8 +85,8 @@ async function fetchAlertDetails(id: string) {
 // Helper functions
 const copied = ref<Record<string, boolean>>({})
 
-function copyWithFeedback(key: string, text: string) {
-  navigator.clipboard.writeText(text)
+async function copyWithFeedback(key: string, text: string) {
+  await navigator.clipboard.writeText(text)
   copied.value[key] = true
   setTimeout(() => (copied.value[key] = false), 1500)
 }

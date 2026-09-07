@@ -9,9 +9,9 @@ const copied = ref<Record<string, boolean>>({})
 const hexPre = ref<HTMLElement | null>(null)
 const asciiPre = ref<HTMLElement | null>(null)
 
-function copyWithFeedback(key: string, text: string) {
+async function copyWithFeedback(key: string, text: string) {
   if (!text) return
-  navigator.clipboard.writeText(text)
+  await navigator.clipboard.writeText(text)
   copied.value[key] = true
   setTimeout(() => (copied.value[key] = false), 1500)
 }
@@ -23,17 +23,17 @@ function getSelectionWithin(el: HTMLElement | null): string | null {
   const range = sel.getRangeAt(0)
   if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return null
   const text = sel.toString()
-  return text && text.trim() ? text : null
+  return text?.trim() ? text : null
 }
 
 function copyHex() {
   const selected = getSelectionWithin(hexPre.value)
-  copyWithFeedback('copy-hex', selected || hexDump.value)
+  return copyWithFeedback('copy-hex', selected || hexDump.value)
 }
 
 function copyAscii() {
   const selected = getSelectionWithin(asciiPre.value)
-  copyWithFeedback('copy-readable', selected || (props.readable || ''))
+  return copyWithFeedback('copy-readable', selected || (props.readable || ''))
 }
 
 function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {

@@ -21,7 +21,7 @@ function copyId() {
   } else if ('id' in props.alert) {
     id = props.alert.id
   }
-  navigator.clipboard.writeText(id || '')
+  return navigator.clipboard.writeText(id || '')
 }
 
 function handleViewDetails() {

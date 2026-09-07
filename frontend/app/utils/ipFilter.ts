@@ -13,8 +13,8 @@ function isValidOctet(s: string): boolean {
 }
 
 function expandPartialIP(segments: string[]): { min: string; max: string } {
-  const minSegments = [...segments, ...Array(4 - segments.length).fill('0')]
-  const maxSegments = [...segments, ...Array(4 - segments.length).fill('255')]
+  const minSegments = [...segments, ...Array<string>(4 - segments.length).fill('0')]
+  const maxSegments = [...segments, ...Array<string>(4 - segments.length).fill('255')]
   return {
     min: minSegments.join('.'),
     max: maxSegments.join('.'),

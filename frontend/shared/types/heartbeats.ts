@@ -1,4 +1,4 @@
-export type HeartbeatStatus = 'active' | 'inactive' | 'offline' | 'unknown' | string
+export type HeartbeatStatus = string
 
 export interface HeartbeatAgent {
   name: string

@@ -59,7 +59,7 @@ function getCountPillClass(count: number): string {
 }
 
 function handleClassificationClick(classification: string, count: number) {
-  urlState.navigateToDetails({
+  return urlState.navigateToDetails({
     sourceIp: props.sourceIp,
     targetIp: props.targetIp,
     classification,

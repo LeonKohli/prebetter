@@ -13,7 +13,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   let redirecting = false
 
   globalThis.$fetch = $fetch.create({
-    onResponseError({ request, response }) {
+    async onResponseError({ request, response }) {
       if (response?.status !== 401 || redirecting) return
 
       const url = typeof request === 'string' ? request : request.url
@@ -23,9 +23,11 @@ export default defineNuxtPlugin((nuxtApp) => {
 
       redirecting = true
       const redirect = window.location.pathname + window.location.search
-      Promise
-        .resolve(nuxtApp.runWithContext(() => navigateTo({ path: '/login', query: { redirect } })))
-        .finally(() => setTimeout(() => { redirecting = false }, 2000))
+      try {
+        await nuxtApp.runWithContext(() => navigateTo({ path: '/login', query: { redirect } }))
+      } finally {
+        setTimeout(() => { redirecting = false }, 2000)
+      }
     },
-  }) as typeof globalThis.$fetch
+  })
 })

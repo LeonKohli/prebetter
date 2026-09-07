@@ -9,6 +9,7 @@ import {
 
 // Extend TanStack Table's TableMeta interface for type-safe meta access
 declare module "@tanstack/vue-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Declaration merging requires TanStack's type parameter name.
   interface TableMeta<TData extends RowData> {
     onViewDetails?: (alertId: string) => void;
     onRequestDeleteSingle?: (alert: AlertListItem) => void;
@@ -24,7 +25,7 @@ export const useAlertTableColumns = () => {
       header: ({ column }) =>
         h(AlertsDataTableColumnHeader, { column, title: "Alerts" }),
       cell: ({ row }) => {
-        const totalCount = row.getValue("total_count") as number;
+        const totalCount = row.original.total_count;
         const classificationCount = row.original.alerts?.length || 0;
 
         return h("div", { class: "flex flex-col" }, [
@@ -170,7 +171,7 @@ export const useAlertTableColumns = () => {
       header: ({ column }) =>
         h(AlertsDataTableColumnHeader, { column, title: "Severity" }),
       cell: ({ row }) => {
-        const severity = row.getValue("severity") as string;
+        const severity = row.original.severity;
         const severityLower = severity?.toLowerCase();
         const severityClasses: Record<string, string> = {
           high: "inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-primary text-primary-foreground",
@@ -179,7 +180,7 @@ export const useAlertTableColumns = () => {
         };
         return h(
           "span",
-          { class: severityClasses[severityLower] || severityClasses.low },
+          { class: (severityLower && severityClasses[severityLower]) || severityClasses.low },
           severity?.toUpperCase() || "UNKNOWN",
         );
       },
@@ -189,7 +190,7 @@ export const useAlertTableColumns = () => {
       header: ({ column }) =>
         h(AlertsDataTableColumnHeader, { column, title: "Classification" }),
       cell: ({ row }) => {
-        const classification = row.getValue("classification_text") || "Unknown";
+        const classification = row.original.classification_text || "Unknown";
         const correlationDesc = row.original.correlation_description;
 
         if (correlationDesc) {
@@ -213,13 +214,13 @@ export const useAlertTableColumns = () => {
       accessorKey: "source_ipv4",
       header: ({ column }) =>
         h(AlertsDataTableColumnHeader, { column, title: "Source IP" }),
-      cell: ({ row }) => row.getValue("source_ipv4") || "Unknown",
+      cell: ({ row }) => row.original.source_ipv4 || "Unknown",
     },
     {
       accessorKey: "target_ipv4",
       header: ({ column }) =>
         h(AlertsDataTableColumnHeader, { column, title: "Target IP" }),
-      cell: ({ row }) => row.getValue("target_ipv4") || "Unknown",
+      cell: ({ row }) => row.original.target_ipv4 || "Unknown",
     },
     {
       accessorKey: "analyzer",
