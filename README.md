@@ -1,106 +1,71 @@
 # Prebetter
 
-A web dashboard for [Prelude IDS](https://www.prelude-siem.org/). Browse, filter, and analyze security alerts through a modern interface instead of Prelude's default tooling.
-
-## What is this?
-
-Prebetter connects directly to Prelude's MySQL database and gives you a web UI on top of it. You get alert filtering, timeline stats, heartbeat monitoring, CSV export, and user management with role-based access.
-
-Prelude IDS is an open-source intrusion detection system. Its default interfaces are... not great. This project exists because we needed something better.
+A dashboard for [Prelude IDS](https://www.prelude-siem.org/) with alert filtering, IP-pair grouping, timelines, heartbeat monitoring, CSV export, alert deletion, and user administration.
 
 ## Architecture
 
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
-│   Browser   │────▶│   Frontend   │────▶│    Backend API  │
-│             │     │   (Nuxt 4)   │     │    (FastAPI)    │
-└─────────────┘     └──────────────┘     └────────┬────────┘
-                                                  │
-                                          ┌───────┴─────────┐
-                                          │                 │
-                                    ┌─────▼──────┐   ┌──────▼───────┐
-                                    │ Prelude DB │   │ Prebetter DB │
-                                    │ (read-only │   │  (users)     │
-                                    └────────────┘   └──────────────┘
-```
+The Nuxt 4 frontend renders the UI and runs Better Auth against the Prebetter MySQL database. Better Auth owns users, password hashes, sessions, and signing keys.
 
-The frontend is a Nuxt 4 / Vue 3 SPA (shadcn-vue, Tailwind CSS, dark/light mode). The backend is a FastAPI REST API with JWT auth. Two MySQL databases: Prelude's existing one (read-only) and a separate one for user management.
+Browser requests go through Nuxt's `/api/*` routes. The proxy obtains a short-lived JWT for the current session and forwards it to FastAPI. FastAPI verifies the signature through Better Auth's JWKS endpoint, checks the issuer and audience, and queries the Prelude database.
 
-## Quick Start
+Prelude contains IDS data and the required `Prebetter_Pair` accelerator. Deletion and maintenance operations write to this database. It is not a read-only connection.
 
-### Prerequisites
+## Set up the project
 
-- Python 3.13+
-- Node.js 20+
-- MySQL 5.7+
-- uv (Python package manager)
-- Bun (JavaScript package manager)
+Requirements:
 
-### Installation
+- Python 3.13 or later and uv.
+- Node.js matching `frontend/package.json` and Bun. CI uses Node 24.
+- MySQL or MariaDB with the Prelude schema. CI tests MariaDB 11.4.
+- Separate Prelude and Prebetter databases and credentials with the required permissions.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/LeonKohli/prebetter.git
-   cd prebetter
-   ```
+1. Install dependencies:
 
-2. **Set up the backend:**
-   ```bash
+   ```sh
    cd backend
-   uv sync
-   cp .env.example .env
-   # Edit .env with your database credentials
-   fastapi dev
+   uv sync --locked
+   cd ../frontend
+   bun install --frozen-lockfile
    ```
 
-3. **Set up the frontend:**
-   ```bash
-   cd frontend
-   bun install
-   bun run dev
-   ```
+2. Copy each component's `.env.example` to `.env` and fill in its settings. Both components must use the same `BETTER_AUTH_URL`.
+3. Follow the [backend setup](backend/README.md#set-up-prelude) to install the Prelude accelerator and indexes.
+4. Follow the [frontend setup](frontend/README.md#set-up-authentication) to install the auth schema and create an administrator or migrate existing users.
+5. Start the backend from `backend` with `uv run fastapi dev`. Start the frontend from `frontend` with `bun run dev`.
 
-4. **Access the application:**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/api/v1/docs
+Open [the dashboard](http://localhost:3000) and [API documentation](http://localhost:8000/api/v1/docs).
 
-## Features
+## Upgrade an existing installation
 
-- Alert browsing with filtering by severity, classification, IP, date range
-- Alert grouping by source/target IP pairs
-- Heartbeat monitoring (which agents are alive, which dropped off)
-- Timeline and summary statistics
-- CSV export
-- JWT auth with superuser/regular user roles
-- Dark/light mode
+Install from the committed lockfiles. Before starting Better Auth 1.7, apply [the JWKS migration](frontend/migrations/2026-09-07-jwks-algorithm.sql) once to an existing Better Auth database. Fresh installations use `frontend/better-auth-schema.sql`, which already includes those columns.
 
-## Tech Stack
+Deploy frontend and backend configuration together. The old `SECRET_KEY`, access/refresh-token settings, and `NUXT_SESSION_PASSWORD` do not configure the current auth system.
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Nuxt 4, Vue 3, TypeScript, Tailwind CSS v4, shadcn-vue |
-| Backend | FastAPI, SQLAlchemy, Pydantic, PyJWT |
-| Database | MySQL 5.7+ (Prelude DB + user management DB) |
-| Package Managers | [uv](https://docs.astral.sh/uv/) (Python), [Bun](https://bun.sh/) (JS) |
+## Verify changes
 
-## Documentation
+From `backend`:
 
-- [Backend README](./backend/README.md) — API endpoints, database schema, setup details
-- [Frontend README](./frontend/README.md) — component structure, auth flow, styling
-- [API docs](http://localhost:8000/api/v1/docs) — interactive Swagger UI (when running)
+```sh
+uv run ruff check .
+uv run pytest
+```
 
-## Motivation
+From `frontend`:
 
-Prelude IDS does its job well, but the existing tools for actually looking at the data it collects haven't kept up. We needed a way to quickly browse alerts, see what's happening across our network, and not fight the UI while doing it. So we built one.
+```sh
+bun run test
+bun run typecheck
+bun run test:e2e
+bun run build
+```
 
-## Contributing
+Database tests require disposable schemas. See the [backend test setup](backend/README.md#tests) and [frontend HTTP tests](frontend/README.md#tests). The [CI workflow](.github/workflows/checks.yml) provisions MariaDB and runs these checks.
 
-1. Fork the repository
-2. Create a feature branch from `dev`
-3. Test thoroughly
-4. Submit a pull request
+## Development references
 
-## License
+- [Backend setup and API](backend/README.md)
+- [Frontend setup and authentication](frontend/README.md)
+- [Prelude maintenance commands](backend/app/scripts/README.md)
+- [Query performance analysis](docs/prelude-slow-query-analysis.md)
 
-[GPL-3.0](./LICENSE)
+Licensed under [GPL-3.0](LICENSE).

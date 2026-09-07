@@ -14,7 +14,7 @@ create table `account` (`id` varchar(36) not null primary key, `accountId` text 
 
 create table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);
 
-create table `jwks` (`id` varchar(36) not null primary key, `publicKey` text not null, `privateKey` text not null, `createdAt` timestamp(3) not null, `expiresAt` timestamp(3));
+create table `jwks` (`id` varchar(36) not null primary key, `publicKey` text not null, `privateKey` text not null, `createdAt` timestamp(3) not null, `expiresAt` timestamp(3), `alg` text, `crv` text);
 
 create index `session_userId_idx` on `session` (`userId`);
 

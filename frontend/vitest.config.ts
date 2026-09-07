@@ -1,27 +1,13 @@
 import { fileURLToPath } from 'node:url'
-import { defineVitestConfig } from '@nuxt/test-utils/config'
+import { defineConfig } from 'vitest/config'
 
-export default defineVitestConfig({
+export default defineConfig({
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./app', import.meta.url)) },
+  },
   test: {
-    environment: 'nuxt',
-    globals: true,
-    setupFiles: ['./test/setup.ts'],
+    environment: 'node',
     include: ['test/**/*.test.ts'],
     exclude: ['test/e2e/**'],
-    environmentOptions: {
-      nuxt: {
-        rootDir: fileURLToPath(new URL('./', import.meta.url)),
-        domEnvironment: 'happy-dom',
-        overrides: {
-          runtimeConfig: {
-            apiBase: 'http://backend.test',
-          },
-        },
-        mock: {
-          intersectionObserver: true,
-          indexedDb: true,
-        },
-      },
-    },
   },
 })

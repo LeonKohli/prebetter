@@ -1,109 +1,84 @@
-# Prebetter Frontend
+# Prebetter frontend
 
-Nuxt 4 frontend for the Prebetter IDS dashboard. Handles alert views, heartbeat monitoring, charts, and user management.
+Nuxt 4 and Vue 3 render the dashboard. UI components use shadcn-vue, Reka UI, and Tailwind CSS. Better Auth runs in the Nuxt server and stores users and sessions in MySQL.
 
-## Tech stack
+## Set up authentication
 
-Built on [Nuxt 4](https://nuxt.com/) with Vue 3 Composition API. UI uses [shadcn-vue](https://www.shadcn-vue.com/) and [Reka UI](https://reka-ui.com/) on top of [Tailwind CSS v4](https://tailwindcss.com/) (OKLCH color system for theming). Tables powered by [TanStack Table](https://tanstack.com/table), charts by [ApexCharts](https://apexcharts.com/). Forms use [vee-validate](https://vee-validate.logaretm.com/) with [Zod 4](https://zod.dev/) for validation. Auth handled by [nuxt-auth-utils](https://github.com/atinux/nuxt-auth-utils) with server-side sessions. Uses [Bun](https://bun.sh/) as package manager.
+From this directory:
 
-## Quick Start
-
-```bash
-# Install dependencies
-bun install
-
-# Copy environment config
+```sh
+bun install --frozen-lockfile
 cp .env.example .env
-# Edit .env with your session password
-
-# Start development server
-bun run dev
 ```
 
-The frontend expects the backend API to be running at `http://localhost:8000` (configurable via `NUXT_API_BASE`).
+Fill in the variables from `.env.example`:
 
-## Scripts
+| Variable | Purpose |
+|---|---|
+| `NUXT_API_BASE` | FastAPI base URL |
+| `BETTER_AUTH_URL` | Public frontend origin, also the JWT issuer and audience |
+| `BETTER_AUTH_SECRET` | Auth secret; generate with `openssl rand -hex 32` |
+| `MYSQL_HOST`, `MYSQL_PORT` | Auth database server |
+| `MYSQL_USER`, `MYSQL_PASSWORD` | Auth database credentials |
+| `MYSQL_PREBETTER_DB` | Auth database name |
 
-| Command | Description |
-|---------|-------------|
-| `bun run dev` | Start development server (port 3000) |
-| `bun run build` | Build for production |
-| `bun run preview` | Preview production build |
-| `bun run typecheck` | Run TypeScript type checking |
-| `bun run test` | Run tests with Vitest |
+Use HTTPS for the production origin. Better Auth derives secure cookie behavior from its configuration and environment.
 
-## Project Structure
+Create the database named by `MYSQL_PREBETTER_DB` through your database administration tooling. For a fresh auth database, import the schema. Export the connection variables for this shell command; `--password` prompts for the database password.
 
-```
-frontend/
-├── app/                        # Nuxt 4 app directory
-│   ├── assets/css/            # Tailwind CSS entry point
-│   ├── components/            # Vue components
-│   │   ├── ui/               # shadcn-vue base components
-│   │   ├── alerts/           # Alert-specific components
-│   │   ├── profile/          # Profile page components
-│   │   ├── Navbar.vue        # App navigation
-│   │   └── ...               # Shared components
-│   ├── composables/          # Auto-imported composables
-│   ├── layouts/              # Layout templates
-│   ├── middleware/            # Route middleware
-│   │   └── auth.global.ts    # Global auth guard
-│   ├── pages/                # File-based routing
-│   │   ├── index.vue         # Dashboard (protected)
-│   │   ├── login.vue         # Login (guest only)
-│   │   ├── profile.vue       # User profile (protected)
-│   │   └── heartbeats/       # Heartbeat views
-│   └── utils/                # Utility functions
-├── server/                    # Nitro server
-│   └── api/                  # Server API routes
-│       ├── [...].ts          # Catch-all API proxy
-│       └── auth/             # Auth endpoints
-├── shared/                    # Shared client/server code
-│   └── types/                # TypeScript declarations
-├── nuxt.config.ts            # Nuxt configuration
-└── vitest.config.ts          # Test configuration
+```sh
+mariadb --host="$MYSQL_HOST" --port="$MYSQL_PORT" --user="$MYSQL_USER" --password "$MYSQL_PREBETTER_DB" < better-auth-schema.sql
 ```
 
-## Environment Variables
+For an existing Better Auth database upgrading to 1.7, apply the additive migration once instead:
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `NUXT_SESSION_PASSWORD` | Session encryption key (min 32 chars) | Yes |
-| `NUXT_API_BASE` | Backend API URL (default: `http://localhost:8000`) | No |
-
-See `.env.example` for a complete template.
-
-## Authentication
-
-Tokens never touch the browser. Here's how it works:
-
-1. User logs in, credentials go to the Nuxt server
-2. Server authenticates with the backend, gets JWT tokens
-3. Tokens are stored in an encrypted server-side session
-4. All API calls go through the Nuxt server, which injects the token
-5. Browser only ever sees an httpOnly session cookie
-
-## Development
-
-### Adding UI Components
-
-```bash
-bunx shadcn-vue@latest add <component-name>
+```sh
+mariadb --host="$MYSQL_HOST" --port="$MYSQL_PORT" --user="$MYSQL_USER" --password "$MYSQL_PREBETTER_DB" < migrations/2026-09-07-jwks-algorithm.sql
 ```
 
-### Styling Guidelines
+For an installation with legacy `users` rows, migrate them after creating the Better Auth tables:
 
-- Use Tailwind CSS utility classes (no `@apply`)
-- Use design tokens (`bg-background`, `text-foreground`, etc.) instead of arbitrary colors
-- Dark mode is handled automatically via the OKLCH color system
+```sh
+bun run scripts/migrate-users.ts
+```
 
-### Key Conventions
+This preserves bcrypt password hashes and leaves the legacy table intact. Do not run it on a fresh database without a `users` table.
 
-- Vue 3 Composition API with `<script setup lang="ts">`
-- Auto-imports for Vue/Nuxt functions (no manual imports needed)
-- All API calls go through `/api/*` proxy routes
-- `definePageMeta({ requiresAuth: true })` for protected pages
+For a fresh installation, export `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`, then run:
 
-## License
+```sh
+bun run auth:create-admin
+```
 
-GPL-3.0 - See [LICENSE](../LICENSE) for details.
+The command uses Better Auth's server API and does not enable public registration. Keep these values in the environment and remove them when finished. Administrators manage subsequent users from the profile page.
+
+Start the frontend with `bun run dev`.
+
+## Authentication contract
+
+- Better Auth serves `/api/auth/*`, including username login, session lookup, logout, user administration, and JWKS.
+- Public registration is disabled. The configured plugins are username, admin, and JWT.
+- Sessions last seven days. JWTs last fifteen minutes. Both are configured in `server/utils/auth.ts`.
+- The application proxies obtain JWTs server-side and inject them into FastAPI requests. Browser application code uses the session cookie.
+- `useAuth()` stores session state in Nuxt `useState` for SSR and hydration. Route middleware refreshes it through `useRequestFetch()`.
+- Protected pages declare `requiresAuth: true`; guest pages declare `guestOnly: true`.
+
+## Tests
+
+`bun run test` runs utility tests in Node without starting Nuxt or accessing MySQL. `bun run typecheck` checks the Nuxt application, and `bun run build` produces the server and client bundles.
+
+`bun run test:e2e` starts the real Nuxt server on `127.0.0.1:43017`. It needs an explicitly exported `MYSQL_PREBETTER_DB` ending in `_test`, the other MySQL connection variables, and the current auth schema. Use a disposable database; tests create and remove users and sessions and may create signing keys.
+
+The HTTP suite checks credentials, closed registration, session isolation, JWT verification, API error forwarding, both SSE proxies, and logout invalidation. Its local backend verifies real JWT signatures through the Nuxt JWKS endpoint. The test generates its own auth secret and origin.
+
+## Dependency compatibility
+
+- Keep TypeScript 6 until Vue's compiler tooling supports the [TypeScript 7 compiler API](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/).
+- Keep Vitest within the peer range declared by `@nuxt/test-utils`.
+- [TanStack Table v9](https://tanstack.com/table/latest/docs/framework/vue/guide/migrating) requires migration of table construction, state, and types. The current components use v8.
+
+Check these upstream constraints before changing their major versions.
+
+## UI conventions
+
+Use Composition API, `<script setup lang="ts">`, and Nuxt auto-imports. Use the existing semantic Tailwind color tokens and shared UI components. Forms use vee-validate with Zod. Frontend-specific development guidance is in [CLAUDE.md](CLAUDE.md).

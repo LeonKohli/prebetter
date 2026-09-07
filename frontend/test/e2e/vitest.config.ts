@@ -1,19 +1,12 @@
 import { fileURLToPath } from 'node:url'
-import { defineVitestConfig } from '@nuxt/test-utils/config'
+import { defineConfig } from 'vitest/config'
 
-export default defineVitestConfig({
+export default defineConfig({
   test: {
-    environment: 'nuxt',
+    environment: 'node',
     dir: fileURLToPath(new URL('.', import.meta.url)),
     include: ['**/*.test.ts'],
-    environmentOptions: {
-      nuxt: {
-        rootDir: fileURLToPath(new URL('../..', import.meta.url)),
-        mock: {
-          intersectionObserver: true,
-          indexedDb: true,
-        },
-      },
-    },
+    testTimeout: 15000,
+    hookTimeout: 120000,
   },
 })
