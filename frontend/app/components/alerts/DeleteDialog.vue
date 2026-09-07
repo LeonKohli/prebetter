@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FetchError } from 'ofetch'
+import { FetchError } from 'ofetch'
 
 type DeleteState =
   | { mode: 'single'; alert: AlertListItem }
@@ -72,8 +72,11 @@ async function confirmDeletion() {
     emit('update:open', false)
     emit('deleted')
   } catch (err) {
-    const fetchError = err as FetchError<{ detail?: string }>
-    error.value = fetchError?.data?.detail || fetchError?.message || 'Failed to delete alerts.'
+    const data: unknown = err instanceof FetchError ? err.data : undefined
+    const detail = data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string'
+      ? data.detail
+      : ''
+    error.value = detail || (err instanceof Error ? err.message : '') || 'Failed to delete alerts.'
   } finally {
     pending.value = false
   }
@@ -181,12 +184,10 @@ async function confirmDeletion() {
             Cancel
           </Button>
         </AlertDialogCancel>
-        <AlertDialogAction as-child>
-          <Button variant="destructive" :disabled="pending" @click="confirmDeletion">
-            <Icon v-if="pending" name="lucide:loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            {{ actionLabel }}
-          </Button>
-        </AlertDialogAction>
+        <Button type="button" variant="destructive" :disabled="pending" @click="confirmDeletion">
+          <Icon v-if="pending" name="lucide:loader-2" class="mr-2 h-4 w-4 animate-spin" />
+          {{ actionLabel }}
+        </Button>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>
