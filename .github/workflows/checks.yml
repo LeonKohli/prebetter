@@ -70,6 +70,6 @@ jobs:
         working-directory: frontend
         run: |
           bun run test
-          bun run typecheck
+          bun run check
           bun run test:e2e
           bun run build

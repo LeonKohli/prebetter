@@ -54,12 +54,12 @@ From `frontend`:
 
 ```sh
 bun run test
-bun run typecheck
+bun run check
 bun run test:e2e
 bun run build
 ```
 
-Database tests require disposable schemas. See the [backend test setup](backend/README.md#tests) and [frontend HTTP tests](frontend/README.md#tests). The [CI workflow](.github/workflows/checks.yml) provisions MariaDB and runs these checks.
+Database tests require disposable schemas. See the [backend test setup](backend/README.md#tests) and [frontend HTTP tests](frontend/README.md#checks). The [CI workflow](.github/workflows/checks.yml) provisions MariaDB and runs these checks.
 
 ## Development references
 

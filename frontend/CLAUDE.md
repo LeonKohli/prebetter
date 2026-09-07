@@ -32,6 +32,6 @@ Read [README.md](README.md) for setup, authentication, and verification commands
 
 ## Checks
 
-Run `bun run test`, `bun run typecheck`, and `bun run build`. Auth and proxy changes also require `bun run test:e2e` against a disposable auth database. Unit tests use Node; HTTP integration tests start the real Nuxt application and Better Auth.
+Run `bun run check`, `bun run test`, and `bun run build`. Auth and proxy changes also require `bun run test:e2e` against a disposable auth database. Unit tests use Node; HTTP integration tests start the real Nuxt application and Better Auth.
 
 TypeScript, Vitest, and TanStack Table upgrades must match their consumers. Check Vue compiler support, Nuxt test-utils peer dependencies, and the Table migration guide before changing their major versions.

@@ -1,4 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
+import { fileURLToPath } from 'node:url'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -10,7 +11,19 @@ export default defineNuxtConfig({
     '@vueuse/nuxt',
     '@nuxtjs/color-mode',
     '@nuxt/fonts',
+    '@nuxt/eslint',
   ],
+  eslint: {
+    config: {
+      typescript: { tsconfigPath: './tsconfig.json', strict: false },
+    },
+  },
+  typescript: {
+    nodeTsConfig: {
+      include: ['./scripts/**/*.ts', './test/**/*.ts', './vitest.config.ts']
+        .map(path => fileURLToPath(new URL(path, import.meta.url))),
+    },
+  },
   runtimeConfig: {
     // Empty default - overridden by NUXT_API_BASE at runtime (12-factor).
     // Better Auth reads its own env (BETTER_AUTH_*, MYSQL_*) in server/utils/auth.ts.

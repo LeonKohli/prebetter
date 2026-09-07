@@ -63,9 +63,11 @@ Start the frontend with `bun run dev`.
 - `useAuth()` stores session state in Nuxt `useState` for SSR and hydration. Route middleware refreshes it through `useRequestFetch()`.
 - Protected pages declare `requiresAuth: true`; guest pages declare `guestOnly: true`.
 
-## Tests
+## Checks
 
-`bun run test` runs utility tests in Node without starting Nuxt or accessing MySQL. `bun run typecheck` checks the Nuxt application, and `bun run build` produces the server and client bundles.
+`bun run check` runs ESLint and Nuxt typechecking, including scripts and tests. ESLint uses the Nuxt preset with type-aware TypeScript rules and Vue template checks. Correctness violations fail the check; advisory rules remain warnings. `bun run lint:fix` applies available lint fixes.
+
+`bun run test` runs utility tests in Node without starting Nuxt or accessing MySQL. `bun run build` produces the server and client bundles.
 
 `bun run test:e2e` starts the real Nuxt server on `127.0.0.1:43017`. It needs an explicitly exported `MYSQL_PREBETTER_DB` ending in `_test`, the other MySQL connection variables, and the current auth schema. Use a disposable database; tests create and remove users and sessions and may create signing keys.
 
