@@ -100,7 +100,7 @@ const onSubmit = form.handleSubmit(async (values) => {
   }
 
   const { error } = await authClient.updateUser({
-    name: values.fullName || undefined,
+    name: nameChanged ? values.fullName ?? '' : undefined,
     username: usernameChanged ? values.username : undefined,
   })
 

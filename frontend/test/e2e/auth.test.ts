@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { once } from 'node:events'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { setup, $fetch, url } from '@nuxt/test-utils/e2e'
+import { setup, $fetch, createPage, url } from '@nuxt/test-utils/e2e'
 import { createPool } from 'mysql2/promise'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
@@ -74,7 +74,8 @@ describe('Better Auth and API proxies', async () => {
   await setup({
     rootDir: fileURLToPath(new URL('../..', import.meta.url)),
     port: 43017,
-    browser: false,
+    browser: true,
+    browserOptions: { type: 'chromium', launch: { channel: 'chrome' } },
     env: { ...process.env, NUXT_API_BASE: apiBase },
     nuxtConfig: { runtimeConfig: { apiBase }, devtools: { enabled: false } },
   })
@@ -153,6 +154,24 @@ describe('Better Auth and API proxies', async () => {
     const response = await fetch(url('/api/failure'), { headers: { cookie } })
     expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ detail: 'Backend unavailable' })
+  })
+
+  it('saves a cleared optional profile name through the form', async () => {
+    const page = await createPage('/login?redirect=/profile')
+    try {
+      await page.getByRole('textbox', { name: 'Username', exact: true }).fill(users[0]!.username)
+      await page.getByLabel('Password', { exact: true }).fill(password)
+      await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+      await page.waitForURL(url('/profile'))
+      await page.getByRole('button', { name: 'Edit Profile', exact: true }).click()
+      await page.getByRole('textbox', { name: /Full Name/ }).fill('')
+      await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+      await page.getByRole('dialog').waitFor({ state: 'hidden' })
+      await page.reload()
+      await page.getByText('Not set', { exact: true }).waitFor()
+    } finally {
+      await page.close()
+    }
   })
 
   it('invalidates a signed-out session for ordinary and streaming requests', async () => {
