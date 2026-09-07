@@ -73,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { toFormValidator } from '@vee-validate/zod'
+import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
 interface Props {
@@ -92,7 +92,7 @@ const isOpen = ref(false)
 // Form setup with useForm - the canonical vee-validate pattern
 // Note: initialValues are computed to react to prop changes
 const form = useForm({
-  validationSchema: toFormValidator(userEditSchema),
+  validationSchema: toTypedSchema(userEditSchema),
   initialValues: {
     username: props.user?.username ?? '',
     email: props.user?.email ?? '',
@@ -109,7 +109,7 @@ watch(() => props.user, (newUser) => {
     const values = {
       username: newUser.username ?? '',
       email: newUser.email,
-      fullName: newUser.name ?? '',
+      fullName: newUser.name,
       isSuperuser: newUser.role === 'admin',
     }
     setValues(values)
@@ -122,7 +122,7 @@ const onSubmit = form.handleSubmit(async (values) => {
   if (!props.user) return
 
   const emailChanged = values.email !== props.user.email
-  const nameChanged = values.fullName !== (props.user.name ?? '')
+  const nameChanged = values.fullName !== props.user.name
   const roleChanged = values.isSuperuser !== (props.user.role === 'admin')
 
   if (!emailChanged && !nameChanged && !roleChanged) {

@@ -42,7 +42,7 @@ for (const u of legacy) {
   }
 
   const now = new Date()
-  const createdAt = u.created_at ?? now
+  const createdAt = u.created_at
   const updatedAt = u.updated_at ?? now
   const role = u.is_superuser ? 'admin' : 'user'
   const name = u.full_name ?? u.username

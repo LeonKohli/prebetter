@@ -16,7 +16,7 @@ const expanded = ref(false)
 
 // Sort classifications by count (desc), then by name for stability
 const sortedClassifications = computed(() => {
-  const list = props.classifications ? [...props.classifications] : []
+  const list = [...props.classifications]
   return list.sort((a, b) => {
     if (b.count !== a.count) return b.count - a.count
     return (a.classification || '').localeCompare(b.classification || '')
@@ -29,16 +29,16 @@ const visibleClassifications = computed(() =>
 )
 
 const hiddenCount = computed(() =>
-  Math.max(0, (props.classifications?.length || 0) - props.maxVisible)
+  Math.max(0, props.classifications.length - props.maxVisible)
 )
 
 const showExpandButton = computed(() =>
-  (props.classifications?.length || 0) > props.maxVisible
+  props.classifications.length > props.maxVisible
 )
 
 // Emphasis logic: compute relative magnitude and map to visual levels
 const maxCount = computed(() => {
-  if (!props.classifications?.length) return 0
+  if (!props.classifications.length) return 0
   return props.classifications.reduce((m, c) => Math.max(m, c.count || 0), 0)
 })
 
@@ -77,10 +77,10 @@ function toggleExpanded() {
     <button
       v-for="(alert, index) in visibleClassifications"
       :key="`${alert.classification}-${index}`"
-      @click="handleClassificationClick(alert.classification, alert.count)"
       class="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/20 cursor-pointer"
       :title="`${alert.classification} - Click to view details`"
       :aria-label="`${alert.classification}: ${alert.count} occurrences. Click to view details`"
+      @click="handleClassificationClick(alert.classification, alert.count)"
     >
       <span class="truncate max-w-[200px]">{{ alert.classification }}</span>
       <span class="flex-shrink-0" :class="getCountPillClass(alert.count)" :title="`${alert.count} occurrences`">{{ alert.count }}</span>
@@ -88,9 +88,9 @@ function toggleExpanded() {
 
     <button
       v-if="showExpandButton && !expanded"
-      @click="toggleExpanded"
       class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-muted hover:bg-muted/80 text-muted-foreground transition-colors border border-border cursor-pointer"
       :title="`Show ${hiddenCount} more classification${hiddenCount > 1 ? 's' : ''}`"
+      @click="toggleExpanded"
     >
       <Icon name="lucide:chevron-down" class="h-3 w-3" />
       <span>+{{ hiddenCount }} more</span>
@@ -98,9 +98,9 @@ function toggleExpanded() {
 
     <button
       v-if="showExpandButton && expanded"
-      @click="toggleExpanded"
       class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-muted hover:bg-muted/80 text-muted-foreground transition-colors border border-border cursor-pointer"
       title="Show less"
+      @click="toggleExpanded"
     >
       <Icon name="lucide:chevron-up" class="h-3 w-3" />
       <span>Show less</span>

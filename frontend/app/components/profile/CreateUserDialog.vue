@@ -73,7 +73,7 @@
 
         <DialogFooter>
           <DialogClose as-child>
-            <Button type="button" variant="outline" @click="handleCancel" :disabled="isSubmitting">
+            <Button type="button" variant="outline" :disabled="isSubmitting" @click="handleCancel">
               Cancel
             </Button>
           </DialogClose>
@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { toFormValidator } from '@vee-validate/zod'
+import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
 const emit = defineEmits<{
@@ -100,7 +100,7 @@ const isOpen = ref(false)
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toFormValidator(userCreateSchema),
+  validationSchema: toTypedSchema(userCreateSchema),
   initialValues: {
     username: '',
     email: '',

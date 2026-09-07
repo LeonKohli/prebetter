@@ -86,7 +86,7 @@ const chartHeight = computed(() => isMobile.value ? 140 : 180)
  * Calculate optimal tick count for x-axis based on data density.
  */
 const dynamicTickAmount = computed(() => {
-  const pointCount = chartSeries.value[0]?.data?.length ?? 0
+  const pointCount = chartSeries.value[0]?.data.length ?? 0
   const chartWidth = isMobile.value ? 300 : 600 // Approximate
 
   if (timeFrame.value === 'minute') return isMobile.value ? 4 : 6

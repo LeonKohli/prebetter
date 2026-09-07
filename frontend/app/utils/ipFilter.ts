@@ -21,6 +21,10 @@ function expandPartialIP(segments: string[]): { min: string; max: string } {
   }
 }
 
+function toIP(num: number): string {
+  return [(num >>> 24) & 0xff, (num >>> 16) & 0xff, (num >>> 8) & 0xff, num & 0xff].join('.')
+}
+
 function parseCIDR(value: string): { network: string; broadcast: string } | null {
   const [ip, prefixStr] = value.split('/')
   if (!ip || !prefixStr) return null
@@ -34,9 +38,6 @@ function parseCIDR(value: string): { network: string; broadcast: string } | null
   const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0
   const network = ipNum & mask
   const broadcast = network | (~mask >>> 0)
-
-  const toIP = (num: number) =>
-    [(num >>> 24) & 0xff, (num >>> 16) & 0xff, (num >>> 8) & 0xff, num & 0xff].join('.')
 
   return { network: toIP(network), broadcast: toIP(broadcast) }
 }

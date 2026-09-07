@@ -43,9 +43,7 @@ export function useHeartbeatStatus(options: {
     }
 
     for (const [key, value] of Object.entries(summary)) {
-      if (normalised[key] === undefined) {
-        normalised[key] = value
-      }
+      normalised[key] ??= value
     }
 
     return normalised

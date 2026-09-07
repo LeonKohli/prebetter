@@ -48,7 +48,7 @@ const STATUS_META: Record<string, { label: string; color: string; description: s
 const meta = computed(() => {
   const statusKey = (props.status || 'unknown').toLowerCase()
   return (
-    STATUS_META[statusKey] || {
+    STATUS_META[statusKey] ?? {
       label: statusKey,
       color: 'oklch(0.68 0.02 250)',
       description: 'Custom heartbeat status returned by the server.',

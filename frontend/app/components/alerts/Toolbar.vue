@@ -15,7 +15,7 @@
         </Button>
         <AlertsDateRangePicker
           v-model="dateRange"
-          :includeTime="true"
+          :include-time="true"
         />
         <AlertsFilterPanel />
       </div>
@@ -77,9 +77,9 @@
           <Button
             variant="outline"
             size="sm"
-            @click="$emit('toggleView')"
             class="h-8 px-3 text-xs font-medium"
             :disabled="pending"
+            @click="$emit('toggleView')"
           >
             <Icon v-if="!isGrouped" name="lucide:users" class="mr-2 size-4" />
             <Icon v-else name="lucide:list" class="mr-2 size-4" />
@@ -122,6 +122,8 @@
 </template>
 
 <script setup lang="ts">
+import type { LocationQueryRaw } from 'vue-router'
+
 interface DateRangeValue {
   from: Date | undefined
   to: Date | undefined
@@ -168,8 +170,8 @@ const isDrilldown = computed(() => {
 async function backToGroups() {
   // Build a single navigation update to avoid racing URL pushes
   const { classification_text, source_ipv4, target_ipv4, ...rest } = urlState.filters.value
-  const newQuery: Record<string, string | undefined> = {
-    ...route.query as Record<string, string | undefined>,
+  const newQuery: LocationQueryRaw = {
+    ...route.query,
     view: 'grouped',
     sort: 'detected_at:desc',
     page: '1',

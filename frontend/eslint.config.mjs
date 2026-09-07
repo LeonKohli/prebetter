@@ -18,8 +18,12 @@ export default withNuxt({
     '@typescript-eslint/switch-exhaustiveness-check': 'error',
     '@typescript-eslint/no-deprecated': 'warn',
     '@typescript-eslint/no-unnecessary-condition': 'warn',
-    '@typescript-eslint/prefer-nullish-coalescing': 'warn',
+    '@typescript-eslint/prefer-nullish-coalescing': ['warn', {
+      ignorePrimitives: { string: true },
+    }],
     'unicorn/consistent-function-scoping': 'warn',
-    'vue/multi-word-component-names': 'warn',
   },
+}, {
+  files: ['app/components/ui/**/*.vue'],
+  rules: { 'vue/require-default-prop': 'off' },
 })

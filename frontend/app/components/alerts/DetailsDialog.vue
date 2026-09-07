@@ -30,7 +30,7 @@ const dialogOpen = computed({
 })
 
 const hasIpPair = computed(() => Boolean(
-  alertData.value?.source?.address && alertData.value?.target?.address,
+  alertData.value?.source?.address && alertData.value.target?.address,
 ))
 
 // Fetch alert details when dialog opens or alert changes
@@ -104,7 +104,7 @@ function getSeverityPillClass(severity?: string): string {
 }
 
 async function viewAllFromPair() {
-  if (!alertData.value?.source?.address || !alertData.value?.target?.address) return
+  if (!alertData.value?.source?.address || !alertData.value.target?.address) return
 
   await urlState.navigateTo({
     query: {

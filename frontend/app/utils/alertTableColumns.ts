@@ -26,7 +26,7 @@ export const useAlertTableColumns = () => {
         h(AlertsDataTableColumnHeader, { column, title: "Alerts" }),
       cell: ({ row }) => {
         const totalCount = row.original.total_count;
-        const classificationCount = row.original.alerts?.length || 0;
+        const classificationCount = row.original.alerts.length;
 
         return h("div", { class: "flex flex-col" }, [
           h(
@@ -72,7 +72,7 @@ export const useAlertTableColumns = () => {
       header: ({ column }) =>
         h(AlertsDataTableColumnHeader, { column, title: "Classifications" }),
       cell: ({ row }) => {
-        const alerts = row.original.alerts || [];
+        const alerts = row.original.alerts;
         return h(AlertsClassificationBadges, {
           classifications: alerts,
           sourceIp: row.original.source_ipv4 || "",
@@ -84,11 +84,11 @@ export const useAlertTableColumns = () => {
     },
     {
       id: "detected_at",
-      accessorFn: (row) => row.alerts?.[0]?.detected_at,
+      accessorFn: (row) => row.alerts[0]?.detected_at,
       header: ({ column }) =>
         h(AlertsDataTableColumnHeader, { column, title: "Last Detected" }),
       cell: ({ row }) => {
-        const dateStr = row.original.alerts?.[0]?.detected_at;
+        const dateStr = row.original.alerts[0]?.detected_at;
 
         if (!dateStr)
           return h("span", { class: "text-muted-foreground" }, "Unknown");

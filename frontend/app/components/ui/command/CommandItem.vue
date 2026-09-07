@@ -40,9 +40,9 @@ onMounted(() => {
     return
 
   // textValue to perform filter
-  allItems.value.set(id, currentElement.value.textContent ?? "")
+  allItems.value.set(id, currentElement.value.textContent)
 
-  const groupId = groupContext?.id
+  const groupId = groupContext.id
   if (groupId) {
     if (!allGroups.value.has(groupId)) {
       allGroups.value.set(groupId, new Set([id]))

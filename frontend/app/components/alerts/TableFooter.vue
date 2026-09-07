@@ -11,7 +11,7 @@
       </div>
 
       <!-- Page Size Selector -->
-      <Select :model-value="String(pageSize)" @update:model-value="handleUpdatePageSize" :disabled="pending">
+      <Select :model-value="String(pageSize)" :disabled="pending" @update:model-value="handleUpdatePageSize">
         <SelectTrigger class="h-8 w-[90px] bg-background" aria-label="Rows per page">
           <SelectValue />
         </SelectTrigger>
@@ -33,8 +33,13 @@
     <div class="flex items-center gap-2">
 
       <!-- Previous Button -->
-      <Button variant="outline" class="h-8 px-3 bg-background" :disabled="isFirstPage || pending"
-        @click="updatePage(currentPage - 1)" aria-label="Go to previous page">
+      <Button
+        variant="outline"
+        class="h-8 px-3 bg-background"
+        :disabled="isFirstPage || pending"
+        aria-label="Go to previous page"
+        @click="updatePage(currentPage - 1)"
+      >
         <Icon name="lucide:chevron-left" class="h-4 w-4 mr-1" />
         <span>Prev</span>
       </Button>
@@ -45,8 +50,13 @@
       </div>
 
       <!-- Next Button -->
-      <Button variant="outline" class="h-8 px-3 bg-background" :disabled="isLastPage || pending"
-        @click="updatePage(currentPage + 1)" aria-label="Go to next page">
+      <Button
+        variant="outline"
+        class="h-8 px-3 bg-background"
+        :disabled="isLastPage || pending"
+        aria-label="Go to next page"
+        @click="updatePage(currentPage + 1)"
+      >
         <span>Next</span>
         <Icon name="lucide:chevron-right" class="h-4 w-4 ml-1" />
       </Button>

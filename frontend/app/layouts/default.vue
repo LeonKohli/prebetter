@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-300">
-    <Navbar />
+    <AppNavbar />
 
     <main class="flex-1 overflow-hidden" role="main">
       <slot />

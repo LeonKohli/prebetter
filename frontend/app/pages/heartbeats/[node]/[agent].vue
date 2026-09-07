@@ -97,8 +97,8 @@
           variant="outline"
           size="sm"
           :disabled="statusPending"
-          @click="refreshStatus"
           class="flex items-center gap-2"
+          @click="refreshStatus"
         >
           <Icon :name="statusPending ? 'lucide:loader-2' : 'lucide:refresh-cw'" class="size-4" :class="{ 'animate-spin': statusPending }" />
           Refresh

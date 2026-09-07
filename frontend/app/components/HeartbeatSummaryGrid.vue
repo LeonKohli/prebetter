@@ -58,8 +58,6 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  summary: () => [],
-  lastUpdated: null,
   pending: false,
 })
 

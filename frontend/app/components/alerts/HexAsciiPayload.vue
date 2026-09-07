@@ -23,7 +23,7 @@ function getSelectionWithin(el: HTMLElement | null): string | null {
   const range = sel.getRangeAt(0)
   if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return null
   const text = sel.toString()
-  return text?.trim() ? text : null
+  return text.trim() ? text : null
 }
 
 function copyHex() {

@@ -67,11 +67,13 @@ Start the frontend with `bun run dev`.
 
 `bun run check` runs ESLint and Nuxt typechecking, including scripts and tests. ESLint uses the Nuxt preset with type-aware TypeScript rules and Vue template checks. Correctness violations fail the check; advisory rules remain warnings. `bun run lint:fix` applies available lint fixes.
 
+Nuxt owns the naming exceptions for routes and nested components. UI wrappers leave optional defaults to Reka and CVA. String fallbacks may intentionally treat empty values as missing.
+
 `bun run test` runs utility tests in Node without starting Nuxt or accessing MySQL. `bun run build` produces the server and client bundles.
 
-`bun run test:e2e` starts the real Nuxt server on `127.0.0.1:43017`. It needs an explicitly exported `MYSQL_PREBETTER_DB` ending in `_test`, the other MySQL connection variables, and the current auth schema. Use a disposable database; tests create and remove users and sessions and may create signing keys.
+`bun run test:e2e` starts the real Nuxt server on `127.0.0.1:43017`. It needs Google Chrome, an explicitly exported `MYSQL_PREBETTER_DB` ending in `_test`, the other MySQL connection variables, and the current auth schema. Use a disposable database; tests create and remove users and sessions and may create signing keys.
 
-The HTTP suite checks credentials, closed registration, session isolation, JWT verification, API error forwarding, both SSE proxies, and logout invalidation. Its local backend verifies real JWT signatures through the Nuxt JWKS endpoint. The test generates its own auth secret and origin.
+The suite checks credentials, closed registration, session isolation, JWT verification, API error forwarding, both SSE proxies, and logout invalidation. A browser test verifies that clearing the optional profile name persists after reload. The local backend verifies real JWT signatures through the Nuxt JWKS endpoint. The test generates its own auth secret and origin.
 
 ## Dependency compatibility
 

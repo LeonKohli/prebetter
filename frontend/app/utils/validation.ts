@@ -7,9 +7,7 @@ export const usernameSchema = z
   .min(3, { error: 'Username must be at least 3 characters' })
   .max(50, { error: 'Username must be less than 50 characters' })
 
-export const emailSchema = z
-  .string()
-  .email({ error: 'Invalid email address' })
+export const emailSchema = z.email({ error: 'Invalid email address' })
 
 export const fullNameSchema = z
   .string()

@@ -25,8 +25,8 @@
       <DropdownMenuSeparator />
       <DropdownMenuItem
         class="text-destructive focus:text-destructive focus:bg-destructive/10"
-        @click="$emit('delete', user)"
         :disabled="user.id === currentUserId || props.isLastSuperuser"
+        @click="$emit('delete', user)"
       >
         <Icon name="lucide:trash" class="mr-2 size-4" />
         Delete

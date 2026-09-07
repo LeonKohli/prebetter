@@ -17,9 +17,9 @@
         <Button
           variant="ghost"
           size="icon"
-          @click="clearSelection"
           class="size-8 shrink-0 p-0"
           aria-label="Clear selection"
+          @click="clearSelection"
         >
           <Icon name="lucide:x" class="size-4" />
         </Button>
@@ -48,10 +48,10 @@
           <Button
             variant="outline"
             size="sm"
-            @click="handleExport"
             class="h-8 px-3 text-xs font-medium"
             disabled
             title="Export feature coming soon"
+            @click="handleExport"
           >
             <Icon name="lucide:download" class="mr-2 size-4" />
             Export
@@ -61,9 +61,9 @@
           <Button
             variant="destructive"
             size="sm"
-            @click="handleBulkDelete"
             class="h-8 px-3 text-xs font-medium"
             :disabled="pending"
+            @click="handleBulkDelete"
           >
             <Icon name="lucide:trash-2" class="mr-2 size-4" />
             Delete

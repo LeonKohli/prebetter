@@ -17,5 +17,5 @@ export function getChartColor(index: 1 | 2 | 3 | 4 | 5 = 1, fallback = '#6366f1'
   const parsed = parse(computed)
   if (!parsed) return fallback
 
-  return formatHex(parsed) ?? fallback
+  return formatHex(parsed)
 }

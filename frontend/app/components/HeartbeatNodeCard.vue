@@ -44,8 +44,8 @@
 
           <!-- Real agent rows -->
           <TableRow
-            v-else
             v-for="agent in node!.agents"
+            v-else
             :key="agent.name"
             class="cursor-pointer transition hover:bg-muted/40 focus-visible:bg-muted/60 outline-none"
             role="button"

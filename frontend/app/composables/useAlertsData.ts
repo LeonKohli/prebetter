@@ -113,14 +113,14 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
       return data.value.groups
     }
     if (isGrouped.value) return [] // Ungrouped data but grouped view - transitioning
-    return data.value.items ?? []
+    return data.value.items
   })
 
   const paginationInfo = computed(() => {
     if (!data.value) return { total: 0, pages: 0, page: 1, size: 100 }
     return isGroupedResponse(data.value)
       ? data.value.pagination
-      : (data.value).pagination
+      : data.value.pagination
   })
 
   const tableTotals = computed(() => {
@@ -132,7 +132,7 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
         total: data.value.pagination.total
       }
     }
-    const items = (data.value).items ?? []
+    const items = data.value.items
     return { rows: items.length, alerts: items.length, total: paginationInfo.value.total }
   })
 

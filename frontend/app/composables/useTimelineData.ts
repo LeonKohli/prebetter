@@ -95,7 +95,7 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
   })
 
   const totalAlerts = computed(() =>
-    data.value?.data?.reduce((sum, p) => sum + p.total, 0) ?? 0
+    data.value?.data.reduce((sum, p) => sum + p.total, 0) ?? 0
   )
 
   return {

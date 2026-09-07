@@ -39,7 +39,7 @@ export default defineEventHandler(async (event: H3Event): Promise<unknown> => {
     if (!(error instanceof FetchError)) throw error
     const fetchError: FetchError<unknown> = error
 
-    if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
+    if (fetchError.name === 'AbortError' || fetchError.message.includes('timeout')) {
       throw createError({
         statusCode: 504,
         statusMessage: 'Gateway Timeout',
@@ -57,7 +57,7 @@ export default defineEventHandler(async (event: H3Event): Promise<unknown> => {
 
     // Pass backend errors through transparently — avoid Nuxt's createError
     // wrapping which nests data inside data (error.data.data.detail)
-    setResponseStatus(event, fetchError.statusCode || 502, fetchError.statusMessage || 'Bad Gateway')
+    setResponseStatus(event, fetchError.statusCode ?? 502, fetchError.statusMessage || 'Bad Gateway')
     return fetchError.data
   }
 })

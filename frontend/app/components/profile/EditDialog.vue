@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { toFormValidator } from '@vee-validate/zod'
+import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
 interface Props {
@@ -70,7 +70,7 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 
 const form = useForm({
-  validationSchema: toFormValidator(selfProfileEditSchema),
+  validationSchema: toTypedSchema(selfProfileEditSchema),
   initialValues: {
     username: props.user.username ?? '',
     fullName: props.user.name ?? '',

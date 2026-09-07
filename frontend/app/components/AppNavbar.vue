@@ -71,7 +71,7 @@
           <ClientOnly>
             <ColorModeToggle />
             <template #fallback>
-              <div class="w-10 h-10"></div>
+              <div class="w-10 h-10"/>
             </template>
           </ClientOnly>
         </div>
@@ -99,7 +99,7 @@ const navLinks = [
 ]
 
 function isActiveLink(link: (typeof navLinks)[number]) {
-  return link.match ? link.match(route.path) : route.path === link.to
+  return link.match(route.path)
 }
 
 const handleLogout = () => signOut('/login')

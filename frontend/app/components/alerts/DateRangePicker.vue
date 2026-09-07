@@ -151,7 +151,7 @@ const currentPresetId = computed<DatePresetId | null>(() => {
 // Display label
 const displayLabel = computed(() => {
   if (currentPresetId.value) return getPresetLabel(currentPresetId.value)
-  if (props.modelValue?.from && props.modelValue?.to) return 'Custom'
+  if (props.modelValue?.from && props.modelValue.to) return 'Custom'
   return null
 })
 
@@ -204,8 +204,8 @@ function formatTime(date: Date): string {
 }
 
 function parseTime(time: string): { h: number; m: number } {
-  const [h, m] = time.split(':').map(Number)
-  return { h: h || 0, m: m || 0 }
+  const [h = 0, m = 0] = time.split(':').map(Number)
+  return { h: Number.isNaN(h) ? 0 : h, m: Number.isNaN(m) ? 0 : m }
 }
 
 function onCalendarUpdate(range: CalendarDateRange) {

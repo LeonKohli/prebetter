@@ -8,9 +8,14 @@ type ViewMode = 'grouped' | 'ungrouped'
 
 const VALID_PAGE_SIZES: readonly PageSize[] = [10, 20, 50, 100] as const
 
+function parseHiddenColumns(colString: string): string[] {
+  if (!colString.trim()) return []
+  return colString.split(',').filter(col => col.trim())
+}
+
 export function useNavigableUrlState(options: {
   defaultView?: ViewMode
-  defaultPageSize?: number
+  defaultPageSize?: PageSize
   defaultSortBy?: string
   defaultSortOrder?: SortOrder
   defaultGroupedSortBy?: string
@@ -21,10 +26,10 @@ export function useNavigableUrlState(options: {
   const { setHint } = useSkeletonHint()
 
   const defaults = {
-    view: (options.defaultView || 'grouped'),
-    pageSize: (options.defaultPageSize || 100) as PageSize,
+    view: options.defaultView ?? 'grouped',
+    pageSize: options.defaultPageSize ?? 100,
     sortBy: options.defaultSortBy || 'detected_at',
-    sortOrder: (options.defaultSortOrder || 'desc'),
+    sortOrder: options.defaultSortOrder ?? 'desc',
     groupedSortBy: options.defaultGroupedSortBy || 'detected_at',
     ungroupedSortBy: options.defaultUngroupedSortBy || 'detected_at',
   } as const
@@ -42,7 +47,7 @@ export function useNavigableUrlState(options: {
   }
 
   const parseFilters = (filterString: string): Record<string, string | number> => {
-    if (!filterString?.trim()) return {}
+    if (!filterString.trim()) return {}
     
     try {
       const parsed: unknown = JSON.parse(filterString)
@@ -61,11 +66,6 @@ export function useNavigableUrlState(options: {
     const keys = Object.keys(filters)
     if (keys.length === 0) return ''
     return JSON.stringify(filters)
-  }
-
-  const parseHiddenColumns = (colString: string): string[] => {
-    if (!colString?.trim()) return []
-    return colString.split(',').filter(col => col.trim())
   }
 
   // Debounce accumulator - batches rapid URL updates to prevent race conditions

@@ -15,13 +15,13 @@ const goBack = () => router.back()
 
 // Determine the error message and title based on status code
 const errorTitle = computed(() => {
-  if (props.error?.statusCode === 404) {
+  if (props.error?.status === 404) {
     return 'Page not found'
   }
-  if (props.error?.statusCode === 403) {
+  if (props.error?.status === 403) {
     return 'Access denied'
   }
-  if (props.error?.statusCode === 500) {
+  if (props.error?.status === 500) {
     return 'Server error'
   }
   return 'An error occurred'
@@ -46,21 +46,21 @@ const errorMessage = computed(() => {
     }
   }
 
-  if (props.error?.message && props.error.message !== props.error.statusMessage) {
+  if (props.error?.message && props.error.message !== props.error.statusText) {
     return props.error.message
   }
 
-  if (props.error?.statusMessage) {
-    return props.error.statusMessage
+  if (props.error?.statusText) {
+    return props.error.statusText
   }
 
-  if (props.error?.statusCode === 404) {
+  if (props.error?.status === 404) {
     return "Sorry, the page you're looking for doesn't exist."
   }
-  if (props.error?.statusCode === 403) {
+  if (props.error?.status === 403) {
     return "You don't have permission to access this resource."
   }
-  if (props.error?.statusCode === 500) {
+  if (props.error?.status === 500) {
     return 'Something went wrong on our end. Please try again later.'
   }
   return 'Something unexpected happened. Please try again.'
@@ -87,7 +87,7 @@ function selectCode() {
         <h1
           class="text-7xl font-bold tracking-tighter text-muted-foreground/20"
         >
-          {{ error?.statusCode || '500' }}
+          {{ error?.status || '500' }}
         </h1>
         <h2 class="text-3xl font-bold tracking-tight">
           {{ errorTitle }}
@@ -99,15 +99,15 @@ function selectCode() {
       </p>
 
       <div class="flex flex-col gap-4 justify-center pt-4 sm:flex-row">
-        <Button @click="handleError" size="lg" class="min-w-[140px]">
+        <Button size="lg" class="min-w-[140px]" @click="handleError">
           <Icon name="lucide:home" class="mr-2 h-4 w-4" />
           Go home
         </Button>
         <Button
-          @click="goBack"
           variant="outline"
           size="lg"
           class="min-w-[140px]"
+          @click="goBack"
         >
           <Icon name="lucide:arrow-left" class="mr-2 h-4 w-4" />
           Go back

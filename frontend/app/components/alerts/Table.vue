@@ -162,7 +162,7 @@ const table = useVueTable({
         mode: 'grouped',
         sourceIp: group.source_ipv4 || '',
         targetIp: group.target_ipv4 || '',
-        totalCount: group.total_count ?? 0,
+        totalCount: group.total_count,
       })
     },
   },
@@ -218,7 +218,7 @@ function handleBulkDelete() {
   if (isGrouped.value) return
   const alerts = table.getSelectedRowModel().rows
     .map((row) => row.original)
-    .filter((item): item is AlertListItem => item !== undefined && 'id' in item)
+    .filter((item): item is AlertListItem => 'id' in item)
 
   if (alerts.length) openDeleteDialog({ mode: 'bulk', alerts })
 }

@@ -22,8 +22,8 @@
 
     <!-- Loaded nodes -->
     <HeartbeatNodeCard
-      v-else
       v-for="node in nodes"
+      v-else
       :key="node.name"
       :node="node"
       @select="handleSelect"

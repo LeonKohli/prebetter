@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import { AlertTriangle } from '@lucide/vue'
-import { toFormValidator } from '@vee-validate/zod'
+import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
 definePageMeta({
@@ -86,7 +86,7 @@ const authError = ref('')
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toFormValidator(loginSchema),
+  validationSchema: toTypedSchema(loginSchema),
   initialValues: {
     username: '',
     password: '',

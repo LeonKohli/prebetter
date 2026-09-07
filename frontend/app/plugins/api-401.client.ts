@@ -14,7 +14,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   globalThis.$fetch = $fetch.create({
     async onResponseError({ request, response }) {
-      if (response?.status !== 401 || redirecting) return
+      if (response.status !== 401 || redirecting) return
 
       const url = typeof request === 'string' ? request : request.url
       // Better Auth owns its 401s (e.g. wrong password on the login form);

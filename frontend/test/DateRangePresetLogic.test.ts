@@ -1,61 +1,61 @@
 import { describe, it, expect } from 'vitest'
 
-// Extract and test the core preset detection logic directly
-describe('Date Range Preset Detection Logic', () => {
-  // This is the core logic we extracted from the component for testing
-  function findBestPresetMatch(
-    userFrom: number,
-    userTo: number,
-    presets: Array<{ label: string; from: number; to: number }>
-  ) {
-    let bestMatch = null
-    let bestScore = Infinity
-    
-    for (const preset of presets) {
-      const fromDiff = Math.abs(userFrom - preset.from)
-      const toDiff = Math.abs(userTo - preset.to)
-      const totalDiff = fromDiff + toDiff
-      
-      // Realistic tolerance based on preset type and real-world variations
-      const label = preset.label.toLowerCase()
-      const timeSpan = Math.abs(preset.to - preset.from)
-      let tolerance: number
-      
-      if (label.includes('hour')) {
-        // Hour presets: reasonable tolerance for user interaction delays
-        tolerance = 15 * 60 * 1000 // 15 minutes
-      } else if (label === 'today') {
-        // Today preset: handle as single day - very flexible since it's often 00:00-23:59
-        tolerance = 12 * 60 * 60 * 1000 // 12 hours
-      } else if (label.includes('week') || label.includes('this week') || label.includes('last 7') || label.includes('7 days')) {
-        // Week presets: week boundaries can vary significantly (check before 'day' to avoid conflict)
-        tolerance = 2 * 24 * 60 * 60 * 1000 // 2 days
-      } else if (label.includes('month') || label.includes('this month') || label.includes('30 days')) {
-        // Month presets: month boundaries vary
-        tolerance = 3 * 24 * 60 * 60 * 1000 // 3 days
-      } else if (label.includes('year') || label.includes('this year')) {
-        // Year presets: year boundaries
-        tolerance = 7 * 24 * 60 * 60 * 1000 // 1 week
-      } else if (label.includes('day')) {
-        // Day presets: account for timezone and daylight savings variations (check after week/month)
-        tolerance = 4 * 60 * 60 * 1000 // 4 hours
-      } else {
-        // Default: use 5% of the time span as tolerance, minimum 1 hour
-        tolerance = Math.max(60 * 60 * 1000, timeSpan * 0.05)
-      }
-      
-      const fromMatch = fromDiff <= tolerance
-      const toMatch = toDiff <= tolerance
-      
-      // If both match and this is the best score so far
-      if (fromMatch && toMatch && totalDiff < bestScore) {
-        bestScore = totalDiff
-        bestMatch = preset
-      }
+// This is the core logic we extracted from the component for testing
+function findBestPresetMatch(
+  userFrom: number,
+  userTo: number,
+  presets: Array<{ label: string; from: number; to: number }>
+) {
+  let bestMatch = null
+  let bestScore = Infinity
+
+  for (const preset of presets) {
+    const fromDiff = Math.abs(userFrom - preset.from)
+    const toDiff = Math.abs(userTo - preset.to)
+    const totalDiff = fromDiff + toDiff
+
+    // Realistic tolerance based on preset type and real-world variations
+    const label = preset.label.toLowerCase()
+    const timeSpan = Math.abs(preset.to - preset.from)
+    let tolerance: number
+
+    if (label.includes('hour')) {
+      // Hour presets: reasonable tolerance for user interaction delays
+      tolerance = 15 * 60 * 1000 // 15 minutes
+    } else if (label === 'today') {
+      // Today preset: handle as single day - very flexible since it's often 00:00-23:59
+      tolerance = 12 * 60 * 60 * 1000 // 12 hours
+    } else if (label.includes('week') || label.includes('this week') || label.includes('last 7') || label.includes('7 days')) {
+      // Week presets: week boundaries can vary significantly (check before 'day' to avoid conflict)
+      tolerance = 2 * 24 * 60 * 60 * 1000 // 2 days
+    } else if (label.includes('month') || label.includes('this month') || label.includes('30 days')) {
+      // Month presets: month boundaries vary
+      tolerance = 3 * 24 * 60 * 60 * 1000 // 3 days
+    } else if (label.includes('year') || label.includes('this year')) {
+      // Year presets: year boundaries
+      tolerance = 7 * 24 * 60 * 60 * 1000 // 1 week
+    } else if (label.includes('day')) {
+      // Day presets: account for timezone and daylight savings variations (check after week/month)
+      tolerance = 4 * 60 * 60 * 1000 // 4 hours
+    } else {
+      // Default: use 5% of the time span as tolerance, minimum 1 hour
+      tolerance = Math.max(60 * 60 * 1000, timeSpan * 0.05)
     }
-    
-    return bestMatch
+
+    const fromMatch = fromDiff <= tolerance
+    const toMatch = toDiff <= tolerance
+
+    // If both match and this is the best score so far
+    if (fromMatch && toMatch && totalDiff < bestScore) {
+      bestScore = totalDiff
+      bestMatch = preset
+    }
   }
+
+  return bestMatch
+}
+
+describe('Date Range Preset Detection Logic', () => {
 
   describe('Hour-based preset detection', () => {
     it('should detect "Last 1 Hour" preset correctly', () => {

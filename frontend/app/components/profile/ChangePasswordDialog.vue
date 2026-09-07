@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { toFormValidator } from '@vee-validate/zod'
+import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
 // Emits
@@ -77,7 +77,7 @@ const isOpen = ref(false)
 
 // Form setup with useForm - the canonical vee-validate pattern
 const form = useForm({
-  validationSchema: toFormValidator(changePasswordSchema),
+  validationSchema: toTypedSchema(changePasswordSchema),
   initialValues: {
     currentPassword: '',
     newPassword: '',

@@ -56,7 +56,7 @@
               </TableCell>
             </TableRow>
             <!-- Data rows -->
-            <TableRow v-else v-for="item in items" :key="itemKey(item)">
+            <TableRow v-for="item in items" v-else :key="itemKey(item)">
               <TableCell v-if="showHost" class="align-middle font-medium">{{ item.host_name }}</TableCell>
               <TableCell class="align-middle">{{ item.analyzer_name }}</TableCell>
               <TableCell class="align-middle text-sm">
@@ -116,9 +116,14 @@ interface Props {
 
 withDefaults(defineProps<Props>(), {
   subtitle: undefined,
+  error: null,
   emptyMessage: 'No timeline data found for this period.',
   showHost: true,
 })
+
+defineEmits<{
+  'update:page': [page: number]
+}>()
 
 function formatAbsolute(value: string) {
   // Use centralized formatter with local timezone display
