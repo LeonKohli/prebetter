@@ -12,20 +12,6 @@
               <span class="font-mono text-xs text-muted-foreground hidden lg:inline">IDS</span>
             </div>
           </NuxtLink>
-
-          <nav v-if="loggedIn" class="hidden items-center gap-3 md:flex" aria-label="Main">
-            <NuxtLink
-              v-for="link in navLinks"
-              :key="link.to"
-              :to="link.to"
-              :class="cn(
-                'text-sm font-medium transition-colors hover:text-foreground',
-                isActiveLink(link) ? 'text-foreground' : 'text-muted-foreground'
-              )"
-            >
-              {{ link.label }}
-            </NuxtLink>
-          </nav>
         </div>
 
         <div class="flex items-center space-x-4">
@@ -80,27 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { cn } from '@/utils/utils'
-
 const { loggedIn, user, signOut } = useAuth()
-const route = useRoute()
-
-const navLinks = [
-  {
-    to: '/',
-    label: 'Alerts',
-    match: (path: string) => path === '/',
-  },
-  {
-    to: '/heartbeats',
-    label: 'Heartbeats',
-    match: (path: string) => path.startsWith('/heartbeats'),
-  },
-]
-
-function isActiveLink(link: (typeof navLinks)[number]) {
-  return link.match(route.path)
-}
 
 const handleLogout = () => signOut('/login')
 </script> 

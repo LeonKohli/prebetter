@@ -3,7 +3,6 @@ import {
   AlertsActions,
   AlertsClassificationBadges,
   AlertsDataTableColumnHeader,
-  Checkbox,
   TimeAgo,
 } from "#components";
 
@@ -12,8 +11,6 @@ declare module "@tanstack/vue-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Declaration merging requires TanStack's type parameter name.
   interface TableMeta<TData extends RowData> {
     onViewDetails?: (alertId: string) => void;
-    onRequestDeleteSingle?: (alert: AlertListItem) => void;
-    onRequestDeleteGroup?: (group: GroupedAlert) => void;
   }
 }
 
@@ -110,40 +107,12 @@ export const useAlertTableColumns = () => {
           alert: row.original,
           isGrouped: true,
           onViewDetails: table.options.meta?.onViewDetails,
-          onRequestDeleteGroup: table.options.meta?.onRequestDeleteGroup,
         }),
       size: 60,
     },
   ];
 
   const ungroupedColumns: ColumnDef<AlertListItem>[] = [
-    {
-      id: "select",
-      header: ({ table }) =>
-        h(Checkbox, {
-          modelValue:
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate"),
-          "onUpdate:modelValue": (value: boolean | "indeterminate") => {
-            if (typeof value === "boolean") {
-              table.toggleAllPageRowsSelected(value);
-            }
-          },
-          ariaLabel: "Select all",
-        }),
-      cell: ({ row }) =>
-        h(Checkbox, {
-          modelValue: row.getIsSelected(),
-          "onUpdate:modelValue": (value: boolean | "indeterminate") => {
-            if (typeof value === "boolean") {
-              row.toggleSelected(value);
-            }
-          },
-          ariaLabel: "Select row",
-        }),
-      enableSorting: false,
-      enableHiding: false,
-    },
     {
       accessorKey: "detected_at",
       header: ({ column }) =>
@@ -190,24 +159,7 @@ export const useAlertTableColumns = () => {
       header: ({ column }) =>
         h(AlertsDataTableColumnHeader, { column, title: "Classification" }),
       cell: ({ row }) => {
-        const classification = row.original.classification_text || "Unknown";
-        const correlationDesc = row.original.correlation_description;
-
-        if (correlationDesc) {
-          return h(
-            "div",
-            { class: "flex items-center gap-1.5", title: correlationDesc },
-            [
-              h(
-                "span",
-                { class: "text-blue-600 dark:text-blue-400 text-xs" },
-                "●",
-              ),
-              String(classification),
-            ],
-          );
-        }
-        return String(classification);
+        return row.original.classification_text || "Unknown";
       },
     },
     {
@@ -225,10 +177,9 @@ export const useAlertTableColumns = () => {
     {
       accessorKey: "analyzer",
       header: ({ column }) =>
-        h(AlertsDataTableColumnHeader, { column, title: "Analyzer" }),
+        h(AlertsDataTableColumnHeader, { column, title: "Sensor" }),
       cell: ({ row }) => {
-        const analyzer = row.getValue<AnalyzerInfo | undefined>("analyzer");
-        return analyzer?.name || "Unknown";
+        return row.original.analyzer?.name || "Unknown";
       },
     },
     {
@@ -239,22 +190,18 @@ export const useAlertTableColumns = () => {
           alert: row.original,
           isGrouped: false,
           onViewDetails: table.options.meta?.onViewDetails,
-          onRequestDeleteSingle: table.options.meta?.onRequestDeleteSingle,
         }),
     },
   ];
 
   const sortFieldMap = {
     detected_at: "detect_time",
-    created_at: "create_time",
     source_ipv4: "source_ip",
     target_ipv4: "target_ip",
     classification_text: "classification",
     analyzer: "analyzer",
     severity: "severity",
-    total_count: "total_count", // Backend now supports this!
-    count: "total_count", // Map count to total_count for backward compat
-    alert_count: "total_count", // Map alert_count to total_count for compact view
+    total_count: "total_count",
   } as const satisfies Record<string, string>;
 
   const filterFieldMap = {

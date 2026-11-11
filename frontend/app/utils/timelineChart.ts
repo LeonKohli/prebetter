@@ -8,7 +8,6 @@ const BUCKET_DURATION: Record<TimeFrame, number> = {
   hour: HOUR,
   day: DAY,
   week: 7 * DAY,
-  month: 30 * DAY,
 }
 
 export function getTimelineBucketDuration(bucketStart: number, timeFrame: TimeFrame): number {
@@ -16,11 +15,7 @@ export function getTimelineBucketDuration(bucketStart: number, timeFrame: TimeFr
 }
 
 function getBucketEnd(bucketStart: number, timeFrame: TimeFrame): number {
-  if (timeFrame !== 'month') return bucketStart + BUCKET_DURATION[timeFrame]
-
-  const end = new Date(bucketStart)
-  end.setUTCMonth(end.getUTCMonth() + 1)
-  return end.getTime()
+  return bucketStart + BUCKET_DURATION[timeFrame]
 }
 
 export function getTimelineBucketVisibleRange(

@@ -141,7 +141,6 @@ interface Props {
 interface Emits {
   toggleView: []
   toggleLive: []
-  bulkDelete: []
   refresh: []
 }
 

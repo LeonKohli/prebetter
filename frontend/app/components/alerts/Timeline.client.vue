@@ -110,8 +110,6 @@ const xAxisLabelFormat = computed<string>(() => {
       return 'dd MMM'
     case 'week':
       return 'dd MMM'
-    case 'month':
-      return 'MMM yy'
     default:
       return 'HH:mm'
   }
@@ -129,10 +127,6 @@ const tooltipTimeFormatter = new Intl.DateTimeFormat('en-GB', {
 })
 const tooltipDateFormatter = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-})
-const tooltipMonthFormatter = new Intl.DateTimeFormat('en-GB', {
   month: 'short',
   year: 'numeric',
 })
@@ -156,12 +150,6 @@ function formatTooltipBucketRange(bucketStart: number): string {
       ? tooltipTimeFormatter.format(end)
       : tooltipDateTimeFormatter.format(end)
     return `${tooltipDateTimeFormatter.format(start)}–${formattedEnd}`
-  }
-
-  if (timeFrame.value === 'month') {
-    const formattedStart = tooltipMonthFormatter.format(start)
-    const formattedEnd = tooltipMonthFormatter.format(end)
-    return formattedStart === formattedEnd ? formattedStart : `${formattedStart}–${formattedEnd}`
   }
 
   const formattedStart = tooltipDateFormatter.format(start)
@@ -301,10 +289,6 @@ function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPoint
     case 'week':
       start = timestamp
       end = new Date(timestamp.getTime() + WEEK - 1)
-      break
-    case 'month':
-      start = new Date(timestamp.getFullYear(), timestamp.getMonth(), 1)
-      end = new Date(timestamp.getFullYear(), timestamp.getMonth() + 1, 0, 23, 59, 59, 999)
       break
     default:
       start = timestamp

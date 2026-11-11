@@ -2,11 +2,11 @@
 description: A FastAPI backend for an IDS (Intrusion Detection System)
 globs: app/
 ---
-You are an expert in Python, FastAPI, and scalable API development. You are also an expert in MYSQL and SQL-Alchemy.
+You are an expert in Python, FastAPI, and scalable API development. You are also an expert in OpenSearch.
 
 # Project Overview:
 
-This is the API backend for an upcoming new frontend for an IDS (Intrusion Detection System) This API is build on top of the Raw MYSQL Database to perform querys and get structured outputs.
+This is the API backend for an upcoming new frontend for an IDS (Intrusion Detection System) This API is a read-only adapter on OpenSearch that turns queries into structured outputs.
 
 
 ### Key Principles
@@ -38,8 +38,7 @@ This is the API backend for an upcoming new frontend for an IDS (Intrusion Detec
 ### Dependencies
 - FastAPI
 - Pydantic v2
-- SQLAlchemy 2.0
-- MYSQL 
+- opensearch-py (async)
 
 ### FastAPI-Specific Guidelines
 - Use functional components (plain functions) and Pydantic models for input validation and response schemas.

@@ -1,64 +1,24 @@
 // Alert types matching backend schemas
 
+export type Severity = 'high' | 'medium' | 'low' | 'info'
+
 export interface TimeInfo {
   timestamp: string
-  // Legacy IDMEF fields - backend no longer sends these
-  usec?: never
-  gmtoff?: never
-}
-
-export interface NodeInfo {
-  name?: string
-  location?: string
-  category?: string
-  ident?: string
-  address?: string
-  os?: string
-  agents_count?: number
-}
-
-export interface ProcessInfo {
-  name?: string
-  pid?: number
-  path?: string
-  args: string[]
-  env: string[]
-}
-
-export interface AnalyzerInfo {
-  name: string
-  analyzer_id?: string
-  node?: NodeInfo
-  model?: string
-  manufacturer?: string
-  version?: string
-  class_type?: string
-  ostype?: string
-  osversion?: string
-  process?: ProcessInfo
-  analyzer_time?: TimeInfo
-  chain_index?: number
-  role?: string
 }
 
 export interface AlertListItem {
   id: string
-  message_id: string
-  created_at?: TimeInfo
   detected_at: TimeInfo
   classification_text?: string
-  severity?: string
-  source_ipv4?: string
-  target_ipv4?: string
-  analyzer?: AnalyzerInfo
-  correlation_description?: string
+  severity?: Severity | null
+  source_ipv4?: string | null
+  target_ipv4?: string | null
+  analyzer?: { name: string }
 }
 
 export interface GroupedAlertDetail {
   classification: string
   count: number
-  analyzer: string[]
-  analyzer_host: string[]
   detected_at: string
 }
 
@@ -87,84 +47,58 @@ export interface GroupedAlertResponse {
   total_alerts: number
 }
 
-// Additional types for alert details
-export interface WebServiceInfo {
-  url?: string
-  cgi?: string
-  http_method?: string
+export interface AlertEndpoint {
+  address: string
+  port?: number | null
+  mac?: string | null
 }
 
-export interface AlertIdentInfo {
-  alertident?: string
-  analyzerid?: string
-}
-
-export interface ReferenceInfo {
-  origin?: string
-  name?: string
-  url?: string
-  meaning?: string
-}
-
-export interface ServiceInfo {
-  port?: number
-  protocol?: string
-  direction: string
-  ip_version?: number
-  name?: string
-  iana_protocol_number?: number
-  iana_protocol_name?: string
-  portlist?: string
-  ident?: string
-}
-
-export interface NetworkInfo {
-  interface?: string
-  category?: string
-  address?: string
-  netmask?: string
-  vlan_name?: string
-  vlan_num?: number
-  ident?: string
-  ip_version?: number
-  ip_hlen?: number
-  protocol?: string
-  protocol_number?: number
-  node?: NodeInfo
-  heartbeat_process?: ProcessInfo
-  addresses: string[]
-}
-
-// Real client attribution recovered from proxied request headers (X-Forwarded-For)
+/** Header-supplied client attribution; advisory only. */
 export interface ForwardedInfo {
-  true_source?: string
+  true_source?: string | null
   forwarded_for: string[]
-  via_proxy?: string
+  via_proxy?: string | null
 }
 
-// Comprehensive alert detail from backend
 export interface AlertDetail {
   id: string
-  message_id: string
-  created_at?: TimeInfo
   detected_at: TimeInfo
+  severity?: Severity | null
   classification_text?: string
-  classification_ident?: string
-  severity?: string
-  description?: string
-  completion?: string
-  impact_type?: string
-  source?: NetworkInfo
-  target?: NetworkInfo
-  analyzers: AnalyzerInfo[]
-  references: ReferenceInfo[]
-  services: ServiceInfo[]
-  web_services: WebServiceInfo[]
-  alert_idents: AlertIdentInfo[]
-  additional_data: Record<string, string | number | boolean | null | {
-    readable: string
-    original: string | null
-  }>
-  forwarded?: ForwardedInfo
-  correlation_description?: string
+  rule: {
+    id?: string | null
+    version?: string | null
+    category?: string | null
+  }
+  action?: string | null
+  source?: AlertEndpoint | null
+  target?: AlertEndpoint | null
+  network: {
+    transport?: string | null
+    protocol?: string | null
+    vlan_id?: string | null
+    bytes?: number | null
+    packets?: number | null
+  }
+  flow: {
+    direction?: string | null
+    started_at?: string | null
+    client_bytes?: number | null
+    client_packets?: number | null
+    server_bytes?: number | null
+    server_packets?: number | null
+  }
+  analyzer: {
+    name?: string | null
+    interface?: string | null
+  }
+  /** Snort's packet fields, e.g. `pkt_len`, `ip_ttl`. Which ones exist varies per alert. */
+  packet: Record<string, string | number | boolean>
+  /** Base64 of the bytes the rule matched on; null when the sensor did not log a payload. */
+  payload?: string | null
+  /** Client address from the proxied request's X-Forwarded-For header; null without one. */
+  forwarded?: ForwardedInfo | null
+  /** Request line (`GET /path HTTP/1.1`) from the companion document; null when there is none. */
+  http_request?: string | null
+  document: Record<string, unknown>
 }

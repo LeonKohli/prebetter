@@ -1,19 +1,18 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Prelude Backend"
+description = "Prebetter backend"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi[all]>=0.141.1",
     "uvicorn[standard]>=0.52.4",
-    "sqlalchemy>=2.0.52",
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
     "python-multipart>=0.0.32",
-    "pymysql>=1.2.0",
     "pyjwt>=2.13.0",
     "cryptography>=50.0.1",
+    "opensearch-py[async]>=3.2.0",
 ]
 
 [dependency-groups]

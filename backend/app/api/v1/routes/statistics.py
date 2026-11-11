@@ -1,206 +1,35 @@
-"""
-Statistics routes using FastAPI best practices.
-
-- Uses Repository pattern for data access
-- Clean, explicit parameter handling
-"""
-
-import logging
-from datetime import UTC, datetime, timedelta
-from enum import Enum
+from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import get_current_user
-from app.core.datetime_utils import ensure_timezone, get_current_time, get_time_range
-from app.repositories.alerts import (
-    AlertRepository,
-    StatisticsRepository,
-    get_alert_repository,
-    get_statistics_repository,
-)
-from app.schemas.filters import AlertFilterParams
-from app.schemas.prelude import StatisticsSummary, TimelineDataPoint, TimelineResponse
+from app.api.deps import Alerts, get_current_user
+from app.core.datetime_utils import get_current_time
+from app.schemas.alerts import TimelineResponse
+from app.schemas.filters import TimeFrame, TimelineParams
 
-logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user, scope="function")])
 
-
-class TimeFrame(str, Enum):
-    MINUTE = "minute"
-    HOUR = "hour"
-    DAY = "day"
-    WEEK = "week"
-    MONTH = "month"
-
-
-DATE_FORMATS = {
-    TimeFrame.MINUTE: "%Y-%m-%d %H:%i:00",
-    TimeFrame.HOUR: "%Y-%m-%d %H:00:00",
-    TimeFrame.DAY: "%Y-%m-%d 00:00:00",
-    TimeFrame.WEEK: "%Y-%m-%d 00:00:00",
-    TimeFrame.MONTH: "%Y-%m-01 00:00:00",
-}
-
+# Window used when the request gives no start date.
 DEFAULT_RANGES = {
     TimeFrame.MINUTE: timedelta(hours=1),
     TimeFrame.HOUR: timedelta(days=1),
     TimeFrame.DAY: timedelta(days=30),
     TimeFrame.WEEK: timedelta(days=90),
-    TimeFrame.MONTH: timedelta(days=365),
 }
 
 
-def _compute_date_range(
-    time_frame: TimeFrame,
-    start_date: datetime | None,
-    end_date: datetime | None,
-) -> tuple[datetime, datetime]:
-    """Compute date range with defaults based on time frame."""
-    if not end_date:
-        end_date = get_current_time()
-    if not start_date:
-        start_date = end_date - DEFAULT_RANGES[time_frame]
-    return ensure_timezone(start_date), ensure_timezone(end_date)
-
-
-def _aggregate_timeline_results(
-    results, time_frame: TimeFrame
-) -> list[TimelineDataPoint]:
-    """Aggregate raw SQL results into TimelineDataPoint objects."""
-    timeline_data: dict[datetime, dict] = {}
-
-    for result in results:
-        time_str = result.time_bucket
-        if not time_str:
-            continue
-
-        timestamp = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
-
-        if time_frame == TimeFrame.WEEK:
-            timestamp = timestamp - timedelta(days=timestamp.weekday())
-
-        if timestamp not in timeline_data:
-            timeline_data[timestamp] = {
-                "timestamp": timestamp,
-                "total": 0,
-                "by_severity": {},
-                "by_classification": {},
-                "by_analyzer": {},
-            }
-
-        data_point = timeline_data[timestamp]
-        data_point["total"] += result.total
-
-        if result.severity:
-            data_point["by_severity"][result.severity] = (
-                data_point["by_severity"].get(result.severity, 0) + result.total
-            )
-        if result.classification:
-            data_point["by_classification"][result.classification] = (
-                data_point["by_classification"].get(result.classification, 0)
-                + result.total
-            )
-        if result.analyzer:
-            data_point["by_analyzer"][result.analyzer] = (
-                data_point["by_analyzer"].get(result.analyzer, 0) + result.total
-            )
-
-    points = [TimelineDataPoint(**data) for data in timeline_data.values()]
-    points.sort(key=lambda x: x.timestamp)
-    return points
-
-
-@router.get("/timeline", response_model=TimelineResponse)
-def get_timeline(
-    repo: Annotated[AlertRepository, Depends(get_alert_repository)],
-    time_frame: Annotated[
-        TimeFrame, Query(description="Grouping interval")
-    ] = TimeFrame.HOUR,
-    start_date: Annotated[
-        datetime | None, Query(description="Start of date range (UTC)")
-    ] = None,
-    end_date: Annotated[
-        datetime | None, Query(description="End of date range (UTC)")
-    ] = None,
-    severity: Annotated[str | None, Query(description="Filter by severity")] = None,
-    classification: Annotated[
-        str | None, Query(description="Filter by classification")
-    ] = None,
-    analyzer_name: Annotated[
-        str | None, Query(description="Filter by analyzer name")
-    ] = None,
-    source_ip: Annotated[
-        str | None,
-        Query(description="Filter by source IP or CIDR (e.g., 192.168.0.0/16)"),
-    ] = None,
-    target_ip: Annotated[
-        str | None,
-        Query(description="Filter by target IP or CIDR (e.g., 10.0.0.0/8)"),
-    ] = None,
-    require_ips: Annotated[
-        bool,
-        Query(description="Only include alerts with both source AND target IPs"),
-    ] = True,
+@router.get("/timeline")
+async def get_timeline(
+    repo: Alerts, params: Annotated[TimelineParams, Query()]
 ) -> TimelineResponse:
-    """Get timeline data for alerts chart."""
-    try:
-        computed_start, computed_end = _compute_date_range(
-            time_frame, start_date, end_date
-        )
-
-        filters = AlertFilterParams(
-            start_date=computed_start,
-            end_date=computed_end,
-            severity=severity,
-            classification=classification,
-            analyzer_name=analyzer_name,
-            source_ip=source_ip,
-            target_ip=target_ip,
-            require_ips=require_ips,
-        )
-
-        date_format = DATE_FORMATS[time_frame]
-        results = repo.get_timeline(filters, date_format)
-        timeline_points = _aggregate_timeline_results(results, time_frame)
-
-        return TimelineResponse(
-            time_frame=time_frame.value,
-            start_date=computed_start,
-            end_date=computed_end,
-            data=timeline_points,
-        )
-    except Exception as e:
-        logger.exception("Error generating timeline data: %s", e)
-        raise HTTPException(status_code=500, detail="Error generating timeline data")
-
-
-@router.get("/summary", response_model=StatisticsSummary)
-def get_statistics_summary(
-    repo: Annotated[StatisticsRepository, Depends(get_statistics_repository)],
-    time_range: Annotated[
-        int, Query(ge=1, le=720, description="Time range in hours")
-    ] = 24,
-) -> StatisticsSummary:
-    """Get summary statistics for alerts."""
-    start_date, end_date = get_time_range(time_range)
-
-    try:
-        stats = repo.get_summary(start_date, end_date)
-        return StatisticsSummary(
-            total_alerts=stats["total_alerts"],
-            alerts_by_severity=stats["alerts_by_severity"],
-            alerts_by_classification=stats["alerts_by_classification"],
-            alerts_by_analyzer=stats["alerts_by_analyzer"],
-            alerts_by_source_ip=stats["alerts_by_source_ip"],
-            alerts_by_target_ip=stats["alerts_by_target_ip"],
-            time_range_hours=time_range,
-            start_at=start_date,
-            end_at=end_date,
-        )
-    except Exception as e:
-        logger.exception("Error generating statistics summary: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Error generating statistics summary"
-        )
+    """Alert counts per time bucket. Buckets without alerts are omitted."""
+    end = params.end_date or get_current_time()
+    start = params.start_date or end - DEFAULT_RANGES[params.time_frame]
+    window = params.model_copy(update={"start_date": start, "end_date": end})
+    return TimelineResponse(
+        time_frame=params.time_frame.value,
+        start_date=start,
+        end_date=end,
+        data=await repo.timeline(window, params.time_frame),
+    )

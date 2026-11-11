@@ -1,8 +1,9 @@
 <script setup lang="ts">
 const props = defineProps<{
-  readable?: string | null
-  original?: string | null
-  name?: string | null
+  /** Base64 of the captured bytes */
+  payload: string
+  /** File name for the download */
+  name: string
 }>()
 
 const copied = ref<Record<string, boolean>>({})
@@ -33,7 +34,7 @@ function copyHex() {
 
 function copyAscii() {
   const selected = getSelectionWithin(asciiPre.value)
-  return copyWithFeedback('copy-readable', selected || (props.readable || ''))
+  return copyWithFeedback('copy-readable', selected || readable.value)
 }
 
 function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
@@ -44,14 +45,16 @@ function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   return out
 }
 
-const bytes = computed<Uint8Array | null>(() => {
-  if (!props.original) return null
+const bytes = computed<Uint8Array<ArrayBuffer> | null>(() => {
   try {
-    return base64ToBytes(props.original)
+    return base64ToBytes(props.payload)
   } catch {
     return null
   }
 })
+
+// Bytes that are not valid UTF-8 show as U+FFFD; the hex view holds the exact values.
+const readable = computed(() => (bytes.value ? new TextDecoder().decode(bytes.value) : ''))
 
 const byteLen = computed<number | null>(() => (bytes.value ? bytes.value.length : null))
 
@@ -64,13 +67,12 @@ function formatBytesCount(n: number): string {
 }
 
 function downloadOriginal() {
-  if (!props.original) return
-  const data = base64ToBytes(props.original)
-  const blob = new Blob([data], { type: 'application/octet-stream' })
+  if (!bytes.value) return
+  const blob = new Blob([bytes.value], { type: 'application/octet-stream' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = props.name || 'payload.bin'
+  a.download = props.name
   document.body.appendChild(a)
   a.click()
   a.remove()
@@ -125,12 +127,12 @@ const hexDump = computed(() => {
             <Icon v-else name="lucide:copy" class="h-3.5 w-3.5" />
             <span class="ml-1">Copy Hex</span>
           </Button>
-          <Button v-if="original" variant="outline" size="sm" class="h-7 px-2" @click="copyWithFeedback('copy-b64', original || '')">
+          <Button variant="outline" size="sm" class="h-7 px-2" @click="copyWithFeedback('copy-b64', payload)">
             <Icon v-if="copied['copy-b64']" name="lucide:check" class="h-3.5 w-3.5 text-primary" />
             <Icon v-else name="lucide:copy" class="h-3.5 w-3.5" />
             <span class="ml-1">Copy Base64</span>
           </Button>
-          <Button v-if="original" variant="outline" size="sm" class="h-7 px-2" @click="downloadOriginal">
+          <Button variant="outline" size="sm" class="h-7 px-2" @click="downloadOriginal">
             <Icon name="lucide:download" class="h-3.5 w-3.5" />
             <span class="ml-1">Download</span>
           </Button>
@@ -149,7 +151,7 @@ const hexDump = computed(() => {
           <span class="ml-1">Copy ASCII</span>
         </Button>
       </header>
-      <pre ref="asciiPre" class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ readable || '' }}</code></pre>
+      <pre ref="asciiPre" class="rounded border p-3 text-xs overflow-auto max-h-64 whitespace-pre"><code>{{ readable }}</code></pre>
     </section>
   </div>
 </template>

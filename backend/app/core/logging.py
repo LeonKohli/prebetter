@@ -16,8 +16,9 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
         }
 
-        if hasattr(record, "request_id"):
-            log_record["request_id"] = record.request_id
+        request_id = getattr(record, "request_id", None)
+        if request_id:
+            log_record["request_id"] = request_id
 
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
@@ -56,4 +57,4 @@ def setup_logging(log_level: str = "INFO", environment: str | None = None) -> No
 
     # Suppress noisy loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("opensearch").setLevel(logging.WARNING)

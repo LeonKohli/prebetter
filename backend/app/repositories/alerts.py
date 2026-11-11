@@ -1,1104 +1,166 @@
-"""
-Alert Repository - Data access layer for alerts.
-
-Encapsulates ALL alert query logic. Routes never touch SQLAlchemy directly.
-Filter logic lives in ONE place - no more scattered apply_* functions.
-
-Usage:
-    repo = AlertRepository(db)
-    alerts = repo.get_list(filters, pagination)
-"""
-
 import ipaddress
-from typing import Annotated
+from typing import Any
 
-from fastapi import Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from sqlalchemy import (
-    select,
-    func,
-    and_,
-    exists,
-    literal_column,
-    literal,
-    or_,
-    text,
-    Table,
-    MetaData,
+from fastapi import HTTPException
+from opensearchpy import AsyncOpenSearch
+
+from app.opensearch import documents, queries
+from app.opensearch.documents import Pair
+from app.opensearch.request_line import decode_request_line, request_id
+from app.schemas.alerts import (
+    AlertDetail,
+    AlertListItem,
+    GroupedAlert,
+    GroupedAlertDetail,
+    TimelineDataPoint,
 )
-from sqlalchemy.exc import NoSuchTableError
-from sqlalchemy.engine import Engine
-from sqlalchemy.dialects import mysql
-
-from .base import BaseRepository
-from app.schemas.filters import AlertFilterParams, PaginationParams
-from app.models.prelude import (
-    Alert,
-    Impact,
-    Classification,
-    Address,
-    DetectTime,
-    Analyzer,
-    Node,
-    CreateTime,
-    CorrelationAlert,
+from app.schemas.filters import (
+    AlertFilterParams,
+    AlertListParams,
+    GroupListParams,
+    GroupSort,
+    SortOrder,
+    TimeFrame,
 )
-from app.database.config import (
-    get_analyzer_join_conditions,
-    get_node_join_conditions,
-    get_prelude_db,
-)
-from app.core.datetime_utils import get_current_time, ensure_timezone
 
-
-def reflect_pair_table(engine: Engine) -> Table | None:
-    """
-    Reflect Prebetter_Pair table from database.
-
-    Called ONCE at startup in lifespan, result stored in app.state.
-    Returns None if table doesn't exist (not an error - optional accelerator).
-    """
-    metadata = MetaData()
-    try:
-        return Table("Prebetter_Pair", metadata, autoload_with=engine)
-    except NoSuchTableError:
-        return None
-
-
-class AlertRepository(BaseRepository[Alert]):
-    """
-    Repository for alert data access.
-
-    All query building and filtering is encapsulated here.
-    No magic **kwargs, no leaky abstractions.
-    """
-
-    # =========================================================================
-    # PRIVATE: Query Building
-    # =========================================================================
-
-    def _ip_scalar(self, parent_type: str):
-        """
-        Correlated scalar for an alert's single source/target IPv4.
-
-        Each alert has exactly one distinct ipv4 per side, stored as ~4
-        duplicate Address rows; MIN collapses them without a join fan-out.
-        """
-        return (
-            select(func.min(Address.address))
-            .where(
-                Address._message_ident == Alert._ident,
-                Address._parent_type == parent_type,
-                Address.category == "ipv4-addr",
-            )
-            .scalar_subquery()
-        )
-
-    def _build_list_select(self):
-        """
-        SELECT columns for the alert list, with source/target IPv4 as
-        correlated scalar subqueries instead of address joins.
-
-        Avoids the ~16x fan-out of joining both address sides, so the query
-        needs no DISTINCT and ORDER BY ... LIMIT is not gated on materializing
-        every joined row first.
-        """
-        return select(
-            Alert._ident,
-            Alert.messageid,
-            DetectTime.time.label("detect_time"),
-            CreateTime.time.label("create_time"),
-            Classification.text.label("classification_text"),
-            Impact.severity,
-            self._ip_scalar("S").label("source_ipv4"),
-            self._ip_scalar("T").label("target_ipv4"),
-            Analyzer.name.label("analyzer_name"),
-            Node.name.label("analyzer_host"),
-            Analyzer.model.label("analyzer_model"),
-            Analyzer.manufacturer.label("analyzer_manufacturer"),
-            Analyzer.version.label("analyzer_version"),
-            literal_column("Prelude_Analyzer.class").label("analyzer_class"),
-            Analyzer.ostype.label("analyzer_ostype"),
-            Analyzer.osversion.label("analyzer_osversion"),
-            Node.location.label("node_location"),
-            Node.category.label("node_category"),
-            CorrelationAlert.name.label("correlation_description"),
-        )
-
-    def _build_list_joins(self, query):
-        """
-        Apply the non-address LEFT joins for the list query.
-
-        All joined tables are 1:1 with the alert (CreateTime/Classification/
-        Impact/CorrelationAlert by message ident; Analyzer/Node pinned to the
-        primary index -1). Source/target presence is enforced via EXISTS.
-        """
-        return (
-            query.select_from(Alert)
-            .outerjoin(DetectTime, Alert._ident == DetectTime._message_ident)
-            .outerjoin(
-                CreateTime,
-                and_(
-                    CreateTime._message_ident == Alert._ident,
-                    CreateTime._parent_type == "A",
-                ),
-            )
-            .outerjoin(Classification, Classification._message_ident == Alert._ident)
-            .outerjoin(Impact, Impact._message_ident == Alert._ident)
-            .outerjoin(
-                CorrelationAlert, CorrelationAlert._message_ident == Alert._ident
-            )
-            .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
-            .outerjoin(Node, get_node_join_conditions(Alert._ident))
-        )
-
-    def _ip_presence_conditions(
-        self, filters: AlertFilterParams, ident_col=Alert._ident
-    ) -> list:
-        """
-        Build EXISTS semi-join conditions for source/target IPv4 presence + filters.
-
-        Used instead of Address INNER joins. Each alert carries ~4 duplicate
-        Address rows per side, so joining both sides fans every alert out ~16x
-        and forces a DISTINCT/temp-table pass before LIMIT. Correlated EXISTS
-        checks presence without generating those rows.
-
-        ident_col is the outer column to correlate against (Alert._ident, or
-        DetectTime._message_ident when driving from the detect-time index).
-        """
-
-        def addr_exists(parent_type: str, ip_range):
-            clause = exists().where(
-                Address._message_ident == ident_col,
-                Address._parent_type == parent_type,
-                Address.category == "ipv4-addr",
-            )
-            if ip_range:
-                if ip_range.is_cidr:
-                    ip_as_int = func.inet_aton(Address.address)
-                    clause = clause.where(
-                        and_(
-                            ip_as_int >= ip_range.network_int,
-                            ip_as_int <= ip_range.broadcast_int,
-                        )
-                    )
-                else:
-                    clause = clause.where(Address.address == ip_range.original)
-            return clause
-
-        conditions = []
-        source_range = filters.source_ip_range()
-        if source_range or filters.require_ips:
-            conditions.append(addr_exists("S", source_range))
-        target_range = filters.target_ip_range()
-        if target_range or filters.require_ips:
-            conditions.append(addr_exists("T", target_range))
-        return conditions
-
-    def _apply_filters(
-        self,
-        query,
-        filters: AlertFilterParams,
-        include_server_filter: bool = True,
-    ):
-        """
-        Apply non-IP filters to query (date, severity, classification, server,
-        analyzer).
-
-        Source/target IP presence and filtering are handled separately via
-        _ip_presence_conditions (EXISTS), so this method never touches Address.
-
-        Args:
-            query: SQLAlchemy query to filter
-            filters: Filter parameters
-            include_server_filter: Whether to apply server filter (requires Node join)
-        """
-        # Date range filters
-        if filters.start_date:
-            # Future date check - return empty results
-            if filters.start_date > get_current_time():
-                return query.where(literal(False))
-            query = query.where(DetectTime.time >= filters.start_date)
-
-        if filters.end_date:
-            query = query.where(DetectTime.time <= filters.end_date)
-
-        # Severity filter (supports comma-separated)
-        severity_list = filters.severity_list()
-        if len(severity_list) == 1:
-            query = query.where(Impact.severity == severity_list[0])
-        elif len(severity_list) > 1:
-            query = query.where(Impact.severity.in_(severity_list))
-
-        # Classification filter (supports comma-separated)
-        classification_list = filters.classification_list()
-        if len(classification_list) == 1:
-            query = query.where(Classification.text == classification_list[0])
-        elif len(classification_list) > 1:
-            query = query.where(Classification.text.in_(classification_list))
-
-        # Server filter (Node.name prefix match) - optional, requires Node join
-        if include_server_filter:
-            server_list = filters.server_list()
-            if len(server_list) == 1:
-                query = query.where(Node.name.startswith(server_list[0] + "."))
-            elif len(server_list) > 1:
-                conditions = [Node.name.startswith(s + ".") for s in server_list]
-                query = query.where(or_(*conditions))
-
-        # Analyzer name filter
-        if filters.analyzer_name:
-            query = query.where(Analyzer.name == filters.analyzer_name)
-
-        return query
-
-    # =========================================================================
-    # PUBLIC: Query Methods
-    # =========================================================================
-
-    def get_list(
-        self,
-        filters: AlertFilterParams,
-        pagination: PaginationParams,
-        sort_by: str = "detect_time",
-        sort_order: str = "desc",
-    ) -> tuple[list, int]:
-        """
-        Get paginated list of alerts with filters applied.
-
-        Args:
-            filters: Filter parameters
-            pagination: Pagination parameters
-            sort_by: Field to sort by
-            sort_order: 'asc' or 'desc'
-
-        Returns:
-            Tuple of (results, total_count)
-        """
-        # Get total count before pagination (EXISTS-based, avoids fan-out)
-        total = self._count_list(filters)
-
-        # Default sort: select the page of idents off the detect-time index
-        # first, then hydrate. Avoids sorting/scanning the whole filtered set.
-        if sort_by == "detect_time":
-            idents = self._page_idents_by_time(filters, pagination, sort_order)
-            return self._hydrate_idents(idents), total
-
-        # Other sorts: single-query path. Scalar IP subqueries replace the
-        # address joins, so the query stays one row per alert (no DISTINCT).
-        query = self._build_list_select()
-        query = self._build_list_joins(query)
-        ip_conditions = self._ip_presence_conditions(filters)
-        if ip_conditions:
-            query = query.where(*ip_conditions)
-        query = self._apply_filters(query, filters)
-
-        sort_column = self._get_sort_column(sort_by)
-        if sort_column is not None:
-            query = query.order_by(
-                sort_column.desc() if sort_order == "desc" else sort_column.asc()
-            )
-
-        # Add stable secondary sort and apply pagination
-        query = query.order_by(Alert._ident)
-        results = self.paginate(query, pagination.offset, pagination.size)
-
-        return results, total
-
-    def _page_idents_by_time(
-        self, filters: AlertFilterParams, pagination: PaginationParams, sort_order: str
-    ) -> list[int]:
-        """
-        Select one page of alert idents ordered by detect time.
-
-        Roots on DetectTime (1:1 with Alert) so the time index drives ORDER BY
-        + LIMIT, and forces correlated EXISTS via STRAIGHT_JOIN so require_ips
-        is a per-row index probe rather than a materialized semi-join. Joins
-        only the tables an active filter references.
-        """
-        ident = DetectTime._message_ident
-        query = select(ident).select_from(DetectTime)
-
-        if filters.severity_list():
-            query = query.outerjoin(Impact, Impact._message_ident == ident)
-        if filters.classification_list():
-            query = query.outerjoin(
-                Classification, Classification._message_ident == ident
-            )
-        if filters.analyzer_name or filters.server_list():
-            query = query.outerjoin(Analyzer, get_analyzer_join_conditions(ident))
-        if filters.server_list():
-            query = query.outerjoin(Node, get_node_join_conditions(ident))
-
-        ip_conditions = self._ip_presence_conditions(filters, ident_col=ident)
-        if ip_conditions:
-            query = query.where(*ip_conditions)
-        query = self._apply_filters(query, filters)
-
-        # Tie-break in the same direction as the time sort so the order matches
-        # the (time, _message_ident) index read direction - no filesort, the
-        # LIMIT stops the scan at `size` rows. (MariaDB 10.5 has no descending
-        # indexes, so a time-DESC / ident-ASC order could not avoid the sort.)
-        if sort_order == "desc":
-            query = query.order_by(DetectTime.time.desc(), ident.desc())
-        else:
-            query = query.order_by(DetectTime.time.asc(), ident.asc())
-        query = query.prefix_with("STRAIGHT_JOIN")
-        query = query.offset(pagination.offset).limit(pagination.size)
-
-        return [row[0] for row in self.db.execute(query).all()]
-
-    def _hydrate_idents(self, idents: list[int]) -> list:
-        """Fetch full list rows for the given idents, preserving their order."""
-        if not idents:
-            return []
-        query = self._build_list_select()
-        query = self._build_list_joins(query)
-        query = query.where(Alert._ident.in_(idents))
-        rows_by_ident = {row._ident: row for row in self.db.execute(query).all()}
-        return [rows_by_ident[i] for i in idents if i in rows_by_ident]
-
-    def _count_list(self, filters: AlertFilterParams) -> int:
-        """
-        Count alerts matching filters, without the address-join fan-out.
-
-        Joins only the tables an active filter references (each 1:1 with the
-        alert); source/target presence and IP filters use EXISTS instead of
-        the INNER address joins that fan every alert out ~16x. Returns the same
-        value as counting distinct idents over the full list query, ~3-100x
-        cheaper depending on filter selectivity.
-        """
-        query = select(func.count(func.distinct(Alert._ident))).select_from(Alert)
-
-        if filters.start_date or filters.end_date:
-            query = query.outerjoin(
-                DetectTime, Alert._ident == DetectTime._message_ident
-            )
-        if filters.severity_list():
-            query = query.outerjoin(Impact, Impact._message_ident == Alert._ident)
-        if filters.classification_list():
-            query = query.outerjoin(
-                Classification, Classification._message_ident == Alert._ident
-            )
-        if filters.analyzer_name or filters.server_list():
-            query = query.outerjoin(
-                Analyzer, get_analyzer_join_conditions(Alert._ident)
-            )
-        if filters.server_list():
-            query = query.outerjoin(Node, get_node_join_conditions(Alert._ident))
-
-        ip_conditions = self._ip_presence_conditions(filters)
-        if ip_conditions:
-            query = query.where(*ip_conditions)
-        query = self._apply_filters(query, filters)
-
-        return self._execute_no_materialization(query).scalar() or 0
-
-    def _execute_no_materialization(self, stmt):
-        """
-        Execute a statement with semi-join materialization disabled for this one
-        statement, returning a Result with normal Row access.
-
-        The require_ips EXISTS checks otherwise get materialized into ~350k-row
-        temp tables (one per side) before the query runs. Disabling only
-        materialization - semijoin optimization stays on, so the planner can
-        still drive from a selective filter and eliminate rows early - turns
-        them into correlated index probes. Measured ~3x faster on unfiltered/
-        broad queries with no regression on any filter combination.
-
-        SET STATEMENT scopes the hint to this query alone (no session state
-        change). Compiling with paramstyle "named" + render_postcompile keeps
-        every value a bound parameter (IN-lists expanded), so the rendered SQL
-        wraps safely in text() with no literal interpolation.
-        """
-        compiled = stmt.compile(
-            dialect=mysql.dialect(paramstyle="named"),
-            compile_kwargs={"render_postcompile": True},
-        )
-        hinted = text(
-            "SET STATEMENT optimizer_switch='materialization=off' FOR " + str(compiled)
-        )
-        return self.db.execute(hinted, compiled.params)
-
-    def _get_sort_column(self, sort_by: str):
-        """Map sort field name to SQLAlchemy column."""
-        sort_map = {
-            "detect_time": DetectTime.time,
-            "create_time": CreateTime.time,
-            "severity": Impact.severity,
-            "classification": Classification.text,
-            "source_ip": literal_column("source_ipv4"),
-            "target_ip": literal_column("target_ipv4"),
-            "analyzer": Analyzer.name,
-            "alert_id": Alert._ident,
-        }
-        return sort_map.get(sort_by)
-
-    def get_timeline(
-        self,
-        filters: AlertFilterParams,
-        date_format: str,
-    ) -> list:
-        """
-        Get timeline aggregation for chart display.
-
-        Args:
-            filters: Filter parameters
-            date_format: MySQL DATE_FORMAT string for grouping
-
-        Returns:
-            List of aggregated timeline data points
-
-        Note:
-            When require_ips is True (default), only counts alerts with BOTH
-            source AND target IPv4 addresses.
-        """
-        # Build base query
-        query = (
-            select(
-                func.date_format(DetectTime.time, date_format).label("time_bucket"),
-                func.count(Alert._ident.distinct()).label("total"),
-                Impact.severity,
-                Classification.text.label("classification"),
-                Analyzer.name.label("analyzer"),
-            )
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .outerjoin(Impact, Impact._message_ident == Alert._ident)
-            .outerjoin(Classification, Classification._message_ident == Alert._ident)
-            .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
-        )
-
-        # Source/target IP presence + filters via EXISTS (avoids ~16x address fan-out)
-        ip_conditions = self._ip_presence_conditions(filters)
-        if ip_conditions:
-            query = query.where(*ip_conditions)
-
-        # Apply shared filter logic - IP handled above via EXISTS, skip server filter
-        query = self._apply_filters(
-            query,
-            filters,
-            include_server_filter=False,  # Timeline query doesn't join Node
-        )
-
-        # Group and order
-        query = query.group_by(
-            text("time_bucket"), Impact.severity, Classification.text, Analyzer.name
-        ).order_by(text("time_bucket"))
-
-        return self._execute_no_materialization(query).all()
-
-    def build_new_alerts_query(
-        self, last_id: int, require_ips: bool = True, limit: int = 50
-    ):
-        """
-        Build a lightweight query for new alerts since last_id (SSE polling).
-
-        Selects only Alert._ident — the stream endpoint uses just the count and
-        latest id. IP presence is checked with EXISTS semi-joins instead of the
-        full list query's joins + DISTINCT, which builds a temp table over 19
-        discarded columns. ~17-6000x cheaper on real data (see complexity report).
-        """
-        query = select(Alert._ident).where(Alert._ident > last_id)
-
-        if require_ips:
-            query = query.where(
-                exists().where(
-                    Address._message_ident == Alert._ident,
-                    Address._parent_type == "S",
-                    Address.category == "ipv4-addr",
-                ),
-                exists().where(
-                    Address._message_ident == Alert._ident,
-                    Address._parent_type == "T",
-                    Address.category == "ipv4-addr",
-                ),
-            )
-
-        return query.order_by(Alert._ident.asc()).limit(limit)
-
-    def get_export_stream(
-        self,
-        filters: AlertFilterParams,
-        alert_ids: list[int] | None = None,
-        limit: int = 50000,
-    ):
-        """
-        Get streaming query for CSV export.
-
-        Args:
-            filters: Filter parameters (ignored if alert_ids provided)
-            alert_ids: Specific alert IDs to export (overrides filters)
-            limit: Maximum number of results
-
-        Returns:
-            SQLAlchemy Result object configured for streaming (yield_per)
-        """
-        # Scalar IP subqueries + EXISTS instead of the address joins: the prior
-        # builder fanned every alert out ~16x and a 50k export materialized a
-        # ~800k-row temp table (DISTINCT), ~17x slower than this one row/alert.
-        query = self._build_list_select()
-        query = self._build_list_joins(query)
-
-        if alert_ids:
-            # Explicit ids select the rows; honor require_ips presence only
-            # (prior code used INNER address joins here), not the free filters.
-            if filters.require_ips:
-                presence = self._ip_presence_conditions(
-                    AlertFilterParams(require_ips=True)
+MAX_PAIRS = 50_000
+
+
+def _address_key(address: str) -> tuple[int, int]:
+    """IPv4 before IPv6, numeric within a version (mixed versions do not compare)."""
+    ip = ipaddress.ip_address(address)
+    return ip.version, int(ip)
+
+
+def _sort_pairs(pairs: list[Pair], sort_by: GroupSort, sort_order: SortOrder) -> None:
+    keys = {
+        GroupSort.TOTAL_COUNT: lambda p: p.count,
+        GroupSort.DETECT_TIME: lambda p: p.latest,
+        GroupSort.SOURCE_IP: lambda p: _address_key(p.source),
+        GroupSort.TARGET_IP: lambda p: _address_key(p.target),
+    }
+    # Sorts are stable: the pair order below survives as the tie-break in both directions.
+    pairs.sort(key=lambda p: (_address_key(p.source), _address_key(p.target)))
+    pairs.sort(key=keys[sort_by], reverse=sort_order is SortOrder.DESC)
+
+
+class AlertRepository:
+    """Read-only access to the alert indices; the only code that talks to OpenSearch."""
+
+    def __init__(self, client: AsyncOpenSearch, index: str, request_index: str):
+        self._client = client
+        self._index = index
+        self._request_index = request_index
+
+    async def _search(self, body: dict[str, Any]) -> dict[str, Any]:
+        return await self._client.search(index=self._index, body=body)
+
+    async def _buckets(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        """Buckets of the aggregation `rows`."""
+        response = await self._search(body)
+        # A pattern that matches no index yet answers without an aggregations section.
+        return response.get("aggregations", {}).get("rows", {}).get("buckets", [])
+
+    async def _composite(
+        self, body: dict[str, Any], max_buckets: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Follow `after_key` until the composite aggregation `rows` is exhausted."""
+        composite = body["aggs"]["rows"]["composite"]
+        buckets: list[dict[str, Any]] = []
+        while True:
+            page = await self._buckets(body)
+            buckets += page
+            if max_buckets is not None and len(buckets) > max_buckets:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Too many address pairs, narrow the filter",
                 )
-                query = query.where(*presence)
-            query = query.where(Alert._ident.in_(alert_ids))
-        else:
-            ip_conditions = self._ip_presence_conditions(filters)
-            if ip_conditions:
-                query = query.where(*ip_conditions)
-            query = self._apply_filters(query, filters)
+            if len(page) < composite["size"]:
+                return buckets
+            # The key of the last bucket is where the next page starts.
+            composite["after"] = page[-1]["key"]
 
-        # Order by ID descending and limit
-        query = query.order_by(Alert._ident.desc()).limit(limit)
+    async def list_alerts(
+        self, params: AlertListParams
+    ) -> tuple[list[AlertListItem], int]:
+        response = await self._search(queries.list_body(params))
+        hits = response["hits"]
+        return [documents.to_list_item(h) for h in hits["hits"]], hits["total"]["value"]
 
-        # Configure for streaming with server-side cursor
-        query = query.execution_options(yield_per=1000)
+    async def group_alerts(
+        self, params: GroupListParams
+    ) -> tuple[list[GroupedAlert], int]:
+        """One page of address pairs with their rule counts, and the number of pairs."""
+        buckets = await self._composite(queries.pairs_body(params), MAX_PAIRS)
+        pairs = [documents.to_pair(b) for b in buckets]
+        _sort_pairs(pairs, params.sort_by, params.sort_order)
+        page = pairs[params.offset : params.offset + params.size]
+        if not page:
+            return [], len(pairs)
 
-        return self.db.execute(query)
+        body = queries.pair_rules_body(params, [(p.source, p.target) for p in page])
+        rules: dict[tuple[str, str], list[GroupedAlertDetail]] = {}
+        for bucket in await self._composite(body):
+            key = bucket["key"]
+            pair_key = (key["source.ip"], key["destination.ip"])
+            rules.setdefault(pair_key, []).append(documents.to_group_detail(bucket))
+        groups = []
+        for pair in page:
+            alerts = rules.get((pair.source, pair.target), [])
+            alerts.sort(key=lambda a: a.classification)
+            alerts.sort(key=lambda a: a.detected_at, reverse=True)
+            groups.append(
+                GroupedAlert(
+                    source_ipv4=pair.source,
+                    target_ipv4=pair.target,
+                    total_count=pair.count,
+                    alerts=alerts,
+                )
+            )
+        return groups, len(pairs)
 
-
-# =========================================================================
-# Dependency Injection - FastAPI pattern with proper Depends() chain
-# =========================================================================
-
-
-def get_alert_repository(
-    db: Annotated[Session, Depends(get_prelude_db)],
-) -> AlertRepository:
-    """
-    FastAPI dependency for AlertRepository.
-
-    Usage in routes:
-        from typing import Annotated
-
-        @router.get("/alerts")
-        async def list_alerts(
-            repo: Annotated[AlertRepository, Depends(get_alert_repository)],
-        ):
-            return repo.get_list(...)
-    """
-    return AlertRepository(db)
-
-
-def get_pair_table(request: Request) -> Table:
-    """
-    FastAPI dependency to get pair_table from app.state.
-
-    Raises HTTPException 503 if table not available (reflected at startup).
-    """
-    pair_table = getattr(request.app.state, "pair_table", None)
-    if pair_table is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Prebetter_Pair accelerator table not configured",
-        )
-    return pair_table
-
-
-def get_statistics_repository(
-    db: Annotated[Session, Depends(get_prelude_db)],
-    pair_table: Annotated[Table, Depends(get_pair_table)],
-) -> "StatisticsRepository":
-    """FastAPI dependency for StatisticsRepository."""
-    return StatisticsRepository(db, pair_table)
-
-
-def get_grouped_alert_repository(
-    db: Annotated[Session, Depends(get_prelude_db)],
-    pair_table: Annotated[Table, Depends(get_pair_table)],
-) -> "GroupedAlertRepository":
-    """FastAPI dependency for GroupedAlertRepository."""
-    return GroupedAlertRepository(db, pair_table)
-
-
-def _filter_null_keys(results) -> dict:
-    """Filter out null keys from query results. DRY helper for aggregations."""
-    return {k: v for k, v in results if k}
-
-
-class StatisticsRepository(BaseRepository):
-    """
-    Repository for statistics queries.
-
-    Encapsulates all statistics aggregation logic.
-    """
-
-    def __init__(self, db: Session, pair_table: Table):
-        super().__init__(db)
-        self._pair_table = pair_table
-
-    def _aggregation_query(self, select_cols, start_date, end_date):
-        """Build aggregation query with date filter. DRY helper."""
-        return (
-            select(*select_cols)
-            .select_from(Alert)
-            .join(DetectTime, Alert._ident == DetectTime._message_ident)
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
+    async def get_alert(self, alert_id: str) -> AlertDetail | None:
+        body = {"query": {"term": {"event.id": alert_id}}, "size": 1}
+        hits = (await self._search(body))["hits"]["hits"]
+        if not hits:
+            return None
+        return documents.to_detail(
+            hits[0], await self._http_request(hits[0]["_source"])
         )
 
-    def _top_pair_ips(self, ip_column, start_date, end_date) -> dict:
-        """Top 10 IPs by alert count from the Prebetter_Pair accelerator.
-
-        Pair holds one source/target IPv4 (as INET_ATON ints) per alert, so
-        COUNT(*) grouped by the int column equals the distinct-alert count and
-        avoids the Prelude_Address fan-out + COUNT(DISTINCT).
-        """
-        query = (
-            select(
-                func.inet_ntoa(ip_column).label("address"),
-                func.count().label("count"),
-            )
-            .select_from(self._pair_table)
-            .join(
-                DetectTime,
-                DetectTime._message_ident == self._pair_table.c._message_ident,
-            )
-            .where(DetectTime.time >= start_date)
-            .where(DetectTime.time <= end_date)
-            .group_by(ip_column)
-            .order_by(func.count().desc())
-            .limit(10)
+    async def _http_request(self, alert: dict[str, Any]) -> str | None:
+        """Request line from the alert's companion document, if it has one."""
+        companion_id = request_id(alert)
+        if companion_id is None:
+            return None
+        response = await self._client.search(
+            index=self._request_index,
+            body=queries.request_body(companion_id),
         )
-        return _filter_null_keys(self.db.execute(query).all())
-
-    def get_summary(self, start_date, end_date) -> dict:
-        """
-        Get aggregated statistics for alerts within time range.
-
-        Args:
-            start_date: Start of time range
-            end_date: End of time range
-
-        Returns:
-            Dict with all aggregated statistics data
-        """
-        # Total alerts in range. Alert:DetectTime is 1:1, so no DISTINCT/subquery
-        # is needed - COUNT(*) over the join is the count.
-        total_alerts = (
-            self.db.scalar(
-                self._aggregation_query([func.count()], start_date, end_date)
-            )
-            or 0
+        hits = response["hits"]["hits"]
+        if not hits:
+            return None
+        return decode_request_line(
+            hits[0]["_source"].get("snort", {}).get("http_request")
         )
 
-        # Severity/classification/analyzer are each <=1 row per alert, so
-        # COUNT(*) equals COUNT(DISTINCT Alert._ident) without the dedup pass.
-        severity_query = (
-            self._aggregation_query(
-                [Impact.severity, func.count()],
-                start_date,
-                end_date,
-            )
-            .outerjoin(Impact, Impact._message_ident == Alert._ident)
-            .group_by(Impact.severity)
+    async def timeline(
+        self, filters: AlertFilterParams, time_frame: TimeFrame
+    ) -> list[TimelineDataPoint]:
+        buckets = await self._buckets(queries.timeline_body(filters, time_frame))
+        return [documents.to_timeline_point(b) for b in buckets]
+
+    async def sensors(self) -> list[str]:
+        buckets = await self._composite(queries.distinct_body(queries.SENSOR))
+        return [b["key"][queries.SENSOR] for b in buckets]
+
+    async def rule_names(self) -> list[str]:
+        buckets = await self._composite(queries.distinct_body(queries.RULE_NAME))
+        return [b["key"][queries.RULE_NAME] for b in buckets]
+
+    async def count(self, timeout: float | None = None) -> int:
+        """Number of documents in the index pattern."""
+        response = await self._client.count(
+            index=self._index, params={"request_timeout": timeout}
         )
-        alerts_by_severity = _filter_null_keys(self.db.execute(severity_query).all())
-
-        # Classification distribution
-        classification_query = (
-            self._aggregation_query(
-                [Classification.text, func.count()],
-                start_date,
-                end_date,
-            )
-            .outerjoin(Classification, Classification._message_ident == Alert._ident)
-            .group_by(Classification.text)
-        )
-        alerts_by_classification = _filter_null_keys(
-            self.db.execute(classification_query).all()
-        )
-
-        # Analyzer distribution
-        analyzer_query = (
-            self._aggregation_query(
-                [Analyzer.name, func.count()],
-                start_date,
-                end_date,
-            )
-            .outerjoin(Analyzer, get_analyzer_join_conditions(Alert._ident))
-            .group_by(Analyzer.name)
-        )
-        alerts_by_analyzer = _filter_null_keys(self.db.execute(analyzer_query).all())
-
-        # Top source/target IPs via the Prebetter_Pair accelerator instead of
-        # the Prelude_Address fan-out. Verified identical top-10s while avoiding
-        # the ~16x address fan-out + COUNT(DISTINCT) (~540ms -> ~95ms each).
-        alerts_by_source_ip = self._top_pair_ips(
-            self._pair_table.c.source_ip, start_date, end_date
-        )
-        alerts_by_target_ip = self._top_pair_ips(
-            self._pair_table.c.target_ip, start_date, end_date
-        )
-
-        return {
-            "total_alerts": total_alerts,
-            "alerts_by_severity": alerts_by_severity,
-            "alerts_by_classification": alerts_by_classification,
-            "alerts_by_analyzer": alerts_by_analyzer,
-            "alerts_by_source_ip": alerts_by_source_ip,
-            "alerts_by_target_ip": alerts_by_target_ip,
-        }
-
-
-class GroupedAlertRepository(BaseRepository):
-    """
-    Repository for grouped alerts (by source/target IP pair).
-
-    Encapsulates all grouped query logic - no more 3 separate query builders.
-
-    The pair_table is injected via DI from app.state (reflected once at startup).
-
-    Note: Grouped view always requires IPs since it groups BY source/target IP pair.
-    The require_ips filter parameter is ignored for grouped queries.
-    """
-
-    def __init__(self, db: Session, pair_table: Table):
-        super().__init__(db)
-        self._pair_table = pair_table
-
-    # =========================================================================
-    # PRIVATE: Filter Helpers
-    # =========================================================================
-
-    def _apply_grouped_filters(self, query, filters: AlertFilterParams):
-        """
-        Apply filters optimized for grouped queries.
-
-        Uses subquery pattern for better performance (semi-join optimization).
-        """
-        pair_table = self._pair_table
-
-        # Date filters
-        if filters.start_date:
-            query = query.where(DetectTime.time >= ensure_timezone(filters.start_date))
-        if filters.end_date:
-            query = query.where(DetectTime.time <= ensure_timezone(filters.end_date))
-
-        # IP filters (direct on pair table for performance)
-        source_range = filters.source_ip_range()
-        if source_range:
-            if source_range.is_cidr:
-                query = query.where(
-                    and_(
-                        pair_table.c.source_ip >= source_range.network_int,
-                        pair_table.c.source_ip <= source_range.broadcast_int,
-                    )
-                )
-            else:
-                query = query.where(
-                    pair_table.c.source_ip == func.inet_aton(source_range.original)
-                )
-
-        target_range = filters.target_ip_range()
-        if target_range:
-            if target_range.is_cidr:
-                query = query.where(
-                    and_(
-                        pair_table.c.target_ip >= target_range.network_int,
-                        pair_table.c.target_ip <= target_range.broadcast_int,
-                    )
-                )
-            else:
-                query = query.where(
-                    pair_table.c.target_ip == func.inet_aton(target_range.original)
-                )
-
-        # Severity filter - use subquery to avoid Cartesian product
-        if filters.severity:
-            severity_list = filters.severity_list()
-            if len(severity_list) == 1:
-                severity_subq = select(Impact._message_ident).where(
-                    Impact.severity == severity_list[0]
-                )
-            else:
-                severity_subq = select(Impact._message_ident).where(
-                    Impact.severity.in_(severity_list)
-                )
-            query = query.where(pair_table.c._message_ident.in_(severity_subq))
-
-        # Classification filter - use subquery for semi-join optimization
-        if filters.classification:
-            classification_list = filters.classification_list()
-            if len(classification_list) == 1:
-                class_subq = select(Classification._message_ident).where(
-                    Classification.text == classification_list[0]
-                )
-            else:
-                class_subq = select(Classification._message_ident).where(
-                    Classification.text.in_(classification_list)
-                )
-            query = query.where(pair_table.c._message_ident.in_(class_subq))
-
-        # Server filter - uses subquery with Analyzer->Node join
-        server_list = filters.server_list()
-        if server_list:
-            server_subq = (
-                select(Analyzer._message_ident)
-                .select_from(Analyzer)
-                .outerjoin(
-                    Node,
-                    and_(
-                        Node._message_ident == Analyzer._message_ident,
-                        Node._parent_type == "A",
-                        Node._parent0_index == Analyzer._index,
-                    ),
-                )
-                .where(Analyzer._parent_type == "A")
-            )
-            if len(server_list) == 1:
-                server_subq = server_subq.where(
-                    Node.name.startswith(server_list[0] + ".")
-                )
-            else:
-                conditions = [Node.name.startswith(s + ".") for s in server_list]
-                server_subq = server_subq.where(or_(*conditions))
-            query = query.where(pair_table.c._message_ident.in_(server_subq))
-
-        return query
-
-    # =========================================================================
-    # PUBLIC: Query Methods
-    # =========================================================================
-
-    def get_groups(
-        self,
-        filters: AlertFilterParams,
-        pagination: PaginationParams,
-        sort_by: str = "total_count",
-        sort_order: str = "desc",
-    ) -> dict:
-        """
-        Get paginated grouped alerts with all details.
-
-        Args:
-            filters: Filter parameters
-            pagination: Pagination parameters
-            sort_by: Field to sort by (detect_time, severity, classification, analyzer, source_ip, target_ip, total_count)
-            sort_order: 'asc' or 'desc'
-
-        Returns:
-            Dict with groups, pagination info, and total alerts count
-        """
-        pair_table = self._pair_table
-
-        # Determine which extra columns to include based on sort field
-        sort_by_severity = sort_by == "severity"
-        sort_by_classification = sort_by == "classification"
-        sort_by_analyzer = sort_by == "analyzer"
-
-        # =====================================================================
-        # QUERY 1: Get paginated pairs with aggregations
-        # =====================================================================
-        select_cols = [
-            func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
-            func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
-            func.max(DetectTime.time).label("latest_time"),
-        ]
-
-        pairs_query = (
-            select(*select_cols)
-            .select_from(DetectTime)
-            .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
-        )
-
-        # Apply filters
-        pairs_query = self._apply_grouped_filters(pairs_query, filters)
-
-        # Build sort columns mapping
-        sort_cols = {
-            "latest_time": literal_column("latest_time"),
-            "source_ip": literal_column("source_ipv4"),
-            "target_ip": literal_column("target_ipv4"),
-            "max_severity": None,
-            "max_classification": None,
-            "max_analyzer": None,
-        }
-
-        classification_list = filters.classification_list()
-
-        # Add severity column for sorting
-        if sort_by_severity:
-            pairs_query = pairs_query.add_columns(
-                func.max(Impact.severity).label("max_severity")
-            )
-            pairs_query = pairs_query.outerjoin(
-                Impact, Impact._message_ident == DetectTime._message_ident
-            )
-            sort_cols["max_severity"] = literal_column("max_severity")
-
-        # Add classification column for sorting
-        if sort_by_classification:
-            pairs_query = pairs_query.add_columns(
-                func.max(Classification.text).label("max_classification")
-            )
-            join_condition = Classification._message_ident == DetectTime._message_ident
-            if classification_list:
-                if len(classification_list) == 1:
-                    join_condition = and_(
-                        join_condition, Classification.text == classification_list[0]
-                    )
-                else:
-                    join_condition = and_(
-                        join_condition, Classification.text.in_(classification_list)
-                    )
-            pairs_query = pairs_query.outerjoin(Classification, join_condition)
-            sort_cols["max_classification"] = literal_column("max_classification")
-
-        # Add analyzer column for sorting (using Node.name)
-        if sort_by_analyzer:
-            pairs_query = pairs_query.add_columns(
-                func.max(Node.name).label("max_analyzer")
-            )
-            analyzer_join_condition = and_(
-                Analyzer._message_ident == DetectTime._message_ident,
-                Analyzer._parent_type == "A",
-            )
-            node_join_condition = and_(
-                Node._message_ident == Analyzer._message_ident,
-                Node._parent_type == "A",
-                Node._parent0_index == Analyzer._index,
-            )
-            server_list = filters.server_list()
-            if server_list:
-                if len(server_list) == 1:
-                    node_join_condition = and_(
-                        node_join_condition, Node.name.startswith(server_list[0] + ".")
-                    )
-                else:
-                    conditions = [Node.name.startswith(s + ".") for s in server_list]
-                    node_join_condition = and_(node_join_condition, or_(*conditions))
-            pairs_query = pairs_query.outerjoin(Analyzer, analyzer_join_condition)
-            pairs_query = pairs_query.outerjoin(Node, node_join_condition)
-            sort_cols["max_analyzer"] = literal_column("max_analyzer")
-
-        # Add count column
-        needs_distinct_count = sort_by_classification or sort_by_analyzer
-        count_column = (
-            func.count(func.distinct(pair_table.c._message_ident))
-            if needs_distinct_count
-            else func.count()
-        )
-        pairs_query = pairs_query.add_columns(count_column.label("total_count"))
-        sort_cols["total_count"] = literal_column("total_count")
-
-        # Group by pair key
-        pairs_query = pairs_query.group_by(pair_table.c.pair_key)
-
-        # =====================================================================
-        # QUERY 2: Count total pairs for pagination
-        # =====================================================================
-        count_query = (
-            select(func.count(func.distinct(pair_table.c.pair_key)))
-            .select_from(DetectTime)
-            .join(pair_table, pair_table.c._message_ident == DetectTime._message_ident)
-        )
-        count_query = self._apply_grouped_filters(count_query, filters)
-        total_pairs = self.db.scalar(count_query) or 0
-
-        # =====================================================================
-        # Apply sorting and pagination to pairs query
-        # =====================================================================
-        sort_map = {
-            "detect_time": sort_cols["latest_time"],
-            "severity": sort_cols.get("max_severity"),
-            "classification": sort_cols.get("max_classification"),
-            "analyzer": sort_cols.get("max_analyzer"),
-            "source_ip": sort_cols["source_ip"],
-            "target_ip": sort_cols["target_ip"],
-            "total_count": sort_cols["total_count"],
-            "alert_id": sort_cols["total_count"],
-        }
-        order_col = sort_map.get(sort_by)
-        if order_col is not None:
-            pairs_query = pairs_query.order_by(
-                order_col.desc() if sort_order == "desc" else order_col
-            )
-
-        # Execute paginated pairs query
-        pairs = self.db.execute(
-            pairs_query.offset(pagination.offset).limit(pagination.size)
-        ).all()
-
-        # =====================================================================
-        # QUERY 3: Get details for the pairs on this page
-        # =====================================================================
-        if pairs:
-
-            def ip_to_int(ip: str) -> int:
-                return int(ipaddress.IPv4Address(ip))
-
-            pair_keys = [
-                (ip_to_int(p.source_ipv4) << 32) + ip_to_int(p.target_ipv4)
-                for p in pairs
-            ]
-
-            detail_query = (
-                select(
-                    func.inet_ntoa(pair_table.c.source_ip).label("source_ipv4"),
-                    func.inet_ntoa(pair_table.c.target_ip).label("target_ipv4"),
-                    Classification.text.label("classification"),
-                    func.count(func.distinct(pair_table.c._message_ident)).label(
-                        "count"
-                    ),
-                    func.group_concat(func.distinct(Analyzer.name)).label("analyzers"),
-                    literal(None).label("analyzer_hosts"),
-                    func.max(DetectTime.time).label("latest_time"),
-                )
-                .select_from(DetectTime)
-                .join(
-                    pair_table, pair_table.c._message_ident == DetectTime._message_ident
-                )
-                .outerjoin(
-                    Classification,
-                    Classification._message_ident == DetectTime._message_ident,
-                )
-                .outerjoin(
-                    Analyzer,
-                    and_(
-                        Analyzer._message_ident == DetectTime._message_ident,
-                        Analyzer._parent_type == "A",
-                    ),
-                )
-                .where(pair_table.c.pair_key.in_(pair_keys))
-                .group_by(pair_table.c.pair_key, Classification.text)
-            )
-
-            # Apply filters to detail query
-            if classification_list:
-                if len(classification_list) == 1:
-                    detail_query = detail_query.where(
-                        Classification.text == classification_list[0]
-                    )
-                else:
-                    detail_query = detail_query.where(
-                        Classification.text.in_(classification_list)
-                    )
-
-            if filters.start_date:
-                detail_query = detail_query.where(
-                    DetectTime.time >= ensure_timezone(filters.start_date)
-                )
-            if filters.end_date:
-                detail_query = detail_query.where(
-                    DetectTime.time <= ensure_timezone(filters.end_date)
-                )
-
-            details = self.db.execute(detail_query).all()
-        else:
-            details = []
-
-        # Return all data for route to process
-        return {
-            "pairs": pairs,
-            "details": details,
-            "total_pairs": total_pairs,
-            "total_pages": pagination.total_pages(total_pairs),
-        }
+        return response["count"]

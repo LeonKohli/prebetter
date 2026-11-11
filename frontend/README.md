@@ -73,7 +73,7 @@ Nuxt owns the naming exceptions for routes and nested components. UI wrappers le
 
 `bun run test:e2e` starts the real Nuxt server on `127.0.0.1:43017`. It needs Google Chrome, an explicitly exported `MYSQL_PREBETTER_DB` ending in `_test`, the other MySQL connection variables, and the current auth schema. Use a disposable database; tests create and remove users and sessions and may create signing keys.
 
-The suite checks credentials, closed registration, session isolation, JWT verification, API error forwarding, both SSE proxies, and logout invalidation. A browser test verifies that clearing the optional profile name persists after reload. The local backend verifies real JWT signatures through the Nuxt JWKS endpoint. The test generates its own auth secret and origin.
+The suite checks credentials, closed registration, session isolation, JWT verification, API error forwarding, the alert SSE proxy, and logout invalidation. A browser test verifies that clearing the optional profile name persists after reload. The local backend verifies real JWT signatures through the Nuxt JWKS endpoint. The test generates its own auth secret and origin.
 
 ## Dependency compatibility
 

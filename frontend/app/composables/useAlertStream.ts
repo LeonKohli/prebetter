@@ -2,11 +2,10 @@ interface UseAlertStreamOptions {
   immediate?: boolean
   onNewAlerts?: (count: number) => void
   debounceMs?: number
-  requireIps?: Ref<boolean>
 }
 
 export function useAlertStream(options: UseAlertStreamOptions = {}) {
-  const { immediate = true, onNewAlerts, debounceMs = 1000, requireIps } = options
+  const { immediate = true, onNewAlerts, debounceMs = 1000 } = options
 
   const debouncedOnNewAlerts = onNewAlerts
     ? useDebounceFn(onNewAlerts, debounceMs)
@@ -14,15 +13,7 @@ export function useAlertStream(options: UseAlertStreamOptions = {}) {
 
   const onSseGiveUp = useSseSessionGuard()
 
-  const url = computed(() => {
-    const base = '/api/alerts-stream'
-    if (requireIps && !requireIps.value) {
-      return `${base}?require_ips=false`
-    }
-    return base
-  })
-
-  const { status, data, error, close, open } = useEventSource<['alerts'], string>(url, ['alerts'], {
+  const { status, data, error, close, open } = useEventSource<['alerts'], string>('/api/alerts-stream', ['alerts'], {
     immediate,
     withCredentials: true,
     autoReconnect: {

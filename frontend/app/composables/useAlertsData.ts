@@ -10,6 +10,8 @@
  */
 import { getPresetRange, isRelativePreset, getActivePresetId } from '@/utils/datePresets'
 
+const groupedSorts = new Set(['total_count', 'detect_time', 'source_ip', 'target_ip'])
+
 export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>) {
   const { sortFieldMap, filterFieldMap } = useAlertTableColumns()
   const { token: sseRefreshToken } = useSseRefreshToken()
@@ -38,7 +40,9 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
   const fetchQuery = computed(() => {
     const activePreset = getActivePresetId(urlState.filters.value)
     const sortBy = urlState.sortBy.value
-    const mappedSort = sortBy in sortFieldMap ? sortFieldMap[sortBy as keyof typeof sortFieldMap] : sortBy
+    const mappedSort = sortBy in sortFieldMap ? sortFieldMap[sortBy as keyof typeof sortFieldMap] : undefined
+    // Each view accepts a different set of sort fields; anything else (e.g. from the URL) falls back to the default
+    const sortAllowed = isGrouped.value ? groupedSorts.has(mappedSort ?? '') : mappedSort !== undefined && mappedSort !== 'total_count'
     const urlFilters = urlState.filters.value
     const hasExplicitDates = !!(urlFilters.start_date && urlFilters.end_date)
 
@@ -68,7 +72,7 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
     return {
       page: urlState.page.value,
       size: urlState.pageSize.value,
-      sort_by: mappedSort || 'detect_time',
+      sort_by: sortAllowed ? mappedSort : 'detect_time',
       sort_order: urlState.sortOrder.value,
       ...filters
     }
@@ -82,23 +86,6 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
     server: true,
     lazy: false,
     dedupe: 'defer',
-    // Strip analyzer/analyzer_host from grouped alert details before SSR serialization.
-    // These arrays are never rendered in the table — only classification, count, detected_at are used.
-    // Saves ~30-50% of grouped response payload from the SSR HTML.
-    transform: (response) => {
-      if ('groups' in response) {
-        return {
-          ...response,
-          groups: response.groups.map(g => ({
-            ...g,
-            alerts: g.alerts.map(({ classification, count, detected_at }) => ({
-              classification, count, detected_at,
-            })),
-          })),
-        } as GroupedAlertResponse
-      }
-      return response
-    },
   })
 
   // Type guard - zero runtime cost, just checks property existence

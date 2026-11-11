@@ -3,8 +3,6 @@ const props = defineProps<{
   alert: AlertListItem | GroupedAlert
   isGrouped: boolean
   onViewDetails?: (alertId: string) => void
-  onRequestDeleteSingle?: (alert: AlertListItem) => void
-  onRequestDeleteGroup?: (alert: GroupedAlert) => void
 }>()
 
 // Use injected context instead of creating new instance
@@ -28,17 +26,6 @@ function handleViewDetails() {
   // For ungrouped view, use the alert ID directly
   if (!props.isGrouped && 'id' in props.alert && props.onViewDetails) {
     props.onViewDetails(props.alert.id)
-  }
-}
-
-const deleteLabel = computed(() => (props.isGrouped ? 'Delete IP pair' : 'Delete alert'))
-
-function handleDelete() {
-  // 'id' property only exists on AlertListItem - proper discriminant
-  if ('id' in props.alert && props.onRequestDeleteSingle) {
-    props.onRequestDeleteSingle(props.alert)
-  } else if (props.onRequestDeleteGroup) {
-    props.onRequestDeleteGroup(props.alert as GroupedAlert)
   }
 }
 
@@ -91,11 +78,6 @@ async function viewAllForPair() {
       <DropdownMenuItem @click="viewAllForPair">
         <Icon name="lucide:list" class="mr-2 size-4" />
         View all from IP pair
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem class="text-destructive focus:text-destructive focus:bg-destructive/10" @click="handleDelete">
-        <Icon name="lucide:trash-2" class="mr-2 size-4" />
-        {{ deleteLabel }}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem @click="copyId">

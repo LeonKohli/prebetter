@@ -1,8 +1,8 @@
 # Prebetter backend
 
-FastAPI serves Prelude alerts, statistics, heartbeats, reference filters, and CSV exports. It verifies Better Auth JWTs through JWKS. User and session management belong to the [Nuxt frontend](../frontend/README.md).
+A read-only FastAPI adapter on the IDS alerts stored in OpenSearch. It serves the alert list, address-pair groups, alert detail, a change stream, a timeline, and the reference lists for the filters. It verifies Better Auth JWTs through JWKS. User and session management belong to the [Nuxt frontend](../frontend/README.md).
 
-## Set up Prelude
+## Set up
 
 From this directory:
 
@@ -11,18 +11,16 @@ uv sync --locked
 cp .env.example .env
 ```
 
-Fill in all required settings from `.env.example`. `BETTER_AUTH_URL` must match the frontend origin because it defines the expected JWT issuer, audience, and JWKS location. Use the existing Prelude database for IDS data and the Prebetter database provisioned by the frontend setup.
+Fill in the settings in `.env`. `BETTER_AUTH_URL` must match the frontend origin because it defines the expected JWT issuer, audience, and JWKS location.
 
-The API requires the `Prebetter_Pair` accelerator. Install it and backfill the required data window:
-
-```sh
-uv run python -m app.scripts.prelude_pair_accelerator install
-uv run python -m app.scripts.prelude_pair_accelerator backfill-days --days 7
-uv run python -m app.scripts.prelude_pair_accelerator status
-uv run python -m app.scripts.prelude_index_maintenance check
-```
-
-These commands modify the Prelude schema or data. Read the [maintenance guide](app/scripts/README.md) before applying them to an existing installation. The API refuses startup when the accelerator table, required triggers, or indexes are missing.
+| Setting | Meaning |
+|---|---|
+| `OPENSEARCH_URL` | Base URL of the node, for example `https://opensearch.example.org:9200`. An `https` URL enables TLS with certificate verification against the default trust store. |
+| `OPENSEARCH_INDEX` | Index pattern with the daily event indices, for example `ids-events-*`. |
+| `OPENSEARCH_REQUEST_INDEX` | Index pattern with the daily request-line indices, for example `ids-requests-*`. The ingest pipeline stores one companion document per HTTP alert there; the alert detail shows its request line. Alerts without a companion show none. |
+| `OPENSEARCH_USER`, `OPENSEARCH_PASSWORD` | Optional basic-authentication credentials. Leave both unset for a node without the security plugin. |
+| `BETTER_AUTH_URL` | Frontend origin; JWT issuer, audience, and JWKS source. |
+| `ENVIRONMENT`, `LOG_LEVEL`, `BACKEND_CORS_ORIGINS` | Runtime settings. |
 
 Start the API:
 
@@ -30,49 +28,80 @@ Start the API:
 uv run fastapi dev
 ```
 
-The frontend must be reachable at `BETTER_AUTH_URL` when the API needs to fetch signing keys. Backend startup does not install Better Auth tables or create users.
+The frontend must be reachable at `BETTER_AUTH_URL` when the API fetches signing keys.
+
+### Local node with sample data
+
+`compose.opensearch.yml` in the repository root starts a single OpenSearch 3.9 node without security on `127.0.0.1:9200`.
+
+```sh
+docker compose -f ../compose.opensearch.yml up -d
+OPENSEARCH_URL=http://127.0.0.1:9200
+OPENSEARCH_INDEX=ids-events-*
+OPENSEARCH_REQUEST_INDEX=ids-requests-*
+```
+
+Set those values in `.env`, then load twelve synthetic events into two daily indices, created from the production index template in `tests/index_template.json`, and the request-line companion of one of them in a daily index from `tests/requests_template.json`:
+
+```sh
+uv run python -m tests.seed
+```
+
+The command refuses to run when `OPENSEARCH_URL` is not `localhost` or `127.0.0.1`. The events are dated relative to the current hour, so a repeated run within the same hour changes nothing.
 
 ## API reference
 
-| Group | Paths under `/api/v1` |
+All routes live under `/api/v1` and require a Bearer token. The [OpenAPI documentation](http://localhost:8000/api/v1/docs) lists every parameter and response.
+
+| Path | Purpose |
 |---|---|
-| Alerts | `/alerts/`, `/alerts/groups`, alert detail/deletion routes, `/alerts/stream` |
-| Statistics | `/statistics/timeline`, `/statistics/summary` |
-| Heartbeats | `/heartbeats/status`, `/heartbeats/timeline`, `/heartbeats/stream` |
-| Export | `/export/alerts/{format}` |
-| Reference | `/reference/classifications`, `/reference/severities`, `/reference/servers` |
+| `GET /alerts` | Paged, filtered, sorted alert list. |
+| `GET /alerts/groups` | Alerts grouped by (source, target) address pair, with counts per rule name. |
+| `GET /alerts/{alert_id}` | One alert with typed fields, the Snort packet fields, the captured payload (base64, when the sensor logs it), the client address from `X-Forwarded-For`, and the complete stored document. `alert_id` is the 64-character event id. |
+| `GET /alerts/stream` | Server-sent events that tell the UI to refetch. |
+| `GET /statistics/timeline` | Alert counts per minute, hour, day, or week. |
+| `GET /reference/severities`, `/servers`, `/classifications` | Values for the filter inputs. |
 
-The registered routers in `app/api/base.py` and the [OpenAPI documentation](http://localhost:8000/api/v1/docs) define the exact request and response contracts. Protected routes use Bearer authentication. Administrator operations require the `admin` role.
+`GET /health` needs no token. It reports `opensearch: true` when a document count on the index pattern succeeds, and `status: unhealthy` otherwise. When OpenSearch is unreachable, every other route answers 503.
 
-`/health` reports startup state and database availability. `/` links to the API documentation.
+Filters shared by the list, groups, and timeline: `start_date`, `end_date`, `severity` (`high`, `medium`, `low`, `info`, comma-separated), `classification` (rule names), `server` (sensor names), `source_ip` and `target_ip` (an address, a CIDR network, or a partial IPv4 prefix such as `10.128`), and `require_ips` (default `true`). Response field names such as `source_ipv4`, `classification_text`, and `analyzer` are the names the frontend uses; `app/opensearch/documents.py` maps them to the document fields.
 
-## Database behavior
+## How the adapter queries OpenSearch
 
-Prelude queries use SQLAlchemy and the existing Prelude schema. Alert listing and grouping use `Prebetter_Pair` to avoid address-join fan-out. Exports stream batches rather than loading the full result into memory.
+- **Filters** go into the `bool.filter` context, so nothing is scored. A `term` query on an `ip` field accepts a CIDR network, which covers address, network, and prefix filters.
+- **The list** uses `from`/`size` paging with an exact `track_total_hits` and ends every sort with `event.id`, so pages never overlap. `index.max_result_window` limits paging to the first 10,000 results; a request beyond that answers 422. Sorting by severity inverts the direction, because Snort priority 1 is the most severe.
+- **Pair groups and the reference lists** must be exact, so they use `composite` aggregations that follow `after_key` to the end instead of a `terms` top-N. The pair list is sorted in Python and sliced, then one more composite fetches the rule names for the pairs on the page. More than 50,000 pairs answer 422.
+- **The timeline** is a `date_histogram` in UTC that omits empty buckets. Weeks start on Monday.
+- **The stream** polls `_count` on the index pattern every 5 seconds and sends `event: alerts` when the count has grown. A count also catches alerts that arrive late with an old event time, which a timestamp cursor would miss.
+- **Severity** maps Snort priority 0 and 1 to `high`, 2 to `medium`, 3 to `low`, and 4 and above to `info`.
 
-The connection is not read-only. Alert deletion removes IDS records, and maintenance scripts manage indexes, triggers, and accelerator rows. Use database permissions appropriate to the operations enabled in your deployment.
+### Required OpenSearch permissions
 
-Keep timestamps timezone-aware and in UTC. Response conversion lives in `app/database/models.py`; Pydantic response schemas live in `app/schemas/`.
+The adapter calls only `_search` and `_count`. Index-level `read` on the `OPENSEARCH_INDEX` and `OPENSEARCH_REQUEST_INDEX` patterns is enough. It needs no cluster permissions and never writes.
 
 ## Tests
 
-Run linting and tests from this directory:
+The tests run against a real OpenSearch node, because the strict index mapping and the `ip` and `keyword` field types decide what the queries return.
 
 ```sh
+docker compose -f ../compose.opensearch.yml up -d
 uv run ruff check .
 uv run pytest
+docker compose -f ../compose.opensearch.yml down
 ```
 
-Use disposable databases for the full suite. Initialize an empty Prelude test database with `prelude_structure.sql`. This file contains `DROP TABLE` statements and must never be imported into a database containing data you need.
+`tests/conftest.py` reads `OPENSEARCH_URL`, `OPENSEARCH_INDEX` and `OPENSEARCH_REQUEST_INDEX` from the environment, or from `.env.test` (not committed). Exported variables take precedence. A minimal `.env.test` for the local node:
 
-Export the MySQL settings, `BETTER_AUTH_URL`, `ENVIRONMENT`, `LOG_LEVEL`, and `BACKEND_CORS_ORIGINS` for the test environment. Alternatively, put test-specific settings in `.env.test`. Exported variables take precedence.
-
-The fixtures create the `Prebetter_Pair` table with DDL, then seed IDS data inside a transaction. Each test uses a savepoint, and the outer transaction rolls back at suite completion. The initial DDL is not rolled back.
-
-For checks without a database connection:
-
-```sh
-uv run pytest tests/test_auth_jwks.py tests/test_datetime_utils.py tests/test_filters.py tests/test_db_models_conversion.py tests/test_health.py
+```
+OPENSEARCH_URL=http://127.0.0.1:9200
+OPENSEARCH_INDEX=prebetter-test-events-*
+OPENSEARCH_REQUEST_INDEX=prebetter-test-requests-*
+BETTER_AUTH_URL=http://localhost:3000
+ENVIRONMENT=test
+LOG_LEVEL=WARNING
+BACKEND_CORS_ORIGINS=["http://localhost:3000"]
 ```
 
-The [CI workflow](../.github/workflows/checks.yml) provisions disposable MariaDB databases and runs the complete suite.
+The suite refuses to run unless both patterns start with `prebetter-test-`. It creates the daily indices from `tests/index_template.json` and `tests/requests_template.json`, indexes the events and request companions from `tests/seed.py` with `refresh`, and deletes the indices afterwards.
+
+The [CI workflow](../.github/workflows/checks.yml) runs the same suite against an OpenSearch service container.

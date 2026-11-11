@@ -11,6 +11,6 @@
 <script setup lang="ts">
 useSeoMeta({
   title: 'Prebetter IDS Dashboard',
-  description: 'A modern Intrusion Detection System dashboard for Prelude IDS',
+  description: 'A modern Intrusion Detection System dashboard for Snort alerts',
 })
 </script>

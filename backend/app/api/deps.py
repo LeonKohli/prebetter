@@ -1,12 +1,13 @@
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jwt import PyJWKClient, PyJWTError
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.repositories.alerts import AlertRepository
 
 settings = get_settings()
 
@@ -76,3 +77,14 @@ CurrentSuperuser = Annotated[
     AuthUser,
     Depends(get_current_superuser, scope="function"),
 ]
+
+
+def get_alert_repository(request: Request) -> AlertRepository:
+    return AlertRepository(
+        request.app.state.opensearch,
+        settings.OPENSEARCH_INDEX,
+        settings.OPENSEARCH_REQUEST_INDEX,
+    )
+
+
+Alerts = Annotated[AlertRepository, Depends(get_alert_repository)]

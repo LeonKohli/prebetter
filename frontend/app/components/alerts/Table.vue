@@ -35,9 +35,6 @@ const {
   tableTotals,
 } = useAlertsData(urlState)
 
-// Local UI state
-const rowSelection = ref<Record<string, boolean>>({})
-
 // Skeleton hint for known row counts (e.g., clicking badge "3" → show 3 skeleton rows)
 const { hint: skeletonHint, clearHint } = useSkeletonHint()
 
@@ -56,12 +53,6 @@ const skeletonRowCount = computed(() => {
   return Math.min(urlState.pageSize.value, 20)
 })
 
-// Compute requireIps from URL filter state for SSE filtering
-const requireIps = computed(() => {
-  const val = urlState.filters.value.require_ips
-  return val === undefined || val === 'true' || val === 1 || val === '1'
-})
-
 // Live mode / SSE (extracted to composable)
 const {
   isLive,
@@ -73,21 +64,11 @@ const {
   resetSilentRefresh,
 } = useAlertsLiveMode({
   status,
-  rowSelection,
-  requireIps,
 })
 
 // Dialog state
 const detailsDialogOpen = ref(false)
 const selectedAlertId = ref<string | null>(null)
-
-type DeleteState =
-  | { mode: 'single'; alert: AlertListItem }
-  | { mode: 'bulk'; alerts: AlertListItem[] }
-  | { mode: 'grouped'; sourceIp: string; targetIp: string; totalCount: number }
-
-const deleteDialogOpen = ref(false)
-const deleteState = ref<DeleteState | null>(null)
 
 // Column definitions (TimeAgo component handles reactivity internally)
 const { compactGroupedColumns, ungroupedColumns } = useAlertTableColumns()
@@ -127,7 +108,6 @@ const table = useVueTable({
   onSortingChange: updaterOrValue => valueUpdater(updaterOrValue, sorting),
   onColumnFiltersChange: updaterOrValue => valueUpdater(updaterOrValue, columnFilters),
   onColumnVisibilityChange: updaterOrValue => valueUpdater(updaterOrValue, columnVisibility),
-  onRowSelectionChange: updaterOrValue => valueUpdater(updaterOrValue, rowSelection),
   onPaginationChange: updaterOrValue => valueUpdater(updaterOrValue, pagination),
   manualPagination: true,
   manualSorting: true,
@@ -137,7 +117,6 @@ const table = useVueTable({
     get sorting() { return sorting.value },
     get columnFilters() { return columnFilters.value },
     get columnVisibility() { return columnVisibility.value },
-    get rowSelection() { return rowSelection.value },
     get pagination() { return pagination.value },
   },
   getRowId: (row, index) => {
@@ -153,17 +132,6 @@ const table = useVueTable({
     onViewDetails: (alertId: string) => {
       selectedAlertId.value = alertId
       detailsDialogOpen.value = true
-    },
-    onRequestDeleteSingle: (alert: AlertListItem) => {
-      openDeleteDialog({ mode: 'single', alert })
-    },
-    onRequestDeleteGroup: (group: GroupedAlert) => {
-      openDeleteDialog({
-        mode: 'grouped',
-        sourceIp: group.source_ipv4 || '',
-        targetIp: group.target_ipv4 || '',
-        totalCount: group.total_count,
-      })
     },
   },
 })
@@ -187,7 +155,6 @@ provideAlertTableContext({
 // Event handlers
 function handleToggleView() {
   const newView = urlState.view.value === 'grouped' ? 'ungrouped' : 'grouped'
-  rowSelection.value = {}
 
   const newQuery: Record<string, string | undefined> = { ...route.query as Record<string, string | undefined>, view: newView }
   delete newQuery.sort
@@ -203,26 +170,6 @@ function handleToggleView() {
   return urlState.navigateTo({ query: newQuery })
 }
 
-function openDeleteDialog(state: DeleteState) {
-  deleteState.value = state
-  deleteDialogOpen.value = true
-}
-
-function handleDeleteComplete() {
-  deleteState.value = null
-  rowSelection.value = {}
-  return refresh()
-}
-
-function handleBulkDelete() {
-  if (isGrouped.value) return
-  const alerts = table.getSelectedRowModel().rows
-    .map((row) => row.original)
-    .filter((item): item is AlertListItem => 'id' in item)
-
-  if (alerts.length) openDeleteDialog({ mode: 'bulk', alerts })
-}
-
 </script>
 
 <template>
@@ -233,7 +180,6 @@ function handleBulkDelete() {
       :sse-error="sseError"
       @toggle-view="handleToggleView"
       @toggle-live="toggleLive"
-      @bulk-delete="handleBulkDelete"
       @refresh="refresh"
     />
 
@@ -279,7 +225,6 @@ function handleBulkDelete() {
               <TableRow
                 v-for="(row, rowIdx) in table.getRowModel().rows"
                 :key="row.id"
-                :data-state="row.getIsSelected() && 'selected'"
                 :class="['h-11 border-b border-border/40 hover:bg-muted/50 transition-colors', rowIdx % 2 === 1 && 'bg-muted/30']"
               >
                 <TableCell
@@ -316,8 +261,6 @@ function handleBulkDelete() {
     </div>
 
     <AlertsDetailsDialog v-model:open="detailsDialogOpen" :alert-id="selectedAlertId" />
-    <AlertsDeleteDialog v-model:open="deleteDialogOpen" :state="deleteState" @deleted="handleDeleteComplete" />
-    <AlertsSelectionBar v-if="!isGrouped" @bulk-delete="handleBulkDelete" />
   </div>
 </template>
 

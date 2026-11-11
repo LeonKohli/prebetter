@@ -1,0 +1,272 @@
+{
+  "settings": {
+    "index": {
+      "number_of_shards": "1",
+      "number_of_replicas": "0"
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "observer": {
+        "properties": {
+          "ingress": {
+            "properties": {
+              "interface": {
+                "properties": {
+                  "name": {
+                    "type": "keyword"
+                  }
+                }
+              }
+            }
+          },
+          "product": {
+            "type": "keyword"
+          },
+          "name": {
+            "type": "keyword"
+          },
+          "type": {
+            "type": "keyword"
+          }
+        }
+      },
+      "server": {
+        "properties": {
+          "bytes": {
+            "type": "long"
+          },
+          "packets": {
+            "type": "long"
+          }
+        }
+      },
+      "@timestamp": {
+        "type": "date"
+      },
+      "destination": {
+        "properties": {
+          "port": {
+            "type": "integer"
+          },
+          "ip": {
+            "type": "ip"
+          },
+          "mac": {
+            "type": "keyword"
+          }
+        }
+      },
+      "client": {
+        "properties": {
+          "bytes": {
+            "type": "long"
+          },
+          "packets": {
+            "type": "long"
+          }
+        }
+      },
+      "rule": {
+        "properties": {
+          "name": {
+            "type": "keyword"
+          },
+          "id": {
+            "type": "keyword"
+          },
+          "category": {
+            "type": "keyword"
+          },
+          "version": {
+            "type": "keyword"
+          }
+        }
+      },
+      "source": {
+        "properties": {
+          "port": {
+            "type": "integer"
+          },
+          "ip": {
+            "type": "ip"
+          },
+          "mac": {
+            "type": "keyword"
+          }
+        }
+      },
+      "event": {
+        "properties": {
+          "severity": {
+            "type": "integer"
+          },
+          "original": {
+            "index": false,
+            "type": "keyword",
+            "doc_values": false
+          },
+          "kind": {
+            "type": "keyword"
+          },
+          "module": {
+            "type": "keyword"
+          },
+          "start": {
+            "type": "date"
+          },
+          "action": {
+            "type": "keyword"
+          },
+          "id": {
+            "type": "keyword"
+          }
+        }
+      },
+      "snort": {
+        "properties": {
+          "tcp": {
+            "properties": {
+              "header_length": {
+                "type": "long"
+              },
+              "flags": {
+                "type": "keyword"
+              },
+              "ack": {
+                "type": "long"
+              },
+              "window": {
+                "type": "long"
+              },
+              "seq": {
+                "type": "long"
+              }
+            }
+          },
+          "udp": {
+            "properties": {
+              "length": {
+                "type": "long"
+              }
+            }
+          },
+          "sgt": {
+            "type": "long"
+          },
+          "dst_ap": {
+            "type": "keyword"
+          },
+          "ip": {
+            "properties": {
+              "tos": {
+                "type": "long"
+              },
+              "id": {
+                "type": "long"
+              },
+              "ttl": {
+                "type": "long"
+              },
+              "payload_length": {
+                "type": "long"
+              }
+            }
+          },
+          "rule": {
+            "type": "keyword"
+          },
+          "thread": {
+            "type": "keyword"
+          },
+          "dir": {
+            "type": "keyword"
+          },
+          "icmp": {
+            "properties": {
+              "code": {
+                "type": "long"
+              },
+              "id": {
+                "type": "long"
+              },
+              "type": {
+                "type": "long"
+              },
+              "seq": {
+                "type": "long"
+              }
+            }
+          },
+          "geneve_vni": {
+            "type": "long"
+          },
+          "target": {
+            "type": "ip"
+          },
+          "pkt_len": {
+            "type": "long"
+          },
+          "iface": {
+            "type": "keyword"
+          },
+          "pkt_gen": {
+            "type": "keyword"
+          },
+          "src_ap": {
+            "type": "keyword"
+          },
+          "eth": {
+            "properties": {
+              "length": {
+                "type": "long"
+              },
+              "type": {
+                "type": "keyword"
+              }
+            }
+          },
+          "mpls": {
+            "type": "long"
+          },
+          "timestamp": {
+            "type": "keyword"
+          },
+          "pkt_num": {
+            "type": "long"
+          },
+          "b64_data": {
+            "type": "binary"
+          }
+        }
+      },
+      "network": {
+        "properties": {
+          "protocol": {
+            "type": "keyword"
+          },
+          "application": {
+            "type": "keyword"
+          },
+          "vlan": {
+            "properties": {
+              "id": {
+                "type": "keyword"
+              }
+            }
+          },
+          "bytes": {
+            "type": "long"
+          },
+          "transport": {
+            "type": "keyword"
+          },
+          "packets": {
+            "type": "long"
+          }
+        }
+      }
+    }
+  }
+}

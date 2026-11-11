@@ -1,0 +1,56 @@
+{
+  "settings": {
+    "index": {
+      "number_of_shards": "1",
+      "number_of_replicas": "0"
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "@timestamp": {
+        "type": "date"
+      },
+      "observer": {
+        "properties": {
+          "name": {
+            "type": "keyword"
+          },
+          "ingress": {
+            "properties": {
+              "interface": {
+                "properties": {
+                  "name": {
+                    "type": "keyword"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "snort": {
+        "properties": {
+          "thread": {
+            "type": "keyword"
+          },
+          "timestamp": {
+            "type": "keyword"
+          },
+          "rule": {
+            "type": "keyword"
+          },
+          "src_ap": {
+            "type": "keyword"
+          },
+          "dst_ap": {
+            "type": "keyword"
+          },
+          "http_request": {
+            "type": "binary"
+          }
+        }
+      }
+    }
+  }
+}

@@ -123,7 +123,7 @@ describe('Better Auth and API proxies', async () => {
 
   it('returns no session and rejects protected requests without a cookie', async () => {
     expect(await $fetch('/api/auth/get-session')).toBeNull()
-    for (const path of ['/api/alerts/', '/api/alerts-stream', '/api/heartbeats-stream']) {
+    for (const path of ['/api/alerts/', '/api/alerts-stream']) {
       expect((await fetch(url(path))).status).toBe(401)
     }
   })
@@ -141,9 +141,9 @@ describe('Better Auth and API proxies', async () => {
     expect(sameSession.map(result => result.userId)).toEqual([users[0]!.id, users[0]!.id])
   })
 
-  it.each(['/api/alerts-stream', '/api/heartbeats-stream'])('authenticates %s', async (path) => {
+  it('authenticates /api/alerts-stream', async () => {
     const cookie = await loginCookie(users[0]!.username)
-    const response = await fetch(url(path), { headers: { cookie } })
+    const response = await fetch(url('/api/alerts-stream'), { headers: { cookie } })
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toContain('text/event-stream')
     expect(await response.text()).toBe(`data: ${JSON.stringify({ userId: users[0]!.id })}\n\n`)
@@ -182,7 +182,7 @@ describe('Better Auth and API proxies', async () => {
       method: 'POST', headers: { cookie, Origin: origin, 'Content-Type': 'application/json' }, body: '{}',
     })
     expect(response.status).toBe(200)
-    for (const path of ['/api/alerts/', '/api/alerts-stream', '/api/heartbeats-stream']) {
+    for (const path of ['/api/alerts/', '/api/alerts-stream']) {
       expect((await fetch(url(path), { headers: { cookie } })).status).toBe(401)
     }
   })

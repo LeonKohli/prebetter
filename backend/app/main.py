@@ -1,18 +1,17 @@
-from fastapi import FastAPI, Request
-from .core.config import get_settings
-from .core.logging import setup_logging
-from .api.base import api_router
-from .database.init_db import (
-    ensure_database,
-    check_database_connections,
-    check_pair_accelerator,
-)
-from .database.config import prelude_engine
-from .repositories.alerts import reflect_pair_table
-from .services.health import update_health_state, get_health_status, HealthResponse
-from .middleware.setup import setup_middleware
 import logging
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
+
+from .api.base import api_router
+from .api.deps import Alerts
+from .core.config import get_settings
+from .core.logging import setup_logging
+from .middleware.setup import setup_middleware
+from .opensearch.client import create_client
+from .services.health import HealthResponse, get_health_status
 
 settings = get_settings()
 setup_logging(log_level=settings.LOG_LEVEL, environment=settings.ENVIRONMENT)
@@ -21,83 +20,28 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager for FastAPI application."""
+    app.state.opensearch = create_client(settings)
     try:
-        logger.info("Initializing prebetter database...")
-        await ensure_database()
-        update_health_state(prebetter_available=True)
-        logger.info("Prebetter database initialization complete.")
-
-        logger.info("Checking Prelude database connection...")
-        prelude_ok = await check_database_connections(
-            check_prelude=True, check_prebetter=False
-        )
-        update_health_state(prelude_available=prelude_ok)
-
-        if prelude_ok:
-            logger.info("Prelude database connection successful.")
-        else:
-            logger.warning(
-                "Prelude database connection failed. Some functionality will be limited."
-            )
-
-        # Enforce presence of the pair-key accelerator; do not start without it
-        try:
-            check_pair_accelerator(strict=True)
-        except Exception as e:
-            logger.error(
-                "Prebetter_Pair accelerator is required but not available: %s", str(e)
-            )
-            # Fail startup as requested: avoid unpredictable fallbacks
-            raise
-
-        # Reflect Prebetter_Pair table ONCE at startup, store in app.state
-        # This avoids global mutable state and makes the table available via DI
-        logger.info("Reflecting Prebetter_Pair table...")
-        app.state.pair_table = reflect_pair_table(prelude_engine)
-        if app.state.pair_table is not None:
-            logger.info("Prebetter_Pair table reflected successfully.")
-        else:
-            logger.warning("Prebetter_Pair table not found - grouped alerts disabled.")
-
-        update_health_state(ready=True)
-        logger.info("Application startup complete.")
-
         yield
-    except Exception as e:
-        logger.error(f"Error during application startup: {e}")
-        update_health_state(ready=False)
-        raise
     finally:
-        logger.info("Application shutdown.")
+        await app.state.opensearch.close()
 
 
 description = """
-API for accessing and managing Prelude IDS data with comprehensive security alert management. 🚀
+Read-only API for the IDS alerts stored in OpenSearch.
 
-## Key Features
+* **Alerts**: filtered and sorted list, groups per address pair, detail, change stream
+* **Statistics**: alert timeline
+* **Reference**: severities, sensors and classifications for the filters
+* **Health**: monitoring endpoint
 
-You can:
-* **View and analyze alerts** with rich metadata
-* **Authenticate users** with JWT and role-based access
-* **Monitor heartbeats** from agents and analyzers
-* **Generate statistics** and event timelines
-* **Export data** in CSV format
-* **Check health status** via monitoring endpoint
-
-## Databases
-
-We connect to:
-* **Prelude DB** - For IDS data
-* **Prebetter DB** - For auth and users
-
-See the docs below for detailed API reference.
+Requests are authenticated with a Better Auth JWT.
 """
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description=description,
-    summary="Comprehensive IDS data management API",
+    summary="IDS alert API on OpenSearch",
     version=settings.VERSION,
     lifespan=lifespan,
     license_info={
@@ -113,40 +57,27 @@ setup_middleware(app)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
+@app.exception_handler(OpenSearchConnectionError)
+async def opensearch_unreachable(request: Request, exc: OpenSearchConnectionError):
+    logger.error("OpenSearch unreachable: %s", exc)
+    return JSONResponse(
+        status_code=503, content={"detail": "OpenSearch is unavailable"}
+    )
+
+
 @app.get("/", tags=["status"])
-def root(request: Request) -> dict[str, str]:
-    """
-    Root endpoint providing API status and documentation links.
-
-    Returns:
-        dict: API status information and documentation URLs
-    """
-    docs_url = request.url_for("swagger_ui_html")
-    redoc_url = request.url_for("redoc_html")
-
+async def root(request: Request) -> dict[str, str]:
+    """API status and documentation links."""
     return {
         "status": "online",
         "message": f"Welcome to {settings.PROJECT_NAME}",
         "version": settings.VERSION,
-        "docs_url": str(docs_url),
-        "redoc_url": str(redoc_url),
+        "docs_url": str(request.url_for("swagger_ui_html")),
+        "redoc_url": str(request.url_for("redoc_html")),
     }
 
 
-@app.get("/health", tags=["health"], response_model=HealthResponse)
-def health_check() -> HealthResponse:
-    """
-    Health check endpoint for infrastructure monitoring.
-
-    This endpoint is designed for:
-    - Load balancers checking service availability
-    - Monitoring systems tracking service health
-    - Kubernetes liveness/readiness probes
-    - Docker health checks
-
-    It returns minimal but essential information about the service status.
-
-    Returns:
-        HealthResponse: Basic health status with database availability
-    """
-    return get_health_status()
+@app.get("/health", tags=["health"])
+async def health_check(repo: Alerts) -> HealthResponse:
+    """Liveness and OpenSearch reachability for load balancers and monitoring."""
+    return await get_health_status(repo)

@@ -3,7 +3,6 @@ from fastapi.responses import JSONResponse
 import logging
 import time
 import uuid
-import sqlalchemy.exc
 
 logger = logging.getLogger(__name__)
 
@@ -26,31 +25,6 @@ async def request_middleware(request: Request, call_next):
 
         return response
 
-    except sqlalchemy.exc.OperationalError as e:
-        process_time = time.time() - start_time
-        logger_adapter.error(
-            f"Database connection error: {str(e)} - "
-            f"Request: {request.method} {request.url.path} - Duration: {process_time:.3f}s",
-            exc_info=True,
-        )
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "detail": "Database connection error. Please try again later.",
-                "request_id": request_id,
-            },
-        )
-    except sqlalchemy.exc.SQLAlchemyError as e:
-        process_time = time.time() - start_time
-        logger_adapter.error(
-            f"Database error: {str(e)} - "
-            f"Request: {request.method} {request.url.path} - Duration: {process_time:.3f}s",
-            exc_info=True,
-        )
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "A database error occurred.", "request_id": request_id},
-        )
     except Exception as e:
         process_time = time.time() - start_time
         logger_adapter.error(
