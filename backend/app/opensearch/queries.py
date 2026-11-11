@@ -143,9 +143,7 @@ def distinct_body(field: str) -> dict[str, Any]:
     return _composite(None, [field], with_latest=False)
 
 
-def timeline_body(
-    filters: AlertFilterParams, time_frame: TimeFrame, first_seen: bool = False
-) -> dict[str, Any]:
+def timeline_body(filters: AlertFilterParams, time_frame: TimeFrame) -> dict[str, Any]:
     histogram: dict[str, Any] = {
         "field": TIMESTAMP,
         "calendar_interval": _INTERVALS[time_frame],
@@ -161,14 +159,11 @@ def timeline_body(
             "min": filters.start_date.isoformat(),
             "max": filters.end_date.isoformat(),
         }
-    aggs: dict[str, Any] = {"rows": {"date_histogram": histogram}}
-    if first_seen:
-        # A global aggregation ignores the query: the oldest event of the whole index.
-        aggs["first_seen"] = {
-            "global": {},
-            "aggs": {"oldest": {"min": {"field": TIMESTAMP}}},
-        }
-    return {"size": 0, "query": _query(filter_clauses(filters)), "aggs": aggs}
+    return {
+        "size": 0,
+        "query": _query(filter_clauses(filters)),
+        "aggs": {"rows": {"date_histogram": histogram}},
+    }
 
 
 def request_body(companion_id: str) -> dict[str, Any]:

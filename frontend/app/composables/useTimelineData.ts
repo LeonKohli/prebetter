@@ -71,23 +71,12 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     dedupe: 'defer',
   })
 
-  const baseline = computed(() =>
-    new Map((data.value?.baseline ?? []).map(point => [Date.parse(point.timestamp), point])),
-  )
-
   // Bars sit at their bucket start, which is also where the axis labels are.
   const bars = computed(() =>
     (data.value?.data ?? [])
       .map((point) => {
         const bucketStart = Date.parse(point.timestamp)
-        const typical = baseline.value.get(bucketStart)
-        return {
-          x: bucketStart,
-          y: point.total,
-          bucketStart,
-          typical,
-          aboveTypical: typical !== undefined && point.total > typical.high,
-        }
+        return { x: bucketStart, y: point.total, bucketStart }
       })
       .filter(point => Number.isFinite(point.x)),
   )

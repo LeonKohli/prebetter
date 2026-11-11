@@ -1,17 +1,14 @@
 import ipaddress
-from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
 from opensearchpy import AsyncOpenSearch
 
-from app import baseline
 from app.opensearch import documents, queries
 from app.opensearch.documents import Pair
 from app.opensearch.request_line import decode_request_line, request_id
 from app.schemas.alerts import (
     AlertDetail,
-    BaselinePoint,
     AlertListItem,
     GroupedAlert,
     GroupedAlertDetail,
@@ -149,39 +146,9 @@ class AlertRepository:
 
     async def timeline(
         self, filters: AlertFilterParams, time_frame: TimeFrame
-    ) -> tuple[list[TimelineDataPoint], list[BaselinePoint]]:
-        """Counts per bucket of the window, plus the typical range per hour.
-
-        Hourly buckets are read together with the weeks before the window in one
-        search; the earlier weeks only feed the baseline.
-        """
-        if time_frame is not TimeFrame.HOUR or filters.start_date is None:
-            buckets = await self._buckets(queries.timeline_body(filters, time_frame))
-            return [documents.to_timeline_point(b) for b in buckets], []
-
-        wide = filters.model_copy(
-            update={"start_date": filters.start_date - baseline.WEEKS * baseline.WEEK}
-        )
-        response = await self._search(
-            queries.timeline_body(wide, time_frame, first_seen=True)
-        )
-        aggregations = response.get("aggregations", {})
-        points = [
-            documents.to_timeline_point(b)
-            for b in aggregations.get("rows", {}).get("buckets", [])
-        ]
-        window_start = filters.start_date.replace(minute=0, second=0, microsecond=0)
-        in_window = [p for p in points if p.timestamp >= window_start]
-        oldest = aggregations.get("first_seen", {}).get("oldest", {})
-        first_seen = (
-            datetime.fromisoformat(oldest["value_as_string"])
-            if oldest.get("value_as_string")
-            else None
-        )
-        counts = {p.timestamp: p.total for p in points}
-        return in_window, baseline.seasonal_baseline(
-            counts, [p.timestamp for p in in_window], first_seen
-        )
+    ) -> list[TimelineDataPoint]:
+        buckets = await self._buckets(queries.timeline_body(filters, time_frame))
+        return [documents.to_timeline_point(b) for b in buckets]
 
     async def sensors(self) -> list[str]:
         buckets = await self._composite(queries.distinct_body(queries.SENSOR))

@@ -119,19 +119,8 @@ class TimelineDataPoint(BaseModel):
     total: int
 
 
-class BaselinePoint(BaseModel):
-    """Typical range of one hour, from the same hour of earlier weeks."""
-
-    timestamp: datetime
-    low: int
-    high: int
-    typical: float
-
-
 class TimelineResponse(BaseModel):
     time_frame: str
     start_date: datetime
     end_date: datetime
     data: list[TimelineDataPoint]
-    # Hourly buckets only; hours without enough history are left out.
-    baseline: list[BaselinePoint] = []

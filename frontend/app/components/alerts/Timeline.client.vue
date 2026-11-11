@@ -5,7 +5,6 @@
  * Features:
  * - Click on bar to filter table to that time period
  * - Drag to zoom/select a time range
- * - Gray band: typical range of the same hour in the previous weeks; bars above it are highlighted
  * - Custom reset button
  *
  * Note: Most styling comes from window.Apex in apexcharts.client.ts plugin.
@@ -128,9 +127,6 @@ function formatTooltipBucketRange(bucketStart: number): string {
 
 // Chart color from design system (--chart-1 changes between light/dark)
 const chartColor = ref(getChartColor(1))
-// Apex does not resolve CSS variables for series fills, so the neutrals are fixed.
-const bandColor = '#94a3b8'
-const aboveTypicalColor = computed(() => colorMode.value === 'dark' ? '#f87171' : '#991b1b')
 
 // Update chart color when theme changes
 watch(() => colorMode.value, () => {
@@ -139,29 +135,10 @@ watch(() => colorMode.value, () => {
   })
 })
 
-// The band goes first so the bars are drawn over it.
-const hasBand = computed(() => bars.value.some(point => point.typical))
-const barSeriesIndex = computed(() => hasBand.value ? 1 : 0)
-const series = computed(() => [
-  ...(hasBand.value
-    ? [{
-        name: 'Typical',
-        type: 'rangeArea',
-        data: bars.value
-          .filter(point => point.typical)
-          .map(point => ({ x: point.x, y: [point.typical!.low, point.typical!.high] })),
-      }]
-    : []),
-  {
-    name: 'Alerts',
-    type: 'bar',
-    data: bars.value.map(point => ({
-      x: point.x,
-      y: point.y,
-      ...(point.aboveTypical && { fillColor: aboveTypicalColor.value }),
-    })),
-  },
-])
+const series = computed(() => [{
+  name: 'Alerts',
+  data: bars.value.map(({ x, y }) => ({ x, y })),
+}])
 
 // Only override what's unique to this chart - rest comes from window.Apex
 const chartOptions = computed(() => ({
@@ -220,7 +197,6 @@ const chartOptions = computed(() => ({
     theme: colorMode.value,
     shared: true,
     intersect: false,
-    enabledOnSeries: [barSeriesIndex.value],
     // apexcharts 5.13+ defaults tooltip.arrow to true; keep the prior flush look
     arrow: false,
     x: {
@@ -229,17 +205,9 @@ const chartOptions = computed(() => ({
         return formatTooltipBucketRange(point?.bucketStart ?? Number(value))
       },
     },
-    y: {
-      formatter: (val: number, opts?: { dataPointIndex: number }) => {
-        const typical = opts ? bars.value[opts.dataPointIndex]?.typical : undefined
-        const count = `${val} alert${val !== 1 ? 's' : ''}`
-        return typical ? `${count} (typical ${typical.low}–${typical.high})` : count
-      },
-    },
+    y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
   },
-  colors: hasBand.value ? [bandColor, chartColor.value] : [chartColor.value],
-  fill: { opacity: hasBand.value ? [0.25, 0.85] : 0.85 },
-  stroke: { width: hasBand.value ? [0, 0] : 0 },
+  colors: [chartColor.value],
 }) as ApexOptions)
 
 /** Update URL filters with new date range, clearing any preset */
@@ -260,8 +228,8 @@ function handleZoomed(_: unknown, { xaxis }: { xaxis: { min?: number; max?: numb
   }
 }
 
-function handleBarClick(_: unknown, __: unknown, { seriesIndex, dataPointIndex }: { seriesIndex: number, dataPointIndex: number }) {
-  const point = seriesIndex === barSeriesIndex.value ? bars.value[dataPointIndex] : undefined
+function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPointIndex: number }) {
+  const point = bars.value[dataPointIndex]
   if (!point) return
 
   const timestamp = new Date(point.bucketStart)
@@ -343,7 +311,7 @@ const formattedTotal = computed(() => {
       <apexchart
         v-if="bars.length"
         ref="chart"
-        type="line"
+        type="bar"
         :height="chartHeight"
         :options="chartOptions"
         :series="series"
@@ -357,12 +325,6 @@ const formattedTotal = computed(() => {
 
       <p v-if="!isMobile" class="text-xs text-muted-foreground mt-2 text-center">
         {{ hasCustomDateRange ? 'Custom range selected' : 'Click bar to filter, drag to select range' }}
-      </p>
-      <p v-if="hasBand" class="text-xs text-muted-foreground mt-1 text-center">
-        <span class="inline-block size-2 rounded-sm align-baseline bg-slate-400/40" />
-        Typical range for this hour (previous 4 weeks) ·
-        <span class="inline-block size-2 rounded-sm align-baseline bg-red-800 dark:bg-red-400" />
-        above typical
       </p>
     </CardContent>
   </Card>
