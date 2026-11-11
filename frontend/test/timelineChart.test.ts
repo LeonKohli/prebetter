@@ -3,7 +3,6 @@ import {
   getTimelineBucketDisplayRange,
   getTimelineBucketVisibleRange,
   getTimelineXAxisRange,
-  renderTimelineTooltip,
 } from '../app/utils/timelineChart'
 
 const HOUR = 60 * 60 * 1000
@@ -61,18 +60,3 @@ describe('getTimelineBucketDisplayRange', () => {
   })
 })
 
-
-describe('renderTimelineTooltip', () => {
-  it('shows the bucket title and the count with Apex tooltip classes', () => {
-    const html = renderTimelineTooltip('10 Nov, 21:00–21:59', 11, '#d33')
-
-    expect(html).toContain('apexcharts-tooltip-title')
-    expect(html).toContain('10 Nov, 21:00–21:59')
-    expect(html).toContain('11 alerts')
-    expect(html).toContain('#d33')
-  })
-
-  it('uses the singular for one alert', () => {
-    expect(renderTimelineTooltip('t', 1, '#d33')).toContain('>1 alert<')
-  })
-})

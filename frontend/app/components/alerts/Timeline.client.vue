@@ -11,9 +11,9 @@
  * This component only overrides what's unique to this specific chart.
  */
 import type { ApexOptions } from 'apexcharts'
-import { useDebounceFn, useWindowSize } from '@vueuse/core'
+import { useDebounceFn } from '@vueuse/core'
 import { getActivePresetId } from '@/utils/datePresets'
-import { getTimelineBucketDisplayRange, getTimelineXAxisRange, renderTimelineTooltip } from '@/utils/timelineChart'
+import { getTimelineBucketDisplayRange, getTimelineXAxisRange } from '@/utils/timelineChart'
 
 interface ChartInstance {
   updateOptions(options: ApexOptions, redrawPaths?: boolean, animate?: boolean): Promise<void>
@@ -30,7 +30,6 @@ const props = defineProps<{
 const urlState = props.urlState
 
 const colorMode = useColorMode()
-const { width } = useWindowSize()
 
 const {
   pending,
@@ -65,8 +64,6 @@ onBeforeUnmount(() => {
   chartRef.value?.destroy()
 })
 
-const isMobile = computed(() => width.value < 768)
-const chartHeight = computed(() => isMobile.value ? 140 : 180)
 
 const xAxisLabelFormat = computed<string>(() => {
   switch (timeFrame.value) {
@@ -154,7 +151,7 @@ const chartOptions = computed(() => ({
       },
     },
     zoom: {
-      enabled: !isMobile.value,
+      enabled: true,
       type: 'x',
       autoScaleYaxis: true,
       allowMouseWheelZoom: false,
@@ -177,8 +174,9 @@ const chartOptions = computed(() => ({
     labels: {
       datetimeUTC: false,
       format: xAxisLabelFormat.value,
-      rotate: -45,
-      rotateAlways: false,
+      // Short HH:mm labels never need the default -45 degrees. Apex reserves the rotated height in
+      // its first layout pass and draws the hover column with that smaller grid.
+      rotate: 0,
       hideOverlappingLabels: true,
       style: {
         fontSize: '11px',
@@ -200,14 +198,17 @@ const chartOptions = computed(() => ({
     intersect: false,
     // apexcharts 5.13+ defaults tooltip.arrow to true; keep the prior flush look
     arrow: false,
-    // No tooltip.x: any setting there enables the x-axis tooltip, which shortens the column highlight.
-    x: { show: false },
-    custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
-      const point = bars.value[dataPointIndex]
-      return point ? renderTimelineTooltip(formatTooltipBucketRange(point.bucketStart), point.y, chartColor.value) : ''
+    x: {
+      formatter: (value, opts) => {
+        const point = opts ? bars.value[opts.dataPointIndex] : undefined
+        return formatTooltipBucketRange(point?.bucketStart ?? Number(value))
+      },
     },
+    y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
   },
   colors: [chartColor.value],
+  // Phones get a lower chart and no drag-zoom (documented `responsive` breakpoints).
+  responsive: [{ breakpoint: 768, options: { chart: { height: 140, zoom: { enabled: false } } } }],
 }) as ApexOptions)
 
 /** Update URL filters with new date range, clearing any preset */
@@ -312,18 +313,18 @@ const formattedTotal = computed(() => {
         v-if="bars.length"
         ref="chart"
         type="bar"
-        :height="chartHeight"
+        :height="180"
         :options="chartOptions"
         :series="series"
       />
-      <div v-else-if="pending" class="flex items-center justify-center" :style="{ height: `${chartHeight}px` }">
+      <div v-else-if="pending" class="flex h-[180px] items-center justify-center max-md:h-[140px]">
         <Icon name="lucide:loader-2" class="size-5 animate-spin text-muted-foreground" />
       </div>
-      <div v-else class="flex items-center justify-center text-sm text-muted-foreground" :style="{ height: `${chartHeight}px` }">
+      <div v-else class="flex h-[180px] items-center justify-center text-sm text-muted-foreground max-md:h-[140px]">
         No alert data for selected period
       </div>
 
-      <p v-if="!isMobile" class="text-xs text-muted-foreground mt-2 text-center">
+      <p class="mt-2 hidden text-center text-xs text-muted-foreground md:block">
         {{ hasCustomDateRange ? 'Custom range selected' : 'Click bar to filter, drag to select range' }}
       </p>
     </CardContent>
