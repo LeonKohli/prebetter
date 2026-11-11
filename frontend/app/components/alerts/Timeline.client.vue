@@ -171,8 +171,9 @@ const chartOptions = computed(() => ({
     type: 'datetime',
     min: xAxisRange.value.min,
     max: xAxisRange.value.max,
-    // One label per bar while they fit; Apex picks the ticks for longer ranges.
-    tickAmount: bars.value.length <= 30 ? 'dataPoints' : undefined,
+    // One label per bar while they fit (n bars span n - 1 tick intervals); Apex picks the ticks
+    // for longer ranges. 'dataPoints' is ignored on a datetime axis in Apex 8.
+    tickAmount: bars.value.length >= 2 && bars.value.length <= 30 ? bars.value.length - 1 : undefined,
     labels: {
       datetimeUTC: false,
       format: xAxisLabelFormat.value,
