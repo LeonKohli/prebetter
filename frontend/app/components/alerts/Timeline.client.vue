@@ -13,7 +13,7 @@
 import type { ApexOptions } from 'apexcharts'
 import { useDebounceFn, useWindowSize } from '@vueuse/core'
 import { getActivePresetId } from '@/utils/datePresets'
-import { getTimelineBucketDisplayRange, getTimelineXAxisRange } from '@/utils/timelineChart'
+import { getTimelineBucketDisplayRange, getTimelineXAxisRange, renderTimelineTooltip } from '@/utils/timelineChart'
 
 interface ChartInstance {
   updateOptions(options: ApexOptions, redrawPaths?: boolean, animate?: boolean): Promise<void>
@@ -200,13 +200,12 @@ const chartOptions = computed(() => ({
     intersect: false,
     // apexcharts 5.13+ defaults tooltip.arrow to true; keep the prior flush look
     arrow: false,
-    x: {
-      formatter: (value, opts) => {
-        const point = opts ? bars.value[opts.dataPointIndex] : undefined
-        return formatTooltipBucketRange(point?.bucketStart ?? Number(value))
-      },
+    // No tooltip.x: any setting there enables the x-axis tooltip, which shortens the column highlight.
+    x: { show: false },
+    custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+      const point = bars.value[dataPointIndex]
+      return point ? renderTimelineTooltip(formatTooltipBucketRange(point.bucketStart), point.y, chartColor.value) : ''
     },
-    y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
   },
   colors: [chartColor.value],
 }) as ApexOptions)

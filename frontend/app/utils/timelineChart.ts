@@ -57,3 +57,24 @@ export function getTimelineXAxisRange(
     max: Math.max(...bucketStarts) + half,
   }
 }
+
+/**
+ * Tooltip body for one bar, in the markup and classes Apex uses itself so its tooltip theme applies.
+ *
+ * It replaces `tooltip.x.formatter`: with Apex 8 any `tooltip.x` setting enables the x-axis tooltip,
+ * which shortens the column highlight (crosshair) to about half the plot height.
+ * `title` is formatted dates only; `color` comes from the design tokens.
+ */
+export function renderTimelineTooltip(title: string, count: number, color: string): string {
+  const label = `${count} alert${count !== 1 ? 's' : ''}`
+  return (
+    `<div class="apexcharts-tooltip-title" style="font-family: inherit; font-size: 12px;">${title}</div>` +
+    '<div class="apexcharts-tooltip-series-group apexcharts-active" style="order: 1; display: flex;">' +
+    `<span class="apexcharts-tooltip-marker" shape="circle" style="background-color: ${color}; color: ${color};"></span>` +
+    '<div class="apexcharts-tooltip-text" style="font-family: inherit; font-size: 12px;">' +
+    '<div class="apexcharts-tooltip-y-group">' +
+    '<span class="apexcharts-tooltip-text-y-label">Alerts: </span>' +
+    `<span class="apexcharts-tooltip-text-y-value">${label}</span>` +
+    '</div></div></div>'
+  )
+}
