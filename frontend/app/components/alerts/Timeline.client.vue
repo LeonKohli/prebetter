@@ -18,6 +18,10 @@ import {
   getTimelineBucketDisplayRange,
   getTimelineColumnWidth,
   getTimelineXAxisRange,
+  getTimelineReferenceValue,
+  formatTimelineReference,
+  TIMELINE_REFERENCES,
+  type TimelineReference,
 } from '@/utils/timelineChart'
 
 interface ChartInstance {
@@ -72,6 +76,12 @@ const dynamicColumnWidth = computed(() => {
   )
 })
 
+// Reference line over the buckets of the window; the choice is remembered per browser.
+const reference = useLocalStorage<TimelineReference>('alerts-timeline-reference', 'average')
+const referenceValue = computed(() =>
+  getTimelineReferenceValue(chartSeries.value[0]?.data.map(point => point.y) ?? [], reference.value),
+)
+
 const chartRef = useTemplateRef<ChartInstance>('chart')
 
 // Prevent ApexCharts memory leaks - destroy chart instance on unmount
@@ -81,24 +91,6 @@ onBeforeUnmount(() => {
 
 const isMobile = computed(() => width.value < 768)
 const chartHeight = computed(() => isMobile.value ? 140 : 180)
-
-/**
- * Calculate optimal tick count for x-axis based on data density.
- */
-const dynamicTickAmount = computed(() => {
-  const pointCount = chartSeries.value[0]?.data.length ?? 0
-  const chartWidth = isMobile.value ? 300 : 600 // Approximate
-
-  if (timeFrame.value === 'minute') return isMobile.value ? 4 : 6
-
-  // For very few points, limit ticks to avoid cluttered labels
-  if (pointCount <= 2) return 3
-  if (pointCount <= 5) return Math.min(pointCount + 1, 5)
-  if (pointCount <= 10) return 6
-
-  // For more points, calculate based on available width (~80px per label)
-  return Math.min(Math.floor(chartWidth / 80), 12)
-})
 
 const xAxisLabelFormat = computed<string>(() => {
   switch (timeFrame.value) {
@@ -159,6 +151,8 @@ function formatTooltipBucketRange(bucketStart: number): string {
 
 // Chart color from design system (--chart-1 changes between light/dark)
 const chartColor = ref(getChartColor(1))
+// Apex does not resolve CSS variables for annotation fills, so use fixed neutrals.
+const referenceColor = computed(() => colorMode.value === 'dark' ? '#e5e5e5' : '#404040')
 
 // Update chart color when theme changes
 watch(() => colorMode.value, () => {
@@ -198,7 +192,6 @@ const chartOptions = computed(() => ({
     type: 'datetime',
     min: dynamicXAxisRange.value.min,
     max: dynamicXAxisRange.value.max,
-    tickAmount: dynamicTickAmount.value,
     labels: {
       datetimeUTC: false,
       format: xAxisLabelFormat.value,
@@ -236,6 +229,26 @@ const chartOptions = computed(() => ({
     y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
   },
   colors: [chartColor.value],
+  annotations: {
+    yaxis: referenceValue.value === null ? [] : [{
+      y: referenceValue.value,
+      borderColor: referenceColor.value,
+      strokeDashArray: 4,
+      label: {
+        text: formatTimelineReference(referenceValue.value, reference.value),
+        position: 'right',
+        textAnchor: 'end',
+        offsetY: -4,
+        borderWidth: 0,
+        style: {
+          color: colorMode.value === 'dark' ? '#171717' : '#fafafa',
+          background: referenceColor.value,
+          fontSize: '10px',
+          padding: { left: 5, right: 5, top: 1, bottom: 1 },
+        },
+      },
+    }],
+  },
 }) as ApexOptions)
 
 /** Update URL filters with new date range, clearing any preset */
@@ -330,6 +343,16 @@ const formattedTotal = computed(() => {
             <Icon name="lucide:rotate-ccw" class="size-3" />
             Reset
           </button>
+          <Select v-model="reference">
+            <SelectTrigger class="h-7 w-[140px] bg-background text-xs" aria-label="Reference line">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="option in TIMELINE_REFERENCES" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <span v-if="!pending && totalAlerts > 0" class="text-xs text-muted-foreground tabular-nums">
             {{ formattedTotal }} alerts
           </span>

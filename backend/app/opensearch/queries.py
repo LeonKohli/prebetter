@@ -144,19 +144,25 @@ def distinct_body(field: str) -> dict[str, Any]:
 
 
 def timeline_body(filters: AlertFilterParams, time_frame: TimeFrame) -> dict[str, Any]:
+    histogram: dict[str, Any] = {
+        "field": TIMESTAMP,
+        "calendar_interval": _INTERVALS[time_frame],
+        "time_zone": "UTC",
+        # Empty buckets stay in, so the chart is a continuous series and
+        # averages over it count the quiet hours. The range query above
+        # already limits the documents; extended_bounds only adds the empty
+        # buckets before the first and after the last alert.
+        "min_doc_count": 0,
+    }
+    if filters.start_date and filters.end_date:
+        histogram["extended_bounds"] = {
+            "min": filters.start_date.isoformat(),
+            "max": filters.end_date.isoformat(),
+        }
     return {
         "size": 0,
         "query": _query(filter_clauses(filters)),
-        "aggs": {
-            "rows": {
-                "date_histogram": {
-                    "field": TIMESTAMP,
-                    "calendar_interval": _INTERVALS[time_frame],
-                    "time_zone": "UTC",
-                    "min_doc_count": 1,
-                }
-            }
-        },
+        "aggs": {"rows": {"date_histogram": histogram}},
     }
 
 

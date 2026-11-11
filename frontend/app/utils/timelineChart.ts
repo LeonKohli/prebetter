@@ -96,3 +96,42 @@ export function getTimelineColumnWidth(
   const percentage = Math.round((bucketDuration / minimumGap) * 80)
   return `${Math.min(80, Math.max(4, percentage))}%`
 }
+
+export type TimelineReference = 'off' | 'average' | 'median' | 'p95'
+
+export const TIMELINE_REFERENCES: { value: TimelineReference; label: string }[] = [
+  { value: 'off', label: 'No reference' },
+  { value: 'average', label: 'Average' },
+  { value: 'median', label: 'Median' },
+  { value: 'p95', label: '95th percentile' },
+]
+
+/**
+ * Value of the reference line over the buckets of the window. Empty buckets
+ * are part of the series (they arrive as 0), so quiet periods count.
+ * The 95th percentile uses the nearest-rank method.
+ */
+export function getTimelineReferenceValue(
+  values: number[],
+  reference: TimelineReference,
+): number | null {
+  if (reference === 'off' || values.length === 0) return null
+
+  if (reference === 'average') {
+    return values.reduce((sum, value) => sum + value, 0) / values.length
+  }
+
+  const sorted = [...values].sort((a, b) => a - b)
+  if (reference === 'p95') {
+    return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)]!
+  }
+
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
+}
+
+export function formatTimelineReference(value: number, reference: TimelineReference): string {
+  const rounded = Number.isInteger(value) ? String(value) : value.toFixed(1)
+  const name = { off: '', average: 'Avg', median: 'Median', p95: 'P95' }[reference]
+  return `${name} ${rounded}`
+}
