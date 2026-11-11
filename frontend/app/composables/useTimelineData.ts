@@ -1,4 +1,5 @@
 import type { TimelineResponse, TimeFrame } from '~~/shared/types/timeline'
+import { buildTimelineModel, pickTimeFrame } from '@/utils/timelineChart'
 import { getPresetRange, isRelativePreset, getActivePresetId } from '@/utils/datePresets'
 
 export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState>) {
@@ -25,13 +26,10 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     return { start: new Date(Date.now() - 24 * 60 * 60 * 1000), end: new Date() }
   })
 
-  const timeFrame = computed<TimeFrame>(() => {
-    const hours = (dateRange.value.end.getTime() - dateRange.value.start.getTime()) / (1000 * 60 * 60)
-    if (hours <= 2) return 'minute'
-    if (hours <= 168) return 'hour'
-    if (hours <= 2160) return 'day'
-    return 'week'
-  })
+  // Bucket size for the selected range (about 60 bars at most).
+  const timeFrame = computed<TimeFrame>(() =>
+    pickTimeFrame(dateRange.value.end.getTime() - dateRange.value.start.getTime()),
+  )
 
   const fetchKey = computed(() => {
     const presetId = getActivePresetId(urlState.filters.value)
@@ -48,6 +46,8 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
   const fetchQuery = computed(() => {
     const query: Record<string, string | boolean> = {
       time_frame: timeFrame.value,
+      // Days and weeks start at midnight of the viewer, not of UTC.
+      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       start_date: dateRange.value.start.toISOString(),
       end_date: dateRange.value.end.toISOString(),
     }
@@ -71,15 +71,17 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     dedupe: 'defer',
   })
 
-  // Bars sit at their bucket start, which is also where the axis labels are.
-  const bars = computed(() =>
-    (data.value?.data ?? [])
-      .map((point) => {
-        const bucketStart = Date.parse(point.timestamp)
-        return { x: bucketStart, y: point.total, bucketStart }
-      })
-      .filter(point => Number.isFinite(point.x)),
-  )
+  // Built from what the server answered (its frame and window), not from the selection that may
+  // already have moved on while the next response is on its way.
+  const model = computed(() => {
+    const response = data.value
+    return buildTimelineModel(response?.data ?? [], {
+      frame: response?.time_frame ?? timeFrame.value,
+      windowStart: Date.parse(response?.start_date ?? '') || dateRange.value.start.getTime(),
+      windowEnd: Date.parse(response?.end_date ?? '') || dateRange.value.end.getTime(),
+      now: Date.now(),
+    })
+  })
 
   const totalAlerts = computed(() =>
     data.value?.data.reduce((sum, p) => sum + p.total, 0) ?? 0
@@ -87,7 +89,7 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
 
   return {
     data, pending, error, status, refresh,
-    bars, totalAlerts, timeFrame, dateRange,
+    model, totalAlerts, timeFrame, dateRange,
     fetchKey,
   }
 }

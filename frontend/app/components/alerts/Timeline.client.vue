@@ -5,15 +5,17 @@
  * Features:
  * - Click on bar to filter table to that time period
  * - Drag to zoom/select a time range
+ * - Outliers: the axis stops below a burst, which is marked with its real count
  * - Custom reset button
  *
- * Note: Most styling comes from window.Apex in apexcharts.client.ts plugin.
- * This component only overrides what's unique to this specific chart.
+ * The bucketing, the axis cap and the Apex options live in utils/timelineChart*.ts, where they
+ * are tested; this component wires them to the URL state.
+ * Most styling comes from window.Apex in apexcharts.client.ts plugin.
  */
 import type { ApexOptions } from 'apexcharts'
 import { useDebounceFn } from '@vueuse/core'
 import { getActivePresetId } from '@/utils/datePresets'
-import { getTimelineBucketDisplayRange, getTimelineXAxisRange } from '@/utils/timelineChart'
+import { createTimelineOptions, createTimelineSeries } from '@/utils/timelineChartOptions'
 
 interface ChartInstance {
   updateOptions(options: ApexOptions, redrawPaths?: boolean, animate?: boolean): Promise<void>
@@ -33,29 +35,16 @@ const colorMode = useColorMode()
 
 const {
   pending,
-  bars,
+  model,
   totalAlerts,
   timeFrame,
   dateRange,
 } = useTimelineData(urlState)
 
-const rangeDurationHours = computed(() =>
-  (dateRange.value.end.getTime() - dateRange.value.start.getTime()) / (1000 * 60 * 60)
-)
-
 const hasCustomDateRange = computed(() => {
   const filters = urlState.filters.value
   return !!(filters.start_date && filters.end_date && !getActivePresetId(filters))
 })
-
-const xAxisRange = computed(() =>
-  getTimelineXAxisRange(
-    bars.value.map(point => point.x),
-    dateRange.value.start.getTime(),
-    dateRange.value.end.getTime(),
-    timeFrame.value,
-  ),
-)
 
 const chartRef = useTemplateRef<ChartInstance>('chart')
 
@@ -63,64 +52,6 @@ const chartRef = useTemplateRef<ChartInstance>('chart')
 onBeforeUnmount(() => {
   chartRef.value?.destroy()
 })
-
-
-const xAxisLabelFormat = computed<string>(() => {
-  switch (timeFrame.value) {
-    case 'minute':
-      return 'HH:mm'
-    case 'hour':
-      return rangeDurationHours.value > 24 ? 'dd MMM HH:mm' : 'HH:mm'
-    case 'day':
-      return 'dd MMM'
-    case 'week':
-      return 'dd MMM'
-    default:
-      return 'HH:mm'
-  }
-})
-
-const tooltipDateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: '2-digit',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-const tooltipTimeFormatter = new Intl.DateTimeFormat('en-GB', {
-  hour: '2-digit',
-  minute: '2-digit',
-})
-const tooltipDateFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-})
-
-function formatTooltipBucketRange(bucketStart: number): string {
-  const { start, end } = getTimelineBucketDisplayRange(
-    bucketStart,
-    dateRange.value.start.getTime(),
-    dateRange.value.end.getTime(),
-    timeFrame.value,
-  )
-
-  if (timeFrame.value === 'minute') {
-    return tooltipDateTimeFormatter.format(start)
-  }
-
-  if (timeFrame.value === 'hour') {
-    const startDate = tooltipDateFormatter.format(start)
-    const endDate = tooltipDateFormatter.format(end)
-    const formattedEnd = startDate === endDate
-      ? tooltipTimeFormatter.format(end)
-      : tooltipDateTimeFormatter.format(end)
-    return `${tooltipDateTimeFormatter.format(start)}–${formattedEnd}`
-  }
-
-  const formattedStart = tooltipDateFormatter.format(start)
-  const formattedEnd = tooltipDateFormatter.format(end)
-  return formattedStart === formattedEnd ? formattedStart : `${formattedStart}–${formattedEnd}`
-}
 
 // Chart color from design system (--chart-1 changes between light/dark)
 const chartColor = ref(getChartColor(1))
@@ -131,85 +62,6 @@ watch(() => colorMode.value, () => {
     chartColor.value = getChartColor(1)
   })
 })
-
-const series = computed(() => [{
-  name: 'Alerts',
-  data: bars.value.map(({ x, y }) => ({ x, y })),
-}])
-
-// Only override what's unique to this chart - rest comes from window.Apex
-const chartOptions = computed(() => ({
-  chart: {
-    id: 'alerts-timeline',
-    background: 'transparent',
-    animations: {
-      enabled: true,
-      easing: 'easeout',
-      dynamicAnimation: {
-        enabled: true,
-        speed: 300, // Fast smooth transition on data updates
-      },
-    },
-    zoom: {
-      enabled: true,
-      type: 'x',
-      autoScaleYaxis: true,
-      allowMouseWheelZoom: false,
-    },
-    events: {
-      zoomed: handleZoomed,
-      dataPointSelection: handleBarClick,
-    },
-  },
-  plotOptions: {
-    bar: { borderRadius: 3, columnWidth: '80%' },
-  },
-  xaxis: {
-    type: 'datetime',
-    min: xAxisRange.value.min,
-    max: xAxisRange.value.max,
-    // One label per bar while they fit (n bars span n - 1 tick intervals); Apex picks the ticks
-    // for longer ranges. 'dataPoints' is ignored on a datetime axis in Apex 8.
-    tickAmount: bars.value.length >= 2 && bars.value.length <= 30 ? bars.value.length - 1 : undefined,
-    labels: {
-      datetimeUTC: false,
-      format: xAxisLabelFormat.value,
-      // Short HH:mm labels never need the default -45 degrees. Apex reserves the rotated height in
-      // its first layout pass and draws the hover column with that smaller grid.
-      rotate: 0,
-      hideOverlappingLabels: true,
-      style: {
-        fontSize: '11px',
-      },
-    },
-    crosshairs: {
-      width: 'barWidth',
-      fill: { type: 'solid', color: 'var(--color-muted)' },
-      opacity: 0.3,
-    },
-  },
-  yaxis: {
-    min: 0,
-    labels: { formatter: (val: number) => Math.round(val).toString() },
-  },
-  tooltip: {
-    theme: colorMode.value,
-    shared: true,
-    intersect: false,
-    // apexcharts 5.13+ defaults tooltip.arrow to true; keep the prior flush look
-    arrow: false,
-    x: {
-      formatter: (value, opts) => {
-        const point = opts ? bars.value[opts.dataPointIndex] : undefined
-        return formatTooltipBucketRange(point?.bucketStart ?? Number(value))
-      },
-    },
-    y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
-  },
-  colors: [chartColor.value],
-  // Phones get a lower chart and no drag-zoom (documented `responsive` breakpoints).
-  responsive: [{ breakpoint: 768, options: { chart: { height: 140, zoom: { enabled: false } } } }],
-}) as ApexOptions)
 
 /** Update URL filters with new date range, clearing any preset */
 function setDateRange(start: Date, end: Date) {
@@ -222,53 +74,18 @@ function setDateRange(start: Date, end: Date) {
 
 const debouncedSetDateRange = useDebounceFn(setDateRange, 300)
 
-function handleZoomed(_: unknown, { xaxis }: { xaxis: { min?: number; max?: number } }) {
-  if (xaxis.min !== undefined && xaxis.max !== undefined && xaxis.max > xaxis.min) {
+function handleZoomed(_chart: unknown, options?: { xaxis: { min: number, max: number } }) {
+  const xaxis = options?.xaxis
+  if (xaxis && xaxis.max > xaxis.min) {
     debouncedSetDateRange(new Date(xaxis.min), new Date(xaxis.max))
       .catch(err => console.error('Failed to update timeline range:', err))
   }
 }
 
-function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPointIndex: number }) {
-  const point = bars.value[dataPointIndex]
-  if (!point) return
-
-  const timestamp = new Date(point.bucketStart)
-  const MINUTE = 60 * 1000
-  const HOUR = 60 * 60 * 1000
-  const DAY = 24 * HOUR
-  const WEEK = 7 * DAY
-
-  let start: Date, end: Date
-
-  switch (timeFrame.value) {
-    case 'minute':
-      start = timestamp
-      end = new Date(timestamp.getTime() + MINUTE - 1)
-      break
-    case 'hour':
-      start = timestamp
-      end = new Date(timestamp.getTime() + HOUR - 1)
-      break
-    case 'day': {
-      const dayStart = new Date(timestamp)
-      dayStart.setHours(0, 0, 0, 0)
-      const dayEnd = new Date(dayStart)
-      dayEnd.setHours(23, 59, 59, 999)
-      start = dayStart
-      end = dayEnd
-      break
-    }
-    case 'week':
-      start = timestamp
-      end = new Date(timestamp.getTime() + WEEK - 1)
-      break
-    default:
-      start = timestamp
-      end = new Date(timestamp.getTime() + HOUR)
-  }
-
-  setDateRange(start, end)
+// A bar filters to exactly the bucket it counted: the same calendar (the viewer's zone) the server used.
+function handleBarClick(_event: unknown, _chart: unknown, options?: { dataPointIndex: number }) {
+  const bar = options ? model.value.bars[options.dataPointIndex] : undefined
+  if (bar) setDateRange(new Date(bar.bucketStart), new Date(bar.bucketEnd - 1))
 }
 
 function handleReset() {
@@ -279,6 +96,18 @@ function handleReset() {
   urlState.filters.value = newFilters
   chartRef.value?.resetSeries()
 }
+
+const series = computed(() => createTimelineSeries(model.value, chartColor.value))
+
+const chartOptions = computed(() => createTimelineOptions({
+  model: model.value,
+  frame: timeFrame.value,
+  color: chartColor.value,
+  mode: colorMode.value === 'dark' ? 'dark' : 'light',
+  window: { start: dateRange.value.start.getTime(), end: dateRange.value.end.getTime() },
+  onZoomed: handleZoomed,
+  onBarClick: handleBarClick,
+}))
 
 const formattedTotal = computed(() => {
   if (totalAlerts.value >= 1000000) return `${(totalAlerts.value / 1000000).toFixed(1)}M`
@@ -310,7 +139,7 @@ const formattedTotal = computed(() => {
       </div>
 
       <apexchart
-        v-if="bars.length"
+        v-if="model.bars.length"
         ref="chart"
         type="bar"
         :height="180"
@@ -324,6 +153,9 @@ const formattedTotal = computed(() => {
         No alert data for selected period
       </div>
 
+      <p v-if="model.capped" class="mt-2 text-center text-xs text-muted-foreground">
+        Axis stops at {{ model.yMax?.toLocaleString('en-GB') }}; ▲ marks a bar above it with its real count.
+      </p>
       <p class="mt-2 hidden text-center text-xs text-muted-foreground md:block">
         {{ hasCustomDateRange ? 'Custom range selected' : 'Click bar to filter, drag to select range' }}
       </p>
