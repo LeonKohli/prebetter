@@ -12,7 +12,7 @@ import { getPresetRange, isRelativePreset, getActivePresetId } from '@/utils/dat
 
 const groupedSorts = new Set(['total_count', 'detect_time', 'source_ip', 'target_ip'])
 
-export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>) {
+export async function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>) {
   const { sortFieldMap, filterFieldMap } = useAlertTableColumns()
   const { token: sseRefreshToken } = useSseRefreshToken()
 
@@ -80,7 +80,9 @@ export function useAlertsData(urlState: ReturnType<typeof useNavigableUrlState>)
 
   // Explicit generic required - catch-all proxy returns untyped data
   // Nuxt natively watches reactive query - no manual watchers needed
-  const { data, pending, error, refresh, status } = useFetch<GroupedAlertResponse | AlertListResponse>(fetchUrl, {
+  // Awaited so the SSR render sees the data: the table adapter reads its options once at setup
+  // and does not re-sync on the server after the prefetch resolves.
+  const { data, pending, error, refresh, status } = await useFetch<GroupedAlertResponse | AlertListResponse>(fetchUrl, {
     key: fetchKey,
     query: fetchQuery,
     server: true,

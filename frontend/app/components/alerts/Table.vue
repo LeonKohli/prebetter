@@ -33,7 +33,7 @@ const {
   displayData,
   paginationInfo,
   tableTotals,
-} = useAlertsData(urlState)
+} = await useAlertsData(urlState)
 
 // Skeleton hint for known row counts (e.g., clicking badge "3" → show 3 skeleton rows)
 const { hint: skeletonHint, clearHint } = useSkeletonHint()
