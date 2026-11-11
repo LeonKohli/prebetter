@@ -90,7 +90,7 @@
 <script setup lang="ts">
 import type { DateValue } from '@internationalized/date'
 import { CalendarDate, CalendarDateTime, getLocalTimeZone } from '@internationalized/date'
-import { useNow } from '@vueuse/core'
+import { useIntervalFn, useNow } from '@vueuse/core'
 import { DATE_PRESETS, isRelativePreset, isValidPresetId, getPresetLabel, type DatePreset, type DatePresetId } from '@/utils/datePresets'
 
 // Define inline to avoid template type inference issues with reka-ui's DateRange
@@ -131,7 +131,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat('de-DE', {
 const open = ref(false)
 
 // Reactive now for relative preset display - updates every 60s (no need for second precision)
-const now = useNow({ interval: 60000 })
+const now = useNow({ scheduler: cb => useIntervalFn(cb, 60_000) })
 
 // Internal state
 const pickerValue = ref<CalendarDateRange>({ start: undefined, end: undefined })

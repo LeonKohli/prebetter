@@ -2,14 +2,14 @@
 import type {
   ColumnDef,
   ColumnFiltersState,
+  ColumnVisibilityState,
   SortingState,
-  VisibilityState,
 } from '@tanstack/vue-table'
 import {
   FlexRender,
-  getCoreRowModel,
-  useVueTable,
+  useTable,
 } from '@tanstack/vue-table'
+import { alertTableFeatures, type AlertTableFeatures, type AlertTableRow } from '@/utils/alertTableFeatures'
 
 // Accept urlState from parent to ensure single source of truth
 // This eliminates race conditions when both Table and Timeline update URL state
@@ -85,7 +85,7 @@ const columnFilters = computed<ColumnFiltersState>({
   set: (value) => urlState.fromFilterState(value)
 })
 
-const columnVisibility = computed<VisibilityState>({
+const columnVisibility = computed<ColumnVisibilityState>({
   get: () => urlState.toVisibilityState.value,
   set: (value) => urlState.fromVisibilityState(value)
 })
@@ -96,15 +96,14 @@ const pagination = computed({
 })
 
 // Table data type
-type TableDataItem = GroupedAlert | AlertListItem
+type TableDataItem = AlertTableRow
 
 // Table instance
-const table = useVueTable({
+const table = useTable<AlertTableFeatures, TableDataItem>({
+  features: alertTableFeatures,
   get data() { return displayData.value as TableDataItem[] },
-  get columns() { return columns.value as ColumnDef<TableDataItem>[] },
-  getCoreRowModel: getCoreRowModel(),
-  // No client-side row models needed — manualPagination/Sorting/Filtering: true
-  // means the server handles all three. These were dead code imports.
+  get columns() { return columns.value as ColumnDef<AlertTableFeatures, TableDataItem>[] },
+  // No client-side row models: manualPagination/Sorting/Filtering means the server handles all three.
   onSortingChange: updaterOrValue => valueUpdater(updaterOrValue, sorting),
   onColumnFiltersChange: updaterOrValue => valueUpdater(updaterOrValue, columnFilters),
   onColumnVisibilityChange: updaterOrValue => valueUpdater(updaterOrValue, columnVisibility),
@@ -194,7 +193,7 @@ function handleToggleView() {
                 :key="header.id"
                 :class="['bg-muted py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider', idx > 0 && 'border-r']"
               >
-                <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header" :props="header.getContext()" />
+                <FlexRender v-if="!header.isPlaceholder" :header="header" />
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -232,7 +231,7 @@ function handleToggleView() {
                   :key="cell.id"
                   :class="['py-2 px-4 text-sm', cellIdx > 0 && 'border-r']"
                 >
-                  <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+                  <FlexRender :cell="cell" />
                 </TableCell>
               </TableRow>
             </template>

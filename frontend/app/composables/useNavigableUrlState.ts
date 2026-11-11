@@ -1,5 +1,5 @@
 import type { LocationQuery } from 'vue-router'
-import type { SortingState, ColumnFiltersState, VisibilityState } from '@tanstack/vue-table'
+import type { SortingState, ColumnFiltersState, ColumnVisibilityState } from '@tanstack/vue-table'
 import { useDebounceFn } from '@vueuse/core'
 
 type PageSize = 10 | 20 | 50 | 100
@@ -207,8 +207,8 @@ export function useNavigableUrlState(options: {
     updateUrl({ filter: serializeFilters(newFilters) }, isUserAction)
   }
 
-  const toVisibilityState = computed((): VisibilityState => {
-    const visibility: VisibilityState = {}
+  const toVisibilityState = computed((): ColumnVisibilityState => {
+    const visibility: ColumnVisibilityState = {}
     
     const allColumnIds = [
       'source_ipv4', 'target_ipv4',
@@ -227,7 +227,7 @@ export function useNavigableUrlState(options: {
     return visibility
   })
 
-  const fromVisibilityState = (state: VisibilityState, isUserAction = true): void => {
+  const fromVisibilityState = (state: ColumnVisibilityState, isUserAction = true): void => {
     const hidden: string[] = []
     for (const [col, visible] of Object.entries(state)) {
       if (!visible) {

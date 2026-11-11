@@ -1,9 +1,10 @@
 import type { Table } from '@tanstack/vue-table'
+import type { AlertTableFeatures, AlertTableRow } from '@/utils/alertTableFeatures'
 import type { useNavigableUrlState } from './useNavigableUrlState'
 
 export interface AlertTableContext {
   urlState: ReturnType<typeof useNavigableUrlState>
-  table: Table<AlertListItem | GroupedAlert>
+  table: Table<AlertTableFeatures, AlertTableRow>
   isGrouped: ComputedRef<boolean>
   pending: Ref<boolean>
 }

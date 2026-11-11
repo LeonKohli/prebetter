@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { Column } from '@tanstack/vue-table'
+import type { AlertTableFeatures, AlertTableRow } from "@/utils/alertTableFeatures"
 import { Icon } from '#components'
 import { Button } from '@/components/ui/button'
 import { computed } from 'vue'
 
 interface Props {
-  column: Pick<Column<unknown>, 'getIsSorted' | 'getCanSort' | 'toggleSorting'>
+  column: Pick<Column<AlertTableFeatures, AlertTableRow>, 'getIsSorted' | 'getCanSort' | 'toggleSorting'>
   title: string
 }
 

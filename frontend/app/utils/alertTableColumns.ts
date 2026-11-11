@@ -1,4 +1,5 @@
-import type { ColumnDef, RowData } from "@tanstack/vue-table";
+import type { ColumnDef } from "@tanstack/vue-table";
+import type { AlertTableFeatures } from "./alertTableFeatures";
 import {
   AlertsActions,
   AlertsClassificationBadges,
@@ -6,17 +7,9 @@ import {
   TimeAgo,
 } from "#components";
 
-// Extend TanStack Table's TableMeta interface for type-safe meta access
-declare module "@tanstack/vue-table" {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Declaration merging requires TanStack's type parameter name.
-  interface TableMeta<TData extends RowData> {
-    onViewDetails?: (alertId: string) => void;
-  }
-}
-
 export const useAlertTableColumns = () => {
   // New compact grouped columns - one group per row
-  const compactGroupedColumns: ColumnDef<GroupedAlert>[] = [
+  const compactGroupedColumns: ColumnDef<AlertTableFeatures, GroupedAlert>[] = [
     {
       accessorKey: "total_count",
       header: ({ column }) =>
@@ -38,7 +31,6 @@ export const useAlertTableColumns = () => {
           ),
         ]);
       },
-      size: 100,
     },
     {
       accessorKey: "source_ipv4",
@@ -50,7 +42,6 @@ export const useAlertTableColumns = () => {
           { class: "font-mono text-sm" },
           row.getValue("source_ipv4") || "Unknown",
         ),
-      size: 150,
     },
     {
       accessorKey: "target_ipv4",
@@ -62,7 +53,6 @@ export const useAlertTableColumns = () => {
           { class: "font-mono text-sm" },
           row.getValue("target_ipv4") || "Unknown",
         ),
-      size: 150,
     },
     {
       accessorKey: "alerts",
@@ -97,7 +87,6 @@ export const useAlertTableColumns = () => {
           ]),
         ]);
       },
-      size: 140,
     },
     {
       id: "actions",
@@ -108,11 +97,10 @@ export const useAlertTableColumns = () => {
           isGrouped: true,
           onViewDetails: table.options.meta?.onViewDetails,
         }),
-      size: 60,
     },
   ];
 
-  const ungroupedColumns: ColumnDef<AlertListItem>[] = [
+  const ungroupedColumns: ColumnDef<AlertTableFeatures, AlertListItem>[] = [
     {
       accessorKey: "detected_at",
       header: ({ column }) =>
