@@ -61,11 +61,13 @@ window.Apex = {
       style: { colors: 'var(--color-muted-foreground)', fontSize: '11px' },
     },
   },
+  // Apex 8 only darkens by its default of 0.15 once the type is overridden, which is barely
+  // visible on a bar; 0.4 gives the hover and selected state of the earlier releases.
   states: {
-    hover: { filter: { type: 'darken' } },
+    hover: { filter: { type: 'darken', value: 0.4 } },
     active: {
       allowMultipleDataPointsSelection: false,
-      filter: { type: 'darken' },
+      filter: { type: 'darken', value: 0.4 },
     },
   },
 }
