@@ -18,7 +18,7 @@ knows both sides of the wire names the frontend uses:
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from app.opensearch.forwarded import forwarded_info
@@ -187,7 +187,8 @@ def to_pair(bucket: dict[str, Any]) -> Pair:
 
 def to_timeline_point(bucket: dict[str, Any]) -> TimelineDataPoint:
     return TimelineDataPoint(
-        timestamp=datetime.fromisoformat(bucket["key_as_string"]),
+        # `key` is the bucket start in epoch milliseconds, whatever zone the buckets follow.
+        timestamp=datetime.fromtimestamp(bucket["key"] / 1000, UTC),
         total=bucket["doc_count"],
     )
 

@@ -3,6 +3,7 @@
 import ipaddress
 from datetime import datetime
 from enum import Enum
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -33,10 +34,17 @@ class GroupSort(str, Enum):
 
 
 class TimeFrame(str, Enum):
-    MINUTE = "minute"
-    HOUR = "hour"
-    DAY = "day"
-    WEEK = "week"
+    """Bucket size of the timeline. Days and weeks follow the calendar of the viewer's zone."""
+
+    MINUTE_1 = "1m"
+    MINUTE_5 = "5m"
+    MINUTE_15 = "15m"
+    HOUR_1 = "1h"
+    HOUR_3 = "3h"
+    HOUR_6 = "6h"
+    HOUR_12 = "12h"
+    DAY = "1d"
+    WEEK = "1w"
 
 
 def csv(value: str | None) -> list[str]:
@@ -145,4 +153,17 @@ class GroupListParams(AlertFilterParams, PaginationParams):
 
 
 class TimelineParams(AlertFilterParams):
-    time_frame: TimeFrame = TimeFrame.HOUR
+    time_frame: TimeFrame = TimeFrame.HOUR_1
+    time_zone: str = Field(
+        "UTC",
+        description="IANA zone the day and week buckets are aligned to, e.g. Europe/Berlin",
+    )
+
+    @field_validator("time_zone")
+    @classmethod
+    def known_time_zone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(f"unknown time zone {value!r}") from exc
+        return value

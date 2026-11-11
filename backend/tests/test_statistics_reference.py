@@ -37,7 +37,7 @@ def test_hourly_buckets_cover_the_window_and_start_on_the_hour(api):
         ("2026-11-10T10:00:00Z", 2),
         ("2026-11-10T11:00:00Z", 1),
     ]
-    assert response.json()["time_frame"] == "hour"
+    assert response.json()["time_frame"] == "1h"
     assert response.json()["start_date"] == "2026-11-10T00:00:00Z"
 
 
@@ -59,7 +59,7 @@ def test_timeline_honours_the_alert_filters(api):
 
 def test_minute_buckets(api):
     params = {
-        "time_frame": "minute",
+        "time_frame": "1m",
         "start_date": "2026-11-10T10:29:00Z",
         "end_date": "2026-11-10T10:31:00Z",
     }
@@ -71,8 +71,8 @@ def test_minute_buckets(api):
     ]
 
 
-def test_daily_buckets_start_at_midnight_utc(api):
-    response = api.get(TIMELINE, params=DAY | {"time_frame": "day"})
+def test_daily_buckets_start_at_midnight_utc_by_default(api):
+    response = api.get(TIMELINE, params=DAY | {"time_frame": "1d"})
 
     assert points(response) == [
         ("2026-11-09T00:00:00Z", 4),
@@ -80,15 +80,63 @@ def test_daily_buckets_start_at_midnight_utc(api):
     ]
 
 
+def test_day_buckets_follow_the_requested_time_zone(api):
+    params = DAY | {"time_frame": "1d", "time_zone": "Europe/Berlin"}
+
+    # Berlin midnight is 23:00 UTC. The event at 23:30 UTC on the 9th belongs to the 10th there,
+    # and the window ends on the 11th (00:59 local), so that day is a bucket as well.
+    assert points(api.get(TIMELINE, params=params)) == [
+        ("2026-11-08T23:00:00Z", 3),
+        ("2026-11-09T23:00:00Z", 8),
+        ("2026-11-10T23:00:00Z", 0),
+    ]
+
+
+def test_a_day_across_a_clock_change_is_25_hours_long(api):
+    params = {
+        "time_frame": "1d",
+        "time_zone": "Europe/Berlin",
+        "start_date": "2026-10-24T00:00:00Z",
+        "end_date": "2026-10-26T23:00:00Z",
+    }
+
+    # Summer time ends on 25 October 2026: that local day starts at 22:00 UTC and lasts until 23:00 UTC.
+    assert [ts for ts, _ in points(api.get(TIMELINE, params=params))] == [
+        "2026-10-23T22:00:00Z",
+        "2026-10-24T22:00:00Z",
+        "2026-10-25T23:00:00Z",
+        "2026-10-26T23:00:00Z",
+    ]
+
+
+def test_six_hour_buckets_start_at_local_quarter_days(api):
+    params = {
+        "time_frame": "6h",
+        "time_zone": "Europe/Berlin",
+        "start_date": "2026-11-10T00:00:00Z",
+        "end_date": "2026-11-10T12:00:00Z",
+    }
+
+    assert [ts for ts, _ in points(api.get(TIMELINE, params=params))] == [
+        "2026-11-09T23:00:00Z",
+        "2026-11-10T05:00:00Z",
+        "2026-11-10T11:00:00Z",
+    ]
+
+
+def test_unknown_time_zone_is_rejected(api):
+    assert api.get(TIMELINE, params={"time_zone": "Mars/Base"}).status_code == 422
+
+
 def test_weekly_buckets_start_on_monday(api):
-    response = api.get(TIMELINE, params=DAY | {"time_frame": "week"})
+    response = api.get(TIMELINE, params=DAY | {"time_frame": "1w"})
 
     # 2026-11-10 is a Tuesday: both days fall into the week of Monday the 9th.
     assert points(response) == [("2026-11-09T00:00:00Z", 11)]
 
 
 def test_missing_dates_default_to_a_window_ending_now(api):
-    body = api.get(TIMELINE, params={"time_frame": "day"}).json()
+    body = api.get(TIMELINE, params={"time_frame": "1d"}).json()
 
     start, end = (datetime.fromisoformat(body[k]) for k in ("start_date", "end_date"))
     assert (end - start).days == 30
@@ -96,7 +144,7 @@ def test_missing_dates_default_to_a_window_ending_now(api):
 
 def test_a_window_with_too_many_buckets_is_rejected(api):
     params = {
-        "time_frame": "minute",
+        "time_frame": "1m",
         "start_date": "2026-11-01T00:00:00Z",
         "end_date": "2026-11-10T00:00:00Z",
     }
@@ -106,6 +154,7 @@ def test_a_window_with_too_many_buckets_is_rejected(api):
 
 def test_unknown_time_frame_is_rejected(api):
     assert api.get(TIMELINE, params={"time_frame": "month"}).status_code == 422
+    assert api.get(TIMELINE, params={"time_frame": "hour"}).status_code == 422
 
 
 def test_severities_are_the_four_labels(api):

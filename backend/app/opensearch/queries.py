@@ -31,12 +31,9 @@ _SORT_FIELDS = {
     AlertSort.ANALYZER: SENSOR,
 }
 
-_INTERVALS = {
-    TimeFrame.MINUTE: "1m",
-    TimeFrame.HOUR: "1h",
-    TimeFrame.DAY: "1d",
-    TimeFrame.WEEK: "1w",
-}
+# Days and weeks are calendar units, so a day is 23 or 25 hours long where the zone changes its
+# clocks. Everything shorter is a fixed length.
+_CALENDAR = {TimeFrame.DAY, TimeFrame.WEEK}
 
 
 def filter_clauses(filters: AlertFilterParams) -> list[dict[str, Any]]:
@@ -143,11 +140,13 @@ def distinct_body(field: str) -> dict[str, Any]:
     return _composite(None, [field], with_latest=False)
 
 
-def timeline_body(filters: AlertFilterParams, time_frame: TimeFrame) -> dict[str, Any]:
+def timeline_body(
+    filters: AlertFilterParams, time_frame: TimeFrame, time_zone: str = "UTC"
+) -> dict[str, Any]:
     histogram: dict[str, Any] = {
         "field": TIMESTAMP,
-        "calendar_interval": _INTERVALS[time_frame],
-        "time_zone": "UTC",
+        ("calendar_interval" if time_frame in _CALENDAR else "fixed_interval"): time_frame.value,
+        "time_zone": time_zone,
         # Empty buckets stay in, so the chart is a continuous series and
         # averages over it count the quiet hours. The range query above
         # already limits the documents; extended_bounds only adds the empty

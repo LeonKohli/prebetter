@@ -145,9 +145,11 @@ class AlertRepository:
         )
 
     async def timeline(
-        self, filters: AlertFilterParams, time_frame: TimeFrame
+        self, filters: AlertFilterParams, time_frame: TimeFrame, time_zone: str = "UTC"
     ) -> list[TimelineDataPoint]:
-        buckets = await self._buckets(queries.timeline_body(filters, time_frame))
+        buckets = await self._buckets(
+            queries.timeline_body(filters, time_frame, time_zone)
+        )
         return [documents.to_timeline_point(b) for b in buckets]
 
     async def sensors(self) -> list[str]:
