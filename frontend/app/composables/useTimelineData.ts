@@ -1,6 +1,5 @@
 import type { TimelineResponse, TimeFrame } from '~~/shared/types/timeline'
 import { getPresetRange, isRelativePreset, getActivePresetId } from '@/utils/datePresets'
-import { getTimelineBucketPlotTimestamp } from '@/utils/timelineChart'
 
 export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState>) {
   const { token: sseRefreshToken } = useSseRefreshToken()
@@ -72,28 +71,26 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
     dedupe: 'defer',
   })
 
-  const chartSeries = computed(() => {
-    if (!data.value?.data) {
-      return [{ name: 'Alerts', data: [] as { x: number; y: number; bucketStart: number }[] }]
-    }
+  const baseline = computed(() =>
+    new Map((data.value?.baseline ?? []).map(point => [Date.parse(point.timestamp), point])),
+  )
 
-    const fullStart = dateRange.value.start.getTime()
-    const fullEnd = dateRange.value.end.getTime()
-
-    return [{
-      name: 'Alerts',
-      data: data.value.data
-        .map((point) => {
-          const bucketStart = new Date(point.timestamp).getTime()
-          return {
-            x: getTimelineBucketPlotTimestamp(bucketStart, fullStart, fullEnd, timeFrame.value),
-            y: point.total,
-            bucketStart,
-          }
-        })
-        .filter(point => Number.isFinite(point.x) && Number.isFinite(point.bucketStart))
-    }]
-  })
+  // Bars sit at their bucket start, which is also where the axis labels are.
+  const bars = computed(() =>
+    (data.value?.data ?? [])
+      .map((point) => {
+        const bucketStart = Date.parse(point.timestamp)
+        const typical = baseline.value.get(bucketStart)
+        return {
+          x: bucketStart,
+          y: point.total,
+          bucketStart,
+          typical,
+          aboveTypical: typical !== undefined && point.total > typical.high,
+        }
+      })
+      .filter(point => Number.isFinite(point.x)),
+  )
 
   const totalAlerts = computed(() =>
     data.value?.data.reduce((sum, p) => sum + p.total, 0) ?? 0
@@ -101,7 +98,7 @@ export function useTimelineData(urlState: ReturnType<typeof useNavigableUrlState
 
   return {
     data, pending, error, status, refresh,
-    chartSeries, totalAlerts, timeFrame, dateRange,
+    bars, totalAlerts, timeFrame, dateRange,
     fetchKey,
   }
 }

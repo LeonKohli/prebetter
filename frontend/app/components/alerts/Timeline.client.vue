@@ -5,6 +5,7 @@
  * Features:
  * - Click on bar to filter table to that time period
  * - Drag to zoom/select a time range
+ * - Gray band: typical range of the same hour in the previous weeks; bars above it are highlighted
  * - Custom reset button
  *
  * Note: Most styling comes from window.Apex in apexcharts.client.ts plugin.
@@ -13,16 +14,7 @@
 import type { ApexOptions } from 'apexcharts'
 import { useDebounceFn, useWindowSize } from '@vueuse/core'
 import { getActivePresetId } from '@/utils/datePresets'
-import {
-  getTimelineBucketDuration,
-  getTimelineBucketDisplayRange,
-  getTimelineColumnWidth,
-  getTimelineXAxisRange,
-  getTimelineReferenceValue,
-  formatTimelineReference,
-  TIMELINE_REFERENCES,
-  type TimelineReference,
-} from '@/utils/timelineChart'
+import { getTimelineBucketDisplayRange, getTimelineXAxisRange } from '@/utils/timelineChart'
 
 interface ChartInstance {
   updateOptions(options: ApexOptions, redrawPaths?: boolean, animate?: boolean): Promise<void>
@@ -43,7 +35,7 @@ const { width } = useWindowSize()
 
 const {
   pending,
-  chartSeries,
+  bars,
   totalAlerts,
   timeFrame,
   dateRange,
@@ -58,28 +50,13 @@ const hasCustomDateRange = computed(() => {
   return !!(filters.start_date && filters.end_date && !getActivePresetId(filters))
 })
 
-const dynamicXAxisRange = computed(() => {
-  const data = chartSeries.value[0]?.data ?? []
-  const fullStart = dateRange.value.start.getTime()
-  const fullEnd = dateRange.value.end.getTime()
-
-  return getTimelineXAxisRange(data.map(point => point.x), fullStart, fullEnd, timeFrame.value)
-})
-
-const dynamicColumnWidth = computed(() => {
-  const data = chartSeries.value[0]?.data ?? []
-  const point = data[0]
-  if (!point) return 12
-  return getTimelineColumnWidth(
-    data.map(item => item.x),
-    getTimelineBucketDuration(point.bucketStart, timeFrame.value),
-  )
-})
-
-// Reference line over the buckets of the window; the choice is remembered per browser.
-const reference = useLocalStorage<TimelineReference>('alerts-timeline-reference', 'average')
-const referenceValue = computed(() =>
-  getTimelineReferenceValue(chartSeries.value[0]?.data.map(point => point.y) ?? [], reference.value),
+const xAxisRange = computed(() =>
+  getTimelineXAxisRange(
+    bars.value.map(point => point.x),
+    dateRange.value.start.getTime(),
+    dateRange.value.end.getTime(),
+    timeFrame.value,
+  ),
 )
 
 const chartRef = useTemplateRef<ChartInstance>('chart')
@@ -151,8 +128,9 @@ function formatTooltipBucketRange(bucketStart: number): string {
 
 // Chart color from design system (--chart-1 changes between light/dark)
 const chartColor = ref(getChartColor(1))
-// Apex does not resolve CSS variables for annotation fills, so use fixed neutrals.
-const referenceColor = computed(() => colorMode.value === 'dark' ? '#e5e5e5' : '#404040')
+// Apex does not resolve CSS variables for series fills, so the neutrals are fixed.
+const bandColor = '#94a3b8'
+const aboveTypicalColor = computed(() => colorMode.value === 'dark' ? '#f87171' : '#991b1b')
 
 // Update chart color when theme changes
 watch(() => colorMode.value, () => {
@@ -160,6 +138,30 @@ watch(() => colorMode.value, () => {
     chartColor.value = getChartColor(1)
   })
 })
+
+// The band goes first so the bars are drawn over it.
+const hasBand = computed(() => bars.value.some(point => point.typical))
+const barSeriesIndex = computed(() => hasBand.value ? 1 : 0)
+const series = computed(() => [
+  ...(hasBand.value
+    ? [{
+        name: 'Typical',
+        type: 'rangeArea',
+        data: bars.value
+          .filter(point => point.typical)
+          .map(point => ({ x: point.x, y: [point.typical!.low, point.typical!.high] })),
+      }]
+    : []),
+  {
+    name: 'Alerts',
+    type: 'bar',
+    data: bars.value.map(point => ({
+      x: point.x,
+      y: point.y,
+      ...(point.aboveTypical && { fillColor: aboveTypicalColor.value }),
+    })),
+  },
+])
 
 // Only override what's unique to this chart - rest comes from window.Apex
 const chartOptions = computed(() => ({
@@ -186,12 +188,14 @@ const chartOptions = computed(() => ({
     },
   },
   plotOptions: {
-    bar: { borderRadius: 3, columnWidth: dynamicColumnWidth.value },
+    bar: { borderRadius: 3, columnWidth: '80%' },
   },
   xaxis: {
     type: 'datetime',
-    min: dynamicXAxisRange.value.min,
-    max: dynamicXAxisRange.value.max,
+    min: xAxisRange.value.min,
+    max: xAxisRange.value.max,
+    // One label per bar while they fit; Apex picks the ticks for longer ranges.
+    tickAmount: bars.value.length <= 30 ? 'dataPoints' : undefined,
     labels: {
       datetimeUTC: false,
       format: xAxisLabelFormat.value,
@@ -216,39 +220,26 @@ const chartOptions = computed(() => ({
     theme: colorMode.value,
     shared: true,
     intersect: false,
+    enabledOnSeries: [barSeriesIndex.value],
     // apexcharts 5.13+ defaults tooltip.arrow to true; keep the prior flush look
     arrow: false,
     x: {
       formatter: (value, opts) => {
-        const point = opts
-          ? chartSeries.value[opts.seriesIndex]?.data[opts.dataPointIndex]
-          : undefined
+        const point = opts ? bars.value[opts.dataPointIndex] : undefined
         return formatTooltipBucketRange(point?.bucketStart ?? Number(value))
       },
     },
-    y: { formatter: (val: number) => `${val} alert${val !== 1 ? 's' : ''}` },
-  },
-  colors: [chartColor.value],
-  annotations: {
-    yaxis: referenceValue.value === null ? [] : [{
-      y: referenceValue.value,
-      borderColor: referenceColor.value,
-      strokeDashArray: 4,
-      label: {
-        text: formatTimelineReference(referenceValue.value, reference.value),
-        position: 'right',
-        textAnchor: 'end',
-        offsetY: -4,
-        borderWidth: 0,
-        style: {
-          color: colorMode.value === 'dark' ? '#171717' : '#fafafa',
-          background: referenceColor.value,
-          fontSize: '10px',
-          padding: { left: 5, right: 5, top: 1, bottom: 1 },
-        },
+    y: {
+      formatter: (val: number, opts?: { dataPointIndex: number }) => {
+        const typical = opts ? bars.value[opts.dataPointIndex]?.typical : undefined
+        const count = `${val} alert${val !== 1 ? 's' : ''}`
+        return typical ? `${count} (typical ${typical.low}–${typical.high})` : count
       },
-    }],
+    },
   },
+  colors: hasBand.value ? [bandColor, chartColor.value] : [chartColor.value],
+  fill: { opacity: hasBand.value ? [0.25, 0.85] : 0.85 },
+  stroke: { width: hasBand.value ? [0, 0] : 0 },
 }) as ApexOptions)
 
 /** Update URL filters with new date range, clearing any preset */
@@ -269,8 +260,8 @@ function handleZoomed(_: unknown, { xaxis }: { xaxis: { min?: number; max?: numb
   }
 }
 
-function handleBarClick(_: unknown, __: unknown, { dataPointIndex }: { dataPointIndex: number }) {
-  const point = chartSeries.value[0]?.data[dataPointIndex]
+function handleBarClick(_: unknown, __: unknown, { seriesIndex, dataPointIndex }: { seriesIndex: number, dataPointIndex: number }) {
+  const point = seriesIndex === barSeriesIndex.value ? bars.value[dataPointIndex] : undefined
   if (!point) return
 
   const timestamp = new Date(point.bucketStart)
@@ -343,16 +334,6 @@ const formattedTotal = computed(() => {
             <Icon name="lucide:rotate-ccw" class="size-3" />
             Reset
           </button>
-          <Select v-model="reference">
-            <SelectTrigger class="h-7 w-[140px] bg-background text-xs" aria-label="Reference line">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="option in TIMELINE_REFERENCES" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
           <span v-if="!pending && totalAlerts > 0" class="text-xs text-muted-foreground tabular-nums">
             {{ formattedTotal }} alerts
           </span>
@@ -360,12 +341,12 @@ const formattedTotal = computed(() => {
       </div>
 
       <apexchart
-        v-if="chartSeries[0]?.data.length"
+        v-if="bars.length"
         ref="chart"
-        type="bar"
+        type="line"
         :height="chartHeight"
         :options="chartOptions"
-        :series="chartSeries"
+        :series="series"
       />
       <div v-else-if="pending" class="flex items-center justify-center" :style="{ height: `${chartHeight}px` }">
         <Icon name="lucide:loader-2" class="size-5 animate-spin text-muted-foreground" />
@@ -376,6 +357,12 @@ const formattedTotal = computed(() => {
 
       <p v-if="!isMobile" class="text-xs text-muted-foreground mt-2 text-center">
         {{ hasCustomDateRange ? 'Custom range selected' : 'Click bar to filter, drag to select range' }}
+      </p>
+      <p v-if="hasBand" class="text-xs text-muted-foreground mt-1 text-center">
+        <span class="inline-block size-2 rounded-sm align-baseline bg-slate-400/40" />
+        Typical range for this hour (previous 4 weeks) ·
+        <span class="inline-block size-2 rounded-sm align-baseline bg-red-800 dark:bg-red-400" />
+        above typical
       </p>
     </CardContent>
   </Card>

@@ -42,9 +42,11 @@ async def get_timeline(
             detail=f"Window too long for {params.time_frame.value} buckets (max {MAX_BUCKETS})",
         )
     window = params.model_copy(update={"start_date": start, "end_date": end})
+    data, baseline = await repo.timeline(window, params.time_frame)
     return TimelineResponse(
         time_frame=params.time_frame.value,
         start_date=start,
         end_date=end,
-        data=await repo.timeline(window, params.time_frame),
+        data=data,
+        baseline=baseline,
     )

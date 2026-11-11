@@ -1,77 +1,30 @@
 import { describe, expect, it } from 'vitest'
 import {
   getTimelineBucketDisplayRange,
-  getTimelineBucketPlotTimestamp,
   getTimelineBucketVisibleRange,
-  getTimelineColumnWidth,
-  getTimelineReferenceValue,
-  formatTimelineReference,
   getTimelineXAxisRange,
 } from '../app/utils/timelineChart'
 
 const HOUR = 60 * 60 * 1000
-const MINUTE = 60 * 1000
 const DAY = 24 * HOUR
 
 describe('getTimelineXAxisRange', () => {
   it('uses the selected range when there is no data', () => {
-    expect(getTimelineXAxisRange([], 0, 24 * HOUR, 'hour')).toEqual({
-      min: 0,
-      max: 24 * HOUR,
-    })
+    expect(getTimelineXAxisRange([], 0, 24 * HOUR, 'hour')).toEqual({ min: 0, max: 24 * HOUR })
   })
 
-  it('centers one point with two buckets of padding', () => {
-    expect(getTimelineXAxisRange([12 * HOUR], 0, 24 * HOUR, 'hour')).toEqual({
-      min: 10 * HOUR,
-      max: 14 * HOUR,
-    })
-  })
-
-  it('does not expand a sparse series before the selected range', () => {
-    expect(getTimelineXAxisRange([8 * HOUR, 9 * HOUR], 7.9 * HOUR, 9.9 * HOUR, 'hour')).toEqual({
-      min: 7.9 * HOUR,
-      max: 9.9 * HOUR,
-    })
-  })
-
-  it('keeps a leading partial bucket inside the selected range', () => {
-    const firstPoint = getTimelineBucketPlotTimestamp(9 * HOUR, 9.5 * HOUR, 12 * HOUR, 'hour')
-    const secondPoint = getTimelineBucketPlotTimestamp(10 * HOUR, 9.5 * HOUR, 12 * HOUR, 'hour')
-
-    expect(getTimelineXAxisRange([firstPoint, secondPoint], 9.5 * HOUR, 12 * HOUR, 'hour')).toEqual({
-      min: 9.5 * HOUR,
+  it('leaves half a bucket on each side of the bars', () => {
+    expect(getTimelineXAxisRange([9 * HOUR, 10 * HOUR, 11 * HOUR], 0, 24 * HOUR, 'hour')).toEqual({
+      min: 8.5 * HOUR,
       max: 11.5 * HOUR,
     })
   })
 
-  it('fits a dense cluster based on its time coverage, not its point count', () => {
-    const timestamps = Array.from({ length: 8 }, (_, index) => (300 + index * 7) * DAY)
-    const range = getTimelineXAxisRange(timestamps, 0, 365 * DAY, 'week')
-
-    expect(range.min).toBeGreaterThan(0)
-    expect(range.max).toBeLessThan(365 * DAY)
-  })
-
-  it('keeps the full range when data and padding already span it', () => {
-    expect(getTimelineXAxisRange([HOUR, 23 * HOUR], 0, 24 * HOUR, 'hour')).toEqual({
-      min: 0,
-      max: 24 * HOUR,
+  it('scales the padding with the bucket size', () => {
+    expect(getTimelineXAxisRange([3 * DAY], 0, 9 * DAY, 'day')).toEqual({
+      min: 2.5 * DAY,
+      max: 3.5 * DAY,
     })
-  })
-})
-
-describe('getTimelineBucketPlotTimestamp', () => {
-  it('plots a complete bucket at its midpoint', () => {
-    expect(getTimelineBucketPlotTimestamp(9 * HOUR, 8 * HOUR, 11 * HOUR, 'hour')).toBe(9.5 * HOUR)
-  })
-
-  it('centers only the visible part of the first bucket', () => {
-    expect(getTimelineBucketPlotTimestamp(9 * HOUR, 9.5 * HOUR, 11 * HOUR, 'hour')).toBe(9.75 * HOUR)
-  })
-
-  it('centers only the visible part of the final bucket', () => {
-    expect(getTimelineBucketPlotTimestamp(9 * HOUR, 8 * HOUR, 9.25 * HOUR, 'hour')).toBe(9.125 * HOUR)
   })
 })
 
@@ -107,44 +60,3 @@ describe('getTimelineBucketDisplayRange', () => {
   })
 })
 
-describe('getTimelineColumnWidth', () => {
-  it('keeps a single sparse bucket narrow', () => {
-    expect(getTimelineColumnWidth([9 * HOUR], MINUTE)).toBe(12)
-  })
-
-  it('sizes multiple columns from bucket duration rather than sparse point spacing', () => {
-    expect(getTimelineColumnWidth([9 * HOUR, 9 * HOUR + 18 * MINUTE], MINUTE)).toBe('4%')
-    expect(getTimelineColumnWidth([9 * HOUR, 9 * HOUR + MINUTE], MINUTE)).toBe('80%')
-  })
-})
-
-describe('getTimelineReferenceValue', () => {
-  const buckets = [0, 0, 4, 12, 0, 8, 0, 100]
-
-  it('averages over all buckets, empty ones included', () => {
-    expect(getTimelineReferenceValue(buckets, 'average')).toBe(15.5)
-  })
-
-  it('takes the middle of the sorted buckets as the median', () => {
-    expect(getTimelineReferenceValue(buckets, 'median')).toBe(2)
-    expect(getTimelineReferenceValue([3, 1, 2], 'median')).toBe(2)
-  })
-
-  it('uses the nearest rank for the 95th percentile', () => {
-    const twenty = Array.from({ length: 20 }, (_, index) => index + 1)
-    expect(getTimelineReferenceValue(twenty, 'p95')).toBe(19)
-  })
-
-  it('has no value when switched off or without buckets', () => {
-    expect(getTimelineReferenceValue(buckets, 'off')).toBeNull()
-    expect(getTimelineReferenceValue([], 'average')).toBeNull()
-  })
-})
-
-describe('formatTimelineReference', () => {
-  it('names the statistic and keeps one decimal for fractions', () => {
-    expect(formatTimelineReference(15.5, 'average')).toBe('Avg 15.5')
-    expect(formatTimelineReference(2, 'median')).toBe('Median 2')
-    expect(formatTimelineReference(19, 'p95')).toBe('P95 19')
-  })
-})
