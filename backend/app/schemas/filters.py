@@ -11,6 +11,18 @@ from app.core.datetime_utils import ensure_timezone
 
 SEVERITY_LABELS = ("high", "medium", "low", "info")
 
+# Per request filter: how many values, and how long one may be (a user agent is cut at 1024 on ingest).
+MAX_REQUEST_VALUES = 20
+MAX_REQUEST_TEXT = 1024
+
+
+class RequestField(str, Enum):
+    """A header of the HTTP request that the filters and the suggestions work on."""
+
+    USER_AGENT = "user_agent"
+    HOST = "host"
+    CLIENT_IP = "client_ip"
+
 
 class SortOrder(str, Enum):
     ASC = "asc"
@@ -104,6 +116,73 @@ class AlertFilterParams(BaseModel):
     require_ips: bool = Field(
         True, description="Only include alerts with both a source and a target address"
     )
+    # The request headers live in the companion document of an HTTP alert (request_line.py).
+    # Repeat the parameter for several values: a user agent can contain commas.
+    user_agent: list[str] = Field(
+        default_factory=list,
+        max_length=MAX_REQUEST_VALUES,
+        description="Only alerts whose HTTP request had one of these exact user agents",
+    )
+    host: list[str] = Field(
+        default_factory=list,
+        max_length=MAX_REQUEST_VALUES,
+        description="Only alerts whose HTTP request had one of these Host names (no port)",
+    )
+    client_ip: list[str] = Field(
+        default_factory=list,
+        max_length=MAX_REQUEST_VALUES,
+        description="Only alerts whose request came from one of these client addresses "
+        "(X-Forwarded-For): address, CIDR network or partial IPv4 prefix",
+    )
+    exclude_user_agent: list[str] = Field(
+        default_factory=list,
+        max_length=MAX_REQUEST_VALUES,
+        description="Hide alerts whose HTTP request had one of these exact user agents",
+    )
+    exclude_host: list[str] = Field(
+        default_factory=list,
+        max_length=MAX_REQUEST_VALUES,
+        description="Hide alerts whose HTTP request had one of these Host names",
+    )
+    exclude_client_ip: list[str] = Field(
+        default_factory=list,
+        max_length=MAX_REQUEST_VALUES,
+        description="Hide alerts whose request came from one of these client addresses",
+    )
+
+    @property
+    def has_request_filter(self) -> bool:
+        return any(
+            (
+                self.user_agent,
+                self.host,
+                self.client_ip,
+                self.exclude_user_agent,
+                self.exclude_host,
+                self.exclude_client_ip,
+            )
+        )
+
+    @field_validator("user_agent", "exclude_user_agent")
+    @classmethod
+    def bounded_text(cls, values: list[str]) -> list[str]:
+        if any(not value or len(value) > MAX_REQUEST_TEXT for value in values):
+            raise ValueError(f"each value must have 1 to {MAX_REQUEST_TEXT} characters")
+        return values
+
+    @field_validator("host", "exclude_host")
+    @classmethod
+    def lower_case_host(cls, values: list[str]) -> list[str]:
+        # The ingest pipeline stores the host in lower case, without its port.
+        hosts = [value.strip().lower() for value in values]
+        if any(not host or len(host) > MAX_REQUEST_TEXT for host in hosts):
+            raise ValueError(f"each value must have 1 to {MAX_REQUEST_TEXT} characters")
+        return hosts
+
+    @field_validator("client_ip", "exclude_client_ip")
+    @classmethod
+    def normalized_client_ips(cls, values: list[str]) -> list[str]:
+        return [parse_ip_filter(value) for value in values]
 
     @field_validator("start_date", "end_date")
     @classmethod
@@ -167,3 +246,22 @@ class TimelineParams(AlertFilterParams):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError(f"unknown time zone {value!r}") from exc
         return value
+
+
+class RequestValueParams(BaseModel):
+    """The most common values of one request header, with the number of requests."""
+
+    field: RequestField
+    q: str = Field("", max_length=100, description="Only values that contain this text")
+    start_date: datetime | None = Field(
+        None, description="Requests of alerts on or after this datetime (UTC)"
+    )
+    end_date: datetime | None = Field(
+        None, description="Requests of alerts on or before this datetime (UTC)"
+    )
+    size: int = Field(50, ge=1, le=100)
+
+    @field_validator("start_date", "end_date")
+    @classmethod
+    def utc_if_naive(cls, v: datetime | None) -> datetime | None:
+        return ensure_timezone(v) if v else None

@@ -12,6 +12,7 @@ from app.schemas.alerts import (
     AlertListItem,
     GroupedAlert,
     GroupedAlertDetail,
+    RequestValue,
     TimelineDataPoint,
 )
 from app.schemas.filters import (
@@ -19,6 +20,8 @@ from app.schemas.filters import (
     AlertListParams,
     GroupListParams,
     GroupSort,
+    RequestField,
+    RequestValueParams,
     SortOrder,
     TimeFrame,
 )
@@ -57,7 +60,12 @@ class AlertRepository:
 
     async def _buckets(self, body: dict[str, Any]) -> list[dict[str, Any]]:
         """Buckets of the aggregation `rows`."""
-        response = await self._search(body)
+        return await self._buckets_of(self._index, body)
+
+    async def _buckets_of(
+        self, index: str, body: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        response = await self._client.search(index=index, body=body)
         # A pattern that matches no index yet answers without an aggregations section.
         return response.get("aggregations", {}).get("rows", {}).get("buckets", [])
 
@@ -83,7 +91,8 @@ class AlertRepository:
     async def list_alerts(
         self, params: AlertListParams
     ) -> tuple[list[AlertListItem], int]:
-        response = await self._search(queries.list_body(params))
+        keys = await self._request_keys(params)
+        response = await self._search(queries.list_body(params, keys))
         hits = response["hits"]
         return [documents.to_list_item(h) for h in hits["hits"]], hits["total"]["value"]
 
@@ -91,14 +100,17 @@ class AlertRepository:
         self, params: GroupListParams
     ) -> tuple[list[GroupedAlert], int]:
         """One page of address pairs with their rule counts, and the number of pairs."""
-        buckets = await self._composite(queries.pairs_body(params), MAX_PAIRS)
+        keys = await self._request_keys(params)
+        buckets = await self._composite(queries.pairs_body(params, keys), MAX_PAIRS)
         pairs = [documents.to_pair(b) for b in buckets]
         _sort_pairs(pairs, params.sort_by, params.sort_order)
         page = pairs[params.offset : params.offset + params.size]
         if not page:
             return [], len(pairs)
 
-        body = queries.pair_rules_body(params, [(p.source, p.target) for p in page])
+        body = queries.pair_rules_body(
+            params, [(p.source, p.target) for p in page], keys
+        )
         rules: dict[tuple[str, str], list[GroupedAlertDetail]] = {}
         for bucket in await self._composite(body):
             key = bucket["key"]
@@ -126,6 +138,41 @@ class AlertRepository:
             return None
         return documents.to_detail(hits[0], await self._companion(hits[0]["_source"]))
 
+    async def _request_keys(
+        self, filters: AlertFilterParams
+    ) -> queries.RequestKeys | None:
+        """Resolve the request-header filters to the keys of the alerts' request documents."""
+        if not filters.has_request_filter:
+            return None
+        include = await self._keys(queries.request_keys_body(filters, exclude=False))
+        exclude = await self._keys(queries.request_keys_body(filters, exclude=True))
+        return queries.RequestKeys(include=include, exclude=exclude or [])
+
+    async def _keys(self, body: dict[str, Any] | None) -> list[str] | None:
+        if body is None:
+            return None
+        response = await self._client.search(index=self._request_index, body=body)
+        hits = response["hits"]["hits"]
+        # A full window may be cut off: refuse it instead of filtering on part of the requests.
+        if len(hits) > queries.MAX_REQUEST_KEYS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"More than {queries.MAX_REQUEST_KEYS} requests match; narrow the time range or the filter",
+            )
+        return [hit["_id"] for hit in hits]
+
+    async def request_values(self, params: RequestValueParams) -> list[RequestValue]:
+        """The most common values of one request header in the range, with their request counts."""
+        buckets = await self._buckets_of(
+            self._request_index, queries.request_values_body(params)
+        )
+        values = [
+            RequestValue(value=str(b["key"]), count=b["doc_count"]) for b in buckets
+        ]
+        if params.q and params.field is RequestField.CLIENT_IP:
+            values = [v for v in values if params.q in v.value]
+        return values
+
     async def _companion(self, alert: dict[str, Any]) -> dict[str, Any] | None:
         """Request line and headers of the alert's companion document, if it has one."""
         companion_id = request_id(alert)
@@ -141,8 +188,9 @@ class AlertRepository:
     async def timeline(
         self, filters: AlertFilterParams, time_frame: TimeFrame, time_zone: str = "UTC"
     ) -> list[TimelineDataPoint]:
+        keys = await self._request_keys(filters)
         buckets = await self._buckets(
-            queries.timeline_body(filters, time_frame, time_zone)
+            queries.timeline_body(filters, time_frame, time_zone, keys)
         )
         return [documents.to_timeline_point(b) for b in buckets]
 

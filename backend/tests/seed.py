@@ -37,6 +37,32 @@ PAYLOAD = base64.b64encode(
 # Request line of event 1, as the ingest pipeline stores it (base64 of the bytes).
 REQUEST_LINE = "GET /seed?q=1 OR 1=1 HTTP/1.1"
 
+# Events with a request document -> its header values (None: the request had none) and its request line.
+# Event 3 has no client address and a user agent with commas, which a comma-separated parameter would cut.
+COMPANIONS = {
+    1: {
+        "user_agent": "curl/8.7.1",
+        "host": "www.example.org",
+        "xff": "8.8.4.4, 10.0.0.1",
+        "client": "8.8.4.4",
+        "line": REQUEST_LINE,
+    },
+    2: {
+        "user_agent": "scanner/1.0",
+        "host": "www.example.org",
+        "xff": "203.0.113.9, 10.0.0.1",
+        "client": "203.0.113.9",
+        "line": "GET /admin HTTP/1.1",
+    },
+    3: {
+        "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)",
+        "host": "api.example.org",
+        "xff": None,
+        "client": None,
+        "line": "POST /api HTTP/1.1",
+    },
+}
+
 # rule key -> (rule.id, rule.name, rule.category)
 RULES = {
     "A": ("1:1001", "Alpha scan", "Attempted Recon"),
@@ -122,13 +148,26 @@ def build_event(n: int, base: datetime) -> dict[str, Any]:
             "tcp": {"flags": "AP"},
             "b64_data": PAYLOAD,
         }
+    elif n in COMPANIONS:
+        # Only what names the alert: no payload and no packet fields.
+        doc["snort"] = {
+            "thread": str(n),
+            "timestamp": f"11/10-{10 + n}:00:00.000000",
+            "rule": f"{rule_id}:4",
+            "src_ap": f"{source}:{40000 + n}",
+            "dst_ap": f"{destination}:25",
+        }
+    # The sensors write the key of the request document into every alert that can have one.
+    key = request_id(doc)
+    if key:
+        doc["snort"]["request_key"] = key
     return doc
 
 
-def build_request(event: dict[str, Any]) -> dict[str, Any]:
+def build_request(event: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
     """Companion document of an HTTP alert, with the identity fields copied from it."""
     snort = event["snort"]
-    return {
+    doc: dict[str, Any] = {
         "@timestamp": event["@timestamp"],
         "observer": {
             "name": event["observer"]["name"],
@@ -138,13 +177,16 @@ def build_request(event: dict[str, Any]) -> dict[str, Any]:
             **{
                 k: snort[k] for k in ("thread", "timestamp", "rule", "src_ap", "dst_ap")
             },
-            "http_request": base64.b64encode(REQUEST_LINE.encode()).decode(),
-            "xff": "8.8.4.4, 10.0.0.1",
+            "http_request": base64.b64encode(spec["line"].encode()).decode(),
         },
-        "user_agent": {"original": "curl/8.7.1"},
-        "url": {"domain": "www.example.org"},
-        "network": {"forwarded_ip": "8.8.4.4"},
+        "user_agent": {"original": spec["user_agent"]},
+        "url": {"domain": spec["host"]},
     }
+    if spec["xff"]:
+        doc["snort"]["xff"] = spec["xff"]
+    if spec["client"]:
+        doc["network"] = {"forwarded_ip": spec["client"]}
+    return doc
 
 
 def _index_name(pattern: str, doc: dict[str, Any]) -> str:
@@ -169,13 +211,16 @@ def seed(
     for doc in docs:
         client.index(index=_index_name(pattern, doc), id=doc["event"]["id"], body=doc)
 
-    request = build_request(docs[0])
-    request_index = _index_name(request_pattern, request)
-    _create(client, [request_index], REQUEST_TEMPLATE)
-    # The id is the app's own, so a change of the key breaks the lookup test.
-    client.index(index=request_index, id=request_id(docs[0]), body=request)
-    client.indices.refresh(index=[*indices, request_index])
-    return [*indices, request_index]
+    request_indices: set[str] = set()
+    for n, spec in COMPANIONS.items():
+        request = build_request(docs[n - 1], spec)
+        request_index = _index_name(request_pattern, request)
+        request_indices.add(request_index)
+        _create(client, [request_index], REQUEST_TEMPLATE)
+        # The id is the app's own, so a change of the key breaks the lookup test.
+        client.index(index=request_index, id=request_id(docs[n - 1]), body=request)
+    client.indices.refresh(index=[*indices, *request_indices])
+    return [*indices, *sorted(request_indices)]
 
 
 def main() -> None:
@@ -190,7 +235,9 @@ def main() -> None:
     indices = seed(
         client, settings.OPENSEARCH_INDEX, settings.OPENSEARCH_REQUEST_INDEX, base
     )
-    print(f"Seeded {len(EVENTS)} events and one request line into {', '.join(indices)}")
+    print(
+        f"Seeded {len(EVENTS)} events and {len(COMPANIONS)} requests into {', '.join(indices)}"
+    )
 
 
 if __name__ == "__main__":

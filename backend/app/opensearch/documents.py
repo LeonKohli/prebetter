@@ -104,8 +104,17 @@ def _endpoint(src: dict[str, Any], side: str) -> Endpoint | None:
     )
 
 
-# Already shown as addresses and ports, interface, rule id, flow direction and payload.
-_PACKET_DUPLICATES = {"src_ap", "dst_ap", "iface", "rule", "dir", "b64_data"}
+# Already shown as addresses and ports, interface, rule id, flow direction and payload, or only a
+# lookup key (request_key) that says nothing about the packet.
+_PACKET_DUPLICATES = {
+    "src_ap",
+    "dst_ap",
+    "iface",
+    "rule",
+    "dir",
+    "b64_data",
+    "request_key",
+}
 
 
 def _flatten(value: dict[str, Any], prefix: str = "") -> dict[str, Any]:

@@ -238,6 +238,9 @@
           },
           "b64_data": {
             "type": "binary"
+          },
+          "request_key": {
+            "type": "keyword"
           }
         }
       },

@@ -128,3 +128,10 @@ class TimelineResponse(BaseModel):
     start_date: datetime
     end_date: datetime
     data: list[TimelineDataPoint]
+
+
+class RequestValue(BaseModel):
+    """A value of a request header and how many requests carried it."""
+
+    value: str
+    count: int
