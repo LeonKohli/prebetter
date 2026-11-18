@@ -2,18 +2,6 @@
 
 export type Severity = 'high' | 'medium' | 'low' | 'info'
 
-/** A value of the filter object in the URL: text, a number, or a list that goes out as a repeated query parameter. */
-export type FilterValue = string | number | string[]
-export type AlertFilters = Record<string, FilterValue>
-
-/** A header of an alert's HTTP request that the list can be filtered by. */
-export type RequestFilterField = 'user_agent' | 'host' | 'client_ip'
-
-export interface RequestValue {
-  value: string
-  count: number
-}
-
 export interface TimeInfo {
   timestamp: string
 }

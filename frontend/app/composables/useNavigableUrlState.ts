@@ -1,7 +1,6 @@
 import type { LocationQuery } from 'vue-router'
 import type { SortingState, ColumnFiltersState, ColumnVisibilityState } from '@tanstack/vue-table'
 import { useDebounceFn } from '@vueuse/core'
-import { sanitizeFilters } from '@/utils/requestFilters'
 
 type PageSize = 10 | 20 | 50 | 100
 type SortOrder = 'asc' | 'desc'
@@ -47,14 +46,14 @@ export function useNavigableUrlState(options: {
     return view === 'ungrouped' ? 'ungrouped' : 'grouped'
   }
 
-  const parseFilters = (filterString: string): AlertFilters => {
+  const parseFilters = (filterString: string): Record<string, string | number> => {
     if (!filterString.trim()) return {}
     
     try {
       const parsed: unknown = JSON.parse(filterString)
       
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return sanitizeFilters(parsed as Record<string, unknown>)
+        return parsed as Record<string, string | number>
       }
       
       return {}
@@ -63,7 +62,7 @@ export function useNavigableUrlState(options: {
     }
   }
 
-  const serializeFilters = (filters: AlertFilters): string => {
+  const serializeFilters = (filters: Record<string, string | number>): string => {
     const keys = Object.keys(filters)
     if (keys.length === 0) return ''
     return JSON.stringify(filters)
@@ -160,7 +159,7 @@ export function useNavigableUrlState(options: {
     }
   })
 
-  const filters = computed<AlertFilters>({
+  const filters = computed<Record<string, string | number>>({
     get: () => parseFilters(route.query.filter as string || ''),
     set: (value) => updateUrl({ filter: serializeFilters(value) }, true) // User filtering
   })
@@ -197,14 +196,11 @@ export function useNavigableUrlState(options: {
   })
 
   const fromFilterState = (state: ColumnFiltersState, isUserAction = true): void => {
-    const newFilters: AlertFilters = {}
-
+    const newFilters: Record<string, string | number> = {}
+    
     for (const filter of state) {
-      const value = filter.value
-      if (value && (typeof value === 'string' || typeof value === 'number')) {
-        newFilters[filter.id] = value
-      } else if (Array.isArray(value) && value.length && value.every(item => typeof item === 'string')) {
-        newFilters[filter.id] = value
+      if (filter.value && (typeof filter.value === 'string' || typeof filter.value === 'number')) {
+        newFilters[filter.id] = filter.value
       }
     }
     
@@ -254,7 +250,7 @@ export function useNavigableUrlState(options: {
   }
 
   // High-level update functions
-  const updateFilters = (newFilters: AlertFilters, isUserAction = true): void => {
+  const updateFilters = (newFilters: Record<string, string | number>, isUserAction = true): void => {
     updateUrl({ filter: serializeFilters(newFilters) }, isUserAction)
   }
 

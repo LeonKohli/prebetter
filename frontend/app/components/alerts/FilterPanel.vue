@@ -17,7 +17,7 @@
         </Badge>
       </Button>
     </PopoverTrigger>
-    <PopoverContent align="end" class="max-h-(--reka-popover-content-available-height) w-80 overflow-y-auto p-0">
+    <PopoverContent align="end" class="w-80 p-0">
       <div class="flex items-center justify-between p-4">
         <span class="text-sm font-semibold">Filters</span>
         <Button
@@ -39,7 +39,6 @@
           as="button"
           type="button"
           class="cursor-pointer"
-          :title="filter.title"
           @click="clearFilter(filter.key)"
         >
           <Icon v-if="filter.icon" :name="filter.icon" class="size-3" />
@@ -270,15 +269,6 @@
 
       <Separator />
 
-      <div class="space-y-3 p-4">
-        <p class="text-xs font-medium text-muted-foreground">HTTP request</p>
-        <RequestFilter field="user_agent" label="User agent" :icon="REQUEST_ICONS.user_agent" placeholder="Search user agents..." />
-        <RequestFilter field="host" label="Host" :icon="REQUEST_ICONS.host" placeholder="Search hosts..." />
-        <RequestFilter field="client_ip" label="Client address" :icon="REQUEST_ICONS.client_ip" placeholder="Search addresses..." />
-      </div>
-
-      <Separator />
-
       <div class="p-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -300,13 +290,6 @@
 
 <script setup lang="ts">
 import { getIPFilterHint } from '~/utils/ipFilter'
-import { clearRequestFilters, requestFilterBadges, toggleRequestValue } from '@/utils/requestFilters'
-
-const REQUEST_ICONS = {
-  user_agent: 'lucide:app-window',
-  host: 'lucide:link',
-  client_ip: 'lucide:user',
-} as const
 
 const { urlState } = useAlertTableContext()
 
@@ -348,7 +331,7 @@ function getSeverityDotColor(value: string) {
 const selectedSeverities = computed({
   get: () => urlState.filters.value.severity ? String(urlState.filters.value.severity).split(',') : [],
   set: (values: string[]) => {
-    const nextFilters: AlertFilters = { ...urlState.filters.value }
+    const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
     delete nextFilters.severity
     if (values.length) nextFilters.severity = values.join(',')
     urlState.filters.value = nextFilters
@@ -358,7 +341,7 @@ const selectedSeverities = computed({
 const selectedServers = computed({
   get: () => urlState.filters.value.server ? String(urlState.filters.value.server).split(',') : [],
   set: (values: string[]) => {
-    const nextFilters: AlertFilters = { ...urlState.filters.value }
+    const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
     delete nextFilters.server
     if (values.length) nextFilters.server = values.join(',')
     urlState.filters.value = nextFilters
@@ -368,7 +351,7 @@ const selectedServers = computed({
 const selectedClassifications = computed({
   get: () => urlState.filters.value.classification_text ? String(urlState.filters.value.classification_text).split(',') : [],
   set: (values: string[]) => {
-    const nextFilters: AlertFilters = { ...urlState.filters.value }
+    const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
     delete nextFilters.classification_text
     if (values.length) nextFilters.classification_text = values.join(',')
     urlState.filters.value = nextFilters
@@ -423,7 +406,7 @@ const targetIpHint = computed(() => getIPFilterHint(targetIpDraft.value))
 
 function applySourceIp() {
   const value = sourceIpDraft.value.trim()
-  const nextFilters: AlertFilters = { ...urlState.filters.value }
+  const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
   delete nextFilters.source_ipv4
   if (value) nextFilters.source_ipv4 = value
   urlState.filters.value = nextFilters
@@ -431,7 +414,7 @@ function applySourceIp() {
 
 function applyTargetIp() {
   const value = targetIpDraft.value.trim()
-  const nextFilters: AlertFilters = { ...urlState.filters.value }
+  const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
   delete nextFilters.target_ipv4
   if (value) nextFilters.target_ipv4 = value
   urlState.filters.value = nextFilters
@@ -453,7 +436,7 @@ const requireIps = computed(() => {
 })
 
 function setRequireIps(checked: boolean) {
-  const nextFilters: AlertFilters = { ...urlState.filters.value }
+  const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
   if (checked) {
     delete nextFilters.require_ips
   } else {
@@ -467,7 +450,7 @@ function setRequireIps(checked: boolean) {
 
 // Active filter badges
 const activeFilters = computed(() => {
-  const result: { key: string; label: string; color?: string; icon?: string; title?: string; clear?: () => void }[] = []
+  const result: { key: string; label: string; color?: string; icon?: string }[] = []
 
   for (const s of selectedSeverities.value) {
     result.push({ key: `severity:${s}`, label: formatSeverity(s), color: getSeverityDotColor(s) })
@@ -484,15 +467,6 @@ const activeFilters = computed(() => {
   if (urlState.filters.value.target_ipv4) {
     result.push({ key: 'target_ipv4', label: String(urlState.filters.value.target_ipv4), icon: 'lucide:arrow-down-right' })
   }
-  for (const badge of requestFilterBadges(urlState.filters.value)) {
-    result.push({
-      key: badge.key,
-      label: badge.label,
-      icon: badge.mode === 'exclude' ? 'lucide:ban' : REQUEST_ICONS[badge.field],
-      title: badge.value,
-      clear: () => { urlState.filters.value = toggleRequestValue(urlState.filters.value, badge.field, badge.mode, badge.value) },
-    })
-  }
   if (!requireIps.value) {
     result.push({ key: 'require_ips', label: 'All alerts', icon: 'lucide:globe' })
   }
@@ -500,8 +474,6 @@ const activeFilters = computed(() => {
 })
 
 function clearFilter(key: string) {
-  const badge = activeFilters.value.find(f => f.key === key)
-  if (badge?.clear) return badge.clear()
   if (key === 'source_ipv4') return clearSourceIp()
   if (key === 'target_ipv4') return clearTargetIp()
   if (key === 'require_ips') return setRequireIps(true)
@@ -515,7 +487,7 @@ function clearFilter(key: string) {
 function clearAllFilters() {
   sourceIpDraft.value = ''
   targetIpDraft.value = ''
-  const nextFilters: AlertFilters = clearRequestFilters(urlState.filters.value)
+  const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
   delete nextFilters.severity
   delete nextFilters.server
   delete nextFilters.classification_text

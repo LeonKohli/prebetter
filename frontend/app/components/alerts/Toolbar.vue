@@ -201,8 +201,8 @@ watchEffect(() => {
     dateRangeRef.value = { from, to, presetId }
   } else if (filters.start_date && filters.end_date) {
     dateRangeRef.value = {
-      from: filterDate(filters.start_date),
-      to: filterDate(filters.end_date)
+      from: new Date(filters.start_date),
+      to: new Date(filters.end_date)
     }
   } else {
     // Default fallback - also a sliding window
@@ -216,7 +216,7 @@ watchEffect(() => {
 const dateRange = computed<DateRangeValue>({
   get: () => dateRangeRef.value,
   set: (value: DateRangeValue) => {
-    const nextFilters: AlertFilters = { ...urlState.filters.value }
+    const nextFilters: Record<string, string | number> = { ...urlState.filters.value }
 
     delete nextFilters.start_date
     delete nextFilters.end_date

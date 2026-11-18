@@ -317,18 +317,12 @@ async function viewAllFromPair() {
 
                       <template v-if="alertData.host">
                         <span class="text-muted-foreground">Host</span>
-                        <span class="flex items-center gap-1 min-w-0">
-                          <span class="font-mono break-all">{{ alertData.host }}</span>
-                          <RequestValueActions field="host" :value="alertData.host" @filtered="dialogOpen = false" />
-                        </span>
+                        <span class="font-mono break-all">{{ alertData.host }}</span>
                       </template>
 
                       <template v-if="alertData.user_agent">
                         <span class="text-muted-foreground">User agent</span>
-                        <span class="flex items-center gap-1 min-w-0">
-                          <span class="font-mono text-xs break-all" title="Supplied by the client — advisory.">{{ alertData.user_agent }}</span>
-                          <RequestValueActions field="user_agent" :value="alertData.user_agent" @filtered="dialogOpen = false" />
-                        </span>
+                        <span class="font-mono text-xs break-all" title="Supplied by the client — advisory.">{{ alertData.user_agent }}</span>
                       </template>
 
                       <span class="text-muted-foreground">Alert ID</span>
@@ -421,7 +415,6 @@ async function viewAllFromPair() {
                             <Icon v-if="copied['true-src']" name="lucide:check" class="h-3 w-3 text-primary" />
                             <Icon v-else name="lucide:copy" class="h-3 w-3" />
                           </Button>
-                          <RequestValueActions field="client_ip" :value="alertData.forwarded.true_source" @filtered="dialogOpen = false" />
                           <span
                             class="ml-0.5 inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
                             title="Recovered from the X-Forwarded-For header. Header-supplied, so treat as advisory — verify before acting."

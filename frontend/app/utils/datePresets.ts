@@ -181,11 +181,6 @@ export function isValidPresetId(id: string | undefined): id is DatePresetId {
   return !!id && PRESET_MAP.has(id as DatePresetId)
 }
 
-/** A date from the URL's filter object: text or milliseconds; anything else (a list) is no date. */
-export function filterDate(value: string | number | string[] | undefined): Date {
-  return typeof value === 'string' || typeof value === 'number' ? new Date(value) : new Date(Number.NaN)
-}
-
 export function getActivePresetId(filters: Record<string, unknown>): DatePresetId | undefined {
   const preset = filters.date_preset
   return typeof preset === 'string' && isValidPresetId(preset) ? preset : undefined

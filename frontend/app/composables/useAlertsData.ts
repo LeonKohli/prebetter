@@ -47,7 +47,7 @@ export async function useAlertsData(urlState: ReturnType<typeof useNavigableUrlS
     const hasExplicitDates = !!(urlFilters.start_date && urlFilters.end_date)
 
     // Build filters without date_preset
-    const filters: AlertFilters = {}
+    const filters: Record<string, string | number> = {}
     for (const [k, v] of Object.entries(urlFilters)) {
       if (k === 'date_preset') continue
       filters[k in filterFieldMap ? filterFieldMap[k as keyof typeof filterFieldMap] : k] = v
