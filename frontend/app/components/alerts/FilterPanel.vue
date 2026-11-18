@@ -17,7 +17,7 @@
         </Badge>
       </Button>
     </PopoverTrigger>
-    <PopoverContent align="end" class="max-h-[85vh] w-80 overflow-y-auto p-0">
+    <PopoverContent align="end" class="max-h-(--reka-popover-content-available-height) w-80 overflow-y-auto p-0">
       <div class="flex items-center justify-between p-4">
         <span class="text-sm font-semibold">Filters</span>
         <Button
