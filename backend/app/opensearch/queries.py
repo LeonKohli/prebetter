@@ -169,5 +169,11 @@ def request_body(companion_id: str) -> dict[str, Any]:
     return {
         "query": {"ids": {"values": [companion_id]}},
         "size": 1,
-        "_source": ["snort.http_request"],
+        "_source": [
+            "snort.http_request",
+            "snort.xff",
+            "user_agent.original",
+            "url.domain",
+            "network.forwarded_ip",
+        ],
     }

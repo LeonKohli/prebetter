@@ -48,6 +48,33 @@
           },
           "http_request": {
             "type": "binary"
+          },
+          "xff": {
+            "type": "keyword",
+            "ignore_above": 1024
+          }
+        }
+      },
+      "user_agent": {
+        "properties": {
+          "original": {
+            "type": "keyword",
+            "ignore_above": 1024
+          }
+        }
+      },
+      "url": {
+        "properties": {
+          "domain": {
+            "type": "keyword",
+            "ignore_above": 255
+          }
+        }
+      },
+      "network": {
+        "properties": {
+          "forwarded_ip": {
+            "type": "ip"
           }
         }
       }

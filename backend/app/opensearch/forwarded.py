@@ -45,17 +45,42 @@ def forwarded_info(payload: str | None) -> ForwardedInfo | None:
     text = raw.decode("utf-8", errors="replace")
     lines = [line.removesuffix("\r") for line in text.split("\n")]
 
-    tokens = ",".join(_header_values(lines, "X-Forwarded-For")).split(",")
-    chain = [ip for ip in map(_parse_ip, tokens) if ip]
+    chain = _chain(",".join(_header_values(lines, "X-Forwarded-For")))
     if not chain:
         return None
-
-    # Right to left: the entry nearest to us was added by our own proxy, so a client
-    # cannot hide behind addresses it prepends.
-    true_source = next(
-        (ip for ip in reversed(chain) if ipaddress.ip_address(ip).is_global), chain[-1]
-    )
     via = _header_values(lines, "Via")
     return ForwardedInfo(
-        true_source=true_source, forwarded_for=chain, via_proxy=via[0] if via else None
+        true_source=_true_source(chain),
+        forwarded_for=chain,
+        via_proxy=via[0] if via else None,
+    )
+
+
+def forwarded_from_header_fields(
+    chain: str | None, client: str | None
+) -> ForwardedInfo | None:
+    """
+    The same answer from the header fields of the request's companion document, for an
+    alert whose payload carries no headers (a match in the body). The ingest pipeline
+    stored the whole X-Forwarded-For chain and the client address it derived; the
+    client address wins over the guess made here.
+    """
+    parsed = _chain(chain or "")
+    if not parsed:
+        return None
+    return ForwardedInfo(
+        true_source=_parse_ip(client or "") or _true_source(parsed),
+        forwarded_for=parsed,
+    )
+
+
+def _chain(header_value: str) -> list[str]:
+    return [ip for ip in map(_parse_ip, header_value.split(",")) if ip]
+
+
+def _true_source(chain: list[str]) -> str:
+    # Right to left: the entry nearest to us was added by our own proxy, so a client
+    # cannot hide behind addresses it prepends.
+    return next(
+        (ip for ip in reversed(chain) if ipaddress.ip_address(ip).is_global), chain[-1]
     )

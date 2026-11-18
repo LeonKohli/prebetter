@@ -139,7 +139,11 @@ def build_request(event: dict[str, Any]) -> dict[str, Any]:
                 k: snort[k] for k in ("thread", "timestamp", "rule", "src_ap", "dst_ap")
             },
             "http_request": base64.b64encode(REQUEST_LINE.encode()).decode(),
+            "xff": "8.8.4.4, 10.0.0.1",
         },
+        "user_agent": {"original": "curl/8.7.1"},
+        "url": {"domain": "www.example.org"},
+        "network": {"forwarded_ip": "8.8.4.4"},
     }
 
 

@@ -6,7 +6,7 @@ from opensearchpy import AsyncOpenSearch
 
 from app.opensearch import documents, queries
 from app.opensearch.documents import Pair
-from app.opensearch.request_line import decode_request_line, request_id
+from app.opensearch.request_line import request_id
 from app.schemas.alerts import (
     AlertDetail,
     AlertListItem,
@@ -124,12 +124,10 @@ class AlertRepository:
         hits = (await self._search(body))["hits"]["hits"]
         if not hits:
             return None
-        return documents.to_detail(
-            hits[0], await self._http_request(hits[0]["_source"])
-        )
+        return documents.to_detail(hits[0], await self._companion(hits[0]["_source"]))
 
-    async def _http_request(self, alert: dict[str, Any]) -> str | None:
-        """Request line from the alert's companion document, if it has one."""
+    async def _companion(self, alert: dict[str, Any]) -> dict[str, Any] | None:
+        """Request line and headers of the alert's companion document, if it has one."""
         companion_id = request_id(alert)
         if companion_id is None:
             return None
@@ -138,11 +136,7 @@ class AlertRepository:
             body=queries.request_body(companion_id),
         )
         hits = response["hits"]["hits"]
-        if not hits:
-            return None
-        return decode_request_line(
-            hits[0]["_source"].get("snort", {}).get("http_request")
-        )
+        return hits[0]["_source"] if hits else None
 
     async def timeline(
         self, filters: AlertFilterParams, time_frame: TimeFrame, time_zone: str = "UTC"

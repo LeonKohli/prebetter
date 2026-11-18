@@ -315,6 +315,16 @@ async function viewAllFromPair() {
                         </span>
                       </template>
 
+                      <template v-if="alertData.host">
+                        <span class="text-muted-foreground">Host</span>
+                        <span class="font-mono break-all">{{ alertData.host }}</span>
+                      </template>
+
+                      <template v-if="alertData.user_agent">
+                        <span class="text-muted-foreground">User agent</span>
+                        <span class="font-mono text-xs break-all" title="Supplied by the client — advisory.">{{ alertData.user_agent }}</span>
+                      </template>
+
                       <span class="text-muted-foreground">Alert ID</span>
                       <span class="flex items-center gap-1 min-w-0">
                         <span class="font-mono" :title="alertData.id">{{ shortAlertId(alertData.id) }}</span>

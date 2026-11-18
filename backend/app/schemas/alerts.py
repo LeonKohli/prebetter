@@ -88,10 +88,14 @@ class AlertDetail(BaseModel):
     packet: dict[str, str | int | float | bool]
     # Base64 of the bytes the rule matched on; absent when the sensor does not log payloads.
     payload: str | None = None
-    # Absent without a payload or an X-Forwarded-For header in it.
+    # Absent without an X-Forwarded-For header, in the payload or in the companion document.
     forwarded: ForwardedInfo | None = None
     # Decoded request line ("GET /path HTTP/1.1"); absent without a companion document.
     http_request: str | None = None
+    # Headers of the request from the companion document; absent without one, and for an alert
+    # on a response, whose headers are the server's. Client-supplied, so advisory.
+    user_agent: str | None = None
+    host: str | None = None
     document: dict[str, Any]
 
 

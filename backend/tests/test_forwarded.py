@@ -2,7 +2,9 @@ import base64
 
 import pytest
 
-from app.opensearch.forwarded import forwarded_info
+from app.opensearch.documents import to_detail
+from app.opensearch.forwarded import forwarded_from_header_fields, forwarded_info
+from tests.seed import TEST_BASE, build_event
 
 H = "Host: a.example\r\nUser-Agent: curl/8\r\n"
 XFF = "X-Forwarded-For: "
@@ -115,6 +117,26 @@ def test_forwarded_info(block, true_source, chain, via):
     )
 
 
+def test_header_fields_of_the_companion_take_the_stored_client_address():
+    info = forwarded_from_header_fields("6.6.6.6, 8.8.4.4, 10.1.1.1", "8.8.4.4")
+
+    assert info is not None
+    assert info.true_source == "8.8.4.4"
+    assert info.forwarded_for == ["6.6.6.6", "8.8.4.4", "10.1.1.1"]
+    assert info.via_proxy is None
+
+
+def test_header_fields_of_the_companion_without_a_client_address_guess_like_the_payload():
+    info = forwarded_from_header_fields("6.6.6.6, 8.8.4.4, 10.1.1.1", None)
+
+    assert info is not None and info.true_source == "8.8.4.4"
+
+
+@pytest.mark.parametrize("chain", [None, "", "unknown", "unknown, also no"])
+def test_header_fields_of_the_companion_without_an_address_give_nothing(chain):
+    assert forwarded_from_header_fields(chain, "8.8.4.4") is None
+
+
 @pytest.mark.parametrize(
     "payload",
     [None, b64(H), b64(H + XFF + "unknown\r\n"), "not base64 !!"],
@@ -122,3 +144,21 @@ def test_forwarded_info(block, true_source, chain, via):
 )
 def test_forwarded_info_is_none_without_a_client_address(payload):
     assert forwarded_info(payload) is None
+
+
+def test_detail_without_headers_in_the_payload_takes_them_from_the_companion():
+    hit = {"_id": "x", "_source": build_event(2, TEST_BASE)}
+    companion = {
+        "snort": {"xff": "8.8.4.4, 10.0.0.1"},
+        "network": {"forwarded_ip": "8.8.4.4"},
+        "user_agent": {"original": "curl/8"},
+        "url": {"domain": "a.example"},
+    }
+
+    detail = to_detail(hit, companion)
+
+    assert detail.payload is None
+    assert detail.forwarded is not None
+    assert detail.forwarded.true_source == "8.8.4.4"
+    assert detail.forwarded.forwarded_for == ["8.8.4.4", "10.0.0.1"]
+    assert (detail.user_agent, detail.host) == ("curl/8", "a.example")

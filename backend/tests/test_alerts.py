@@ -217,6 +217,8 @@ def test_detail_returns_typed_fields_and_the_complete_document(api):
             "via_proxy": "1.1 proxy.example",
         },
         "http_request": REQUEST_LINE,
+        "user_agent": "curl/8.7.1",
+        "host": "www.example.org",
     }
     assert document["event"]["id"] == eid(1)
     assert '"msg": "Alpha scan"' in document["event"]["original"]
@@ -228,6 +230,7 @@ def test_detail_without_addresses_or_payload_reports_them_as_missing(api):
     assert body["source"] is None and body["target"] is None
     assert body["payload"] is None and body["forwarded"] is None
     assert body["http_request"] is None  # no snort fields, hence no companion lookup
+    assert body["user_agent"] is None and body["host"] is None
 
 
 def test_detail_of_unknown_alert_is_404(api):

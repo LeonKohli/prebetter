@@ -12,16 +12,19 @@ knows both sides of the wire names the frontend uses:
     flow.*                  <- snort.dir, event.start, client.*, server.*
     packet                  <- snort.* (flattened)
     payload                 <- snort.b64_data
-    forwarded               <- X-Forwarded-For and Via in snort.b64_data (forwarded.py)
+    forwarded               <- X-Forwarded-For and Via in snort.b64_data, else snort.xff and
+                               network.forwarded_ip of the companion document (forwarded.py)
     http_request            <- snort.http_request of the companion document in the
                                request indices (request_line.py)
+    user_agent, host        <- user_agent.original, url.domain of the companion document
 """
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from app.opensearch.forwarded import forwarded_info
+from app.opensearch.forwarded import forwarded_from_header_fields, forwarded_info
+from app.opensearch.request_line import decode_request_line
 from app.schemas.alerts import (
     AlertDetail,
     AlertListItem,
@@ -125,8 +128,12 @@ def _packet(src: dict[str, Any]) -> dict[str, Any]:
     return _flatten(fields)
 
 
-def to_detail(hit: dict[str, Any], http_request: str | None = None) -> AlertDetail:
+def to_detail(
+    hit: dict[str, Any], companion: dict[str, Any] | None = None
+) -> AlertDetail:
+    """`companion` is the `_source` of the alert's document in the request indices."""
     src = hit["_source"]
+    companion = companion or {}
     payload = _dig(src, "snort.b64_data")
     return AlertDetail(
         id=hit["_id"],
@@ -159,8 +166,13 @@ def to_detail(hit: dict[str, Any], http_request: str | None = None) -> AlertDeta
         analyzer=_analyzer(src),
         packet=_packet(src),
         payload=payload,
-        forwarded=forwarded_info(payload),
-        http_request=http_request,
+        forwarded=forwarded_info(payload)
+        or forwarded_from_header_fields(
+            _dig(companion, "snort.xff"), _dig(companion, "network.forwarded_ip")
+        ),
+        http_request=decode_request_line(_dig(companion, "snort.http_request")),
+        user_agent=_dig(companion, "user_agent.original"),
+        host=_dig(companion, "url.domain"),
         document=src,
     )
 

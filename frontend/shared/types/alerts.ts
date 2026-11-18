@@ -100,5 +100,8 @@ export interface AlertDetail {
   forwarded?: ForwardedInfo | null
   /** Request line (`GET /path HTTP/1.1`) from the companion document; null when there is none. */
   http_request?: string | null
+  /** Request headers from the companion document; null without one and on an alert on a response. */
+  user_agent?: string | null
+  host?: string | null
   document: Record<string, unknown>
 }
